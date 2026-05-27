@@ -1,43 +1,76 @@
-// src/types/index.ts
-
+// ── Auth ──────────────────────────────────────────────────────
 export interface User {
-  userId: string;
-  username: string;
-  isGuest: boolean;
-  trustScore: number;
-  isEmailVerified: boolean;
-  ageVerified: boolean;
+  userId:          string
+  username:        string
+  isGuest:         boolean
+  trustScore:      number
+  isEmailVerified: boolean
+  ageVerified:     boolean
 }
 
+// ── Chat ──────────────────────────────────────────────────────
 export interface Room {
-  id: string;
-  slug: string;
-  name: string;
-  description?: string;
-  onlineCount?: number;
+  slug:          string
+  displayName:   string
+  description:   string
+  category:      'public' | '18plus'
+  iconEmoji:     string
+  activeNow:     number
+  totalMessages: number
 }
 
 export interface Message {
-  id: string;
-  roomId: string; // ya slug
-  senderId: string;
-  senderName: string;
-  content: string;
-  modStatus?: 'pending' | 'approved' | 'rejected' | 'flagged';
-  replyToId?: string;
-  timestamp?: string;
+  id:           string
+  roomId:       string
+  senderId:     string
+  senderName:   string
+  senderAvatar: string | null
+  content:      string
+  type:         'text' | 'image' | 'system' | 'gif'
+  mediaUrl:     string | null
+  replyTo:      string | null
+  reactions:    Record<string, string[]>
+  modStatus:    'pending' | 'clean' | 'flagged' | 'blocked'
+  editedAt:     string | null
+  createdAt:    string
 }
 
+// ── Trust ─────────────────────────────────────────────────────
 export interface TrustScore {
-  score: number;
-  level?: string;
+  score:     number
+  band:      'new' | 'restricted' | 'normal' | 'trusted' | 'elite'
+  bandLabel: string
 }
 
-// Video Calling Types
-export type VideoStatus = 'idle' | 'searching' | 'matched' | 'connected' | 'ended';
+export interface TrustEvent {
+  id:        string
+  eventType: string
+  delta:     number
+  reason:    string | null
+  refSource: string | null
+  createdAt: string
+}
+
+// ── Video ─────────────────────────────────────────────────────
+export type VideoStatus =
+  | 'idle'
+  | 'queuing'
+  | 'matched'
+  | 'connecting'
+  | 'connected'
+  | 'ended'
 
 export interface VideoParticipant {
-  id: string;
-  username: string;
-  isGuest?: boolean;
+  userId:      string
+  username:    string
+  trustScore:  number
+  ageVerified: boolean
+}
+
+// ── API response envelope ─────────────────────────────────────
+export interface ApiResponse<T> {
+  success: boolean
+  data:    T | null
+  error:   string | null
+  message: string | null
 }

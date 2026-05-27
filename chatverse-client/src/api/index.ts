@@ -1,17 +1,53 @@
 import api from './client'
 
-// Rooms ke liye API (Yehi ChatPage.tsx maang raha hai)
 export const roomsApi = {
-  getAll: () => api.get('/rooms'),
-  getOne: (slug: string) => api.get(`/rooms/${slug}`),
+  getAll: () =>
+    api.get('/rooms'),
+  getOne: (slug: string) =>
+    api.get(`/rooms/${slug}`),
+  getMessages: (slug: string, skip = 0, limit = 50) =>
+    api.get(`/rooms/${slug}/messages`, { params: { skip, limit } }),
 }
 
-// Trust Score API (ProfilePage ke liye)
 export const trustApi = {
-  getScore: () => api.get('/trust/score'),
+  getScore: () =>
+    api.get('/trust/score'),
+  getHistory: (skip = 0, limit = 20) =>
+    api.get('/trust/history', { params: { skip, limit } }),
+  fileReport: (data: {
+    reportedUserId: string
+    reason: string
+    description?: string
+  }) => api.post('/trust/report', data),
 }
 
-// Age Verification API (ProfilePage ke liye)
 export const ageApi = {
-  getStatus: () => api.get('/age/status'),
+  getStatus: () =>
+    api.get('/age/status'),
+  declare: (dob: string) =>
+    api.post('/age/declare', { dob }),
+  submitAiQuiz: (data: {
+    finalScore: number
+    sessionRef?: string
+    questions?: object[]
+  }) => api.post('/age/ai-quiz/submit', data),
+  uploadDoc: (data: {
+    docType: string
+    cloudinaryPublicId: string
+    cloudinaryUrl: string
+  }) => api.post('/age/doc-upload', data),
+}
+
+export const billingApi = {
+  getPlans: () =>
+    api.get('/billing/plans'),
+  createOrder: (planType: string) =>
+    api.post('/billing/order', { planType }),
+  verifyPayment: (data: {
+    orderId: string
+    paymentId: string
+    signature: string
+  }) => api.post('/billing/verify-payment', data),
+  getSubscription: () =>
+    api.get('/billing/subscription'),
 }
