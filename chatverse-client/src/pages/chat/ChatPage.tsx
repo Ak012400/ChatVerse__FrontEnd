@@ -13,7 +13,8 @@ export default function ChatPage() {
   const { rooms, setRooms, messages,
           activeRoom, setActiveRoom }    = useChatStore()
   const { joinRoom, leaveRoom,
-          sendMessage, sendTyping }      = useChatHub()
+          sendMessage, sendTyping,
+          isConnected }               = useChatHub()
   const [input, setInput]               = useState('')
   const [loading, setLoading]           = useState(false)
   const messagesEndRef                   = useRef<HTMLDivElement>(null)
@@ -186,7 +187,7 @@ export default function ChatPage() {
             />
             <button
               type="submit"
-              disabled={!input.trim() || loading}
+              disabled={!input.trim() || loading || !slug}
               className="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500
                          text-white font-medium transition disabled:opacity-40"
             >
