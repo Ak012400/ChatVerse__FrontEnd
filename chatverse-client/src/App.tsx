@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import { authApi } from './api/auth'
 
+import ToastContainer from './components/ui/ToastContainer'
+
 // Pages
 import LandingPage    from './pages/auth/LandingPage'
 import LoginPage      from './pages/auth/LoginPage'
@@ -38,6 +40,8 @@ export default function App() {
   }, [])
 
   return (
+    <>
+    <ToastContainer />
     <BrowserRouter>
       <Routes>
         {/* Public */}
@@ -70,5 +74,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+    </>
   )
 }
