@@ -57,11 +57,13 @@ export default function VerifyOtpPage() {
       setAuth(
         {
           userId: data.userId,
-          username: email.split('@')[0],
+          // Backend now returns the canonical username + flags from DB,
+          // but fall back to email-prefix if an older API responds.
+          username: data.username ?? email.split('@')[0],
           isGuest: false,
-          trustScore: 60,
-          isEmailVerified: true,
-          ageVerified: false,
+          trustScore: data.trustScore ?? 60,
+          isEmailVerified: data.isEmailVerified ?? true,
+          ageVerified: data.ageVerified ?? false,
         },
         data.token,
       )

@@ -1,25 +1,33 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import checker from 'vite-plugin-checker' // Ye import add kiya
+import checker from 'vite-plugin-checker'
 
+/**
+ * Frontend talks to the backend via `VITE_API_URL` (see .env) — currently
+ * https://localhost:7217. The proxy below is a fallback used only if the
+ * frontend code reaches /api or /hubs as a relative path. Ports here MUST
+ * match the backend's launchSettings.json (`https` profile = 7217).
+ */
 export default defineConfig({
   plugins: [
-    react(), 
+    react(),
     tailwindcss(),
-    checker({ typescript: true }) // Ye checker plugin add kiya gaya hai
+    checker({ typescript: true }),
   ],
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'https://localhost:7217',
         changeOrigin: true,
+        secure: false, // dev cert is self-signed
       },
       '/hubs': {
-        target: 'http://localhost:5000',
+        target: 'https://localhost:7217',
         changeOrigin: true,
-        ws: true,        // WebSocket proxy — SignalR ke liye zaroori
-      }
-    }
-  }
+        secure: false,
+        ws: true, // WebSocket pass-through for SignalR
+      },
+    },
+  },
 })
