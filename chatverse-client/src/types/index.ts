@@ -26,13 +26,14 @@ export interface Message {
   senderName:   string
   senderAvatar: string | null
   content:      string
-  type:         'text' | 'image' | 'system' | 'gif'
+  type:         'text' | 'image' | 'system' | 'gif' | 'ephemeral_image'
   mediaUrl:     string | null
   replyTo:      string | null
   reactions:    Record<string, string[]>
   modStatus:    'pending' | 'clean' | 'flagged' | 'blocked'
   editedAt:     string | null
   createdAt:    string
+  
 }
 
 // ── Trust ─────────────────────────────────────────────────────

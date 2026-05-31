@@ -5,122 +5,120 @@ import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
 import type { Message } from '../types'
 
-const HUB_URL = (import.meta.env.VITE_API_URL ?? 'https://localhost:7217/api')
-  .replace('/api', '') + '/hubs/chat'
+const HUB_URL = (import.meta.env.VITE_API_URL ?? 'https://localhost:7217/api').replace('/api', '') + '/hubs/chat'
 
-// 💥 GLOBAL VARIABLE (React के बाहर) - यह कभी रीसेट नहीं होगा!
 let globalLastWarnedScore: number | null = null;
 
 export function useChatHub() {
-  const connection = useRef<signalR.HubConnection | null>(null)
-  
+  const connectionRef = useRef<signalR.HubConnection | null>(null)
+  const connectionPromiseRef = useRef<Promise<void> | null>(null)
+
   const token = useAuthStore((s) => s.token)
   const { addMessage, updateMsgStatus, removeMessage, setMessages, setOnlineCount, setTyping } = useChatStore()
   const { showToast } = useToastStore()
 
-  useEffect(() => {
-    if (!token) return
+  const connect = useCallback(async () => {
+    if (!token) return;
+    if (connectionRef.current?.state === signalR.HubConnectionState.Connected) return;
+    if (connectionPromiseRef.current) return connectionPromiseRef.current;
 
-    // useChatHub.ts में यह पक्का करो कि access_token query parameter में जा रहा है
     const hub = new signalR.HubConnectionBuilder()
-      .withUrl(HUB_URL + `?access_token=${token}`, { // 👈 टोकन यहाँ पास करना ज़रूरी है
+      .withUrl(`${HUB_URL}?access_token=${token}`, {
         transport: signalR.HttpTransportType.WebSockets,
-        skipNegotiation: true 
+        skipNegotiation: true
       })
       .withAutomaticReconnect()
-      .build();
+      .build()
 
-    hub.on('ReceiveMessage', (msg: Message) => {
-      if (msg.modStatus === 'blocked') return
-      addMessage(msg.roomId, msg)
-    })
-
+    hub.on('ReceiveMessage', (msg: Message) => { if (msg.modStatus !== 'blocked') addMessage(msg.roomId, msg) })
     hub.on('RoomHistory', ({ roomSlug, messages }: { roomSlug: string; messages: Message[] }) => {
       const clean = [...messages].reverse().filter((m) => m.modStatus !== 'blocked')
       setMessages(roomSlug, clean)
     })
-
     hub.on('MessageBlocked', ({ messageId }: { messageId: string }) => {
       const rooms = useChatStore.getState().messages
       for (const slug in rooms) removeMessage(slug, messageId)
-
-      showToast({
-        type: 'danger',
-        title: '🚫 Message Blocked',
-        message: 'Your message violated policies and was removed.',
-        duration: 5000,
-      })
+      showToast({ type: 'danger', title: '🚫 Blocked', message: 'Message removed.', duration: 5000 })
     })
-
-    hub.on('MessageFlagged', ({ messageId, reason }: { messageId: string; reason: string }) => {
+    hub.on('MessageFlagged', ({ messageId }: { messageId: string }) => {
       const rooms = useChatStore.getState().messages
       for (const slug in rooms) updateMsgStatus(slug, messageId, 'flagged')
     })
-
-    // ── 100% BULLETPROOF TRUST WARNING FIX ────────────────────────
-    hub.on('TrustWarning', ({ score, band }: { score: number; band: string }) => {
+    hub.on('TrustWarning', ({ score }: { score: number }) => {
       const auth = useAuthStore.getState()
-      const currentScore = auth.user?.trustScore ?? 100
-
-      // अगर इसी सेम स्कोर पर पहले वार्निंग मिल चुकी है, तो तुरंत कोड रोक दो (Ignore)
-      if (globalLastWarnedScore === score) return;
-
-      // टोस्ट सिर्फ तब दिखाओ जब स्कोर सच में पिछले वाले से कम हो
-      if (score < currentScore) {
-        
-        globalLastWarnedScore = score; // ग्लोबल मेमोरी में सेव कर लिया
-        
-        if (score <= 40) {
-          showToast({ type: 'danger', title: '🛡️ Trust Score Critical', message: `Your trust score dropped to ${score}/100.`, duration: 8000 })
-        } else if (score <= 60) {
-          showToast({ type: 'warning', title: '⚠️ Trust Score Dropped', message: `Your trust score dropped to ${score}/100 due to a violation.`, duration: 6000 })
-        }
-        
-        // Zustand स्टोर में नया स्कोर अपडेट कर दो
-        if (auth.user && auth.token) {
-          auth.setAuth({ ...auth.user, trustScore: score }, auth.token)
-        }
+      if (globalLastWarnedScore !== score && score < (auth.user?.trustScore ?? 100)) {
+        globalLastWarnedScore = score
+        showToast({ type: 'warning', title: '⚠️ Score Dropped', message: `Score: ${score}/100`, duration: 5000 })
       }
     })
-
     hub.on('UserTyping', ({ username }: { username: string }) => {
-      const auth = useAuthStore.getState()
-      if (username === auth.user?.username) return
       const activeRoom = useChatStore.getState().activeRoom
       if (activeRoom) setTyping(activeRoom, username)
     })
+    hub.on('UserJoined', ({ activeCount, roomSlug }: any) => setOnlineCount(roomSlug, activeCount))
+    hub.on('UserLeft', ({ activeCount, roomSlug }: any) => setOnlineCount(roomSlug, activeCount))
+    hub.on('Error', (msg: string) => showToast({ type: 'error', title: 'Error', message: msg, duration: 4000 }))
 
-    hub.on('UserJoined', ({ activeCount, roomSlug }: { activeCount: number; roomSlug: string }) => {
-      setOnlineCount(roomSlug, activeCount)
-    })
+    const startPromise = hub.start()
+      .then(() => { connectionRef.current = hub })
+      .catch((err) => { connectionRef.current = null })
+      .finally(() => { connectionPromiseRef.current = null })
 
-    hub.on('UserLeft', ({ activeCount, roomSlug }: { activeCount: number; roomSlug: string }) => {
-      setOnlineCount(roomSlug, activeCount)
-    })
-
-    hub.on('Error', (msg: string) => {
-      showToast({ type: 'error', title: 'Error', message: msg, duration: 4000 })
-    })
-
-    hub.start()
-      .then(() => console.log('[ChatHub] connected'))
-      .catch((err) => console.error('[ChatHub]', err))
-
-    connection.current = hub
-    return () => { hub.stop(); connection.current = null }
+    connectionPromiseRef.current = startPromise
+    return startPromise
   }, [token])
 
-  const joinRoom = useCallback(async (slug: string) => { await connection.current?.invoke('JoinRoom', slug) }, [])
-  const leaveRoom = useCallback(async (slug: string) => { await connection.current?.invoke('LeaveRoom', slug) }, [])
-  const sendMessage = useCallback(async (slug: string, content: string, type: string = "text", mediaUrl: string | null = null, replyToId?: string) => {
-    await connection.current?.invoke('SendMessage', slug, content, type, mediaUrl, replyToId ?? null)
+  const disconnect = useCallback(async () => {
+    if (connectionPromiseRef.current) {
+      try { await connectionPromiseRef.current } catch (e) { /* ignore */ }
+    }
+    if (connectionRef.current) {
+      await connectionRef.current.stop()
+      connectionRef.current = null
+    }
   }, [])
-  const sendTyping = useCallback(async (slug: string) => { await connection.current?.invoke('SendTyping', slug) }, [])
-  const reactToMessage = useCallback(async (slug: string, messageId: string, emoji: string) => {
-    await connection.current?.invoke('ReactToMessage', slug, messageId, emoji)
-  }, [])
-  
-  const isConnected = () => connection.current?.state === signalR.HubConnectionState.Connected
 
-  return { joinRoom, leaveRoom, sendMessage, sendTyping, reactToMessage, isConnected }
+  useEffect(() => {
+    connect()
+    return () => { disconnect() }
+  }, [connect, disconnect])
+
+  // ── 💥 FIX: Smart & Silent Auto-Reconnect ──
+  const safeInvoke = async (method: string, ...args: any[]) => {
+    try {
+      if (connectionRef.current?.state === signalR.HubConnectionState.Disconnected) {
+        await connect();
+      } else if (!connectionRef.current && connectionPromiseRef.current) {
+        await connectionPromiseRef.current;
+      } else if (!connectionRef.current) {
+        await connect();
+      }
+
+      if (connectionRef.current?.state === signalR.HubConnectionState.Connected) {
+        await connectionRef.current.invoke(method, ...args)
+      } else {
+        // 💥 CHUPE HUYE DUSHMAN KO YAHAN ROKA HAI:
+        // JoinRoom, LeaveRoom aur SendTyping par faltu toast mat dikhao
+        if (method !== 'JoinRoom' && method !== 'LeaveRoom' && method !== 'SendTyping') {
+          showToast({ type: 'error', title: 'Network Issue', message: 'Reconnecting to chat...', duration: 2000 })
+        }
+      }
+    } catch (err) {
+      console.error(`[ChatHub] Action ${method} failed:`, err);
+      // Try-Catch mein bhi same rule apply kiya hai
+      if (method !== 'JoinRoom' && method !== 'LeaveRoom' && method !== 'SendTyping') {
+        showToast({ type: 'error', title: 'Action Failed', message: 'Could not complete request.', duration: 2000 })
+      }
+    }
+  }
+
+  return {
+    joinRoom: (slug: string) => safeInvoke('JoinRoom', slug),
+    leaveRoom: (slug: string) => safeInvoke('LeaveRoom', slug),
+    sendMessage: (slug: string, content: string, type: string = "text", mediaUrl: string | null = null, replyToId?: string) => 
+      safeInvoke('SendMessage', slug, content, type, mediaUrl, replyToId ?? null),
+    sendTyping: (slug: string) => safeInvoke('SendTyping', slug),
+    reactToMessage: (slug: string, messageId: string, emoji: string) => safeInvoke('ReactToMessage', slug, messageId, emoji),
+    isConnected: () => connectionRef.current?.state === signalR.HubConnectionState.Connected
+  }
 }
