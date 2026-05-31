@@ -38,6 +38,41 @@ export const ageApi = {
   }) => api.post('/age/doc-upload', data),
 }
 
+export const randomGroupApi = {
+  join: () =>
+    api.post('/random-group/join'),
+  leave: (roomName: string) =>
+    api.post('/random-group/leave', { roomName }),
+  report: (data: {
+    roomName: string
+    violatorUserId: string
+    selfReport?: boolean
+    label?: string
+    confidence?: number
+  }) => api.post('/random-group/report', data),
+  active: () =>
+    api.get('/random-group/active'),
+}
+
+export const directCallApi = {
+  /** Once both parties accept via ChatHub, each fetches its own token here. */
+  token: (roomName: string) =>
+    api.post('/direct-call/token', { roomName }),
+}
+
+export const groupCallApi = {
+  token: (roomName: string, maxParticipants?: number) =>
+    api.post('/group-call/token', { roomName, maxParticipants }),
+  create: (roomName: string, maxParticipants = 10) =>
+    api.post('/group-call/create', { roomName, maxParticipants }),
+  participants: (roomName: string) =>
+    api.get(`/group-call/${roomName}/participants`),
+  end: (roomName: string) =>
+    api.delete(`/group-call/${roomName}`),
+  active: () =>
+    api.get('/group-call/active'),
+}
+
 export const billingApi = {
   getPlans: () =>
     api.get('/billing/plans'),
