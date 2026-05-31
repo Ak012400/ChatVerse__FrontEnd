@@ -1,12 +1,20 @@
 import { useRef, useState } from 'react'
+import { Paperclip } from 'lucide-react'
 import { useToastStore } from '../../stores/toastStore'
-import Loader from '../ui/Loader'
+import IconButton from '../ui/IconButton'
 
 interface ImageUploadButtonProps {
-  onImageReady: (compressedBase64: string) => Promise<void>;
-  disabled?: boolean;
+  onImageReady: (compressedBase64: string) => Promise<void>
+  disabled?: boolean
 }
 
+/**
+ * Reusable image picker. Compresses to JPEG @ ~0.4 quality and width <= 600px
+ * before handing the base64 string to the parent.
+ *
+ * Used independently of ChatPage's inline upload flow (which also runs
+ * client-side nsfwjs scanning). Keep these in sync if you wire both up.
+ */
 export default function ImageUploadButton({ onImageReady, disabled }: ImageUploadButtonProps) {
   const [isScanning, setIsScanning] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -17,76 +25,84 @@ export default function ImageUploadButton({ onImageReady, disabled }: ImageUploa
     if (!file) return
 
     if (!file.type.startsWith('image/')) {
-      showToast({ type: 'error', title: 'Invalid File', message: 'Only images are allowed.', duration: 3000 })
+      showToast({
+        type: 'error',
+        title: 'Invalid file',
+        message: 'Only images are allowed.',
+        duration: 3000,
+      })
       return
     }
 
     setIsScanning(true)
-
     try {
-      // 1. Load Image
       const img = new Image()
       const objectUrl = URL.createObjectURL(file)
       await new Promise((resolve, reject) => {
         img.onload = resolve
-        img.onerror = () => reject(new Error("Image failed to load in browser."))
+        img.onerror = () => reject(new Error('Image failed to load.'))
         img.src = objectUrl
       })
 
-      // 2. Smart Canvas Compression (No Upscaling)
       const canvas = document.createElement('canvas')
       let width = img.width
       let height = img.height
-
       if (width > 600) {
         height = Math.round((height * 600) / width)
         width = 600
       }
-
       canvas.width = width
       canvas.height = height
-      
-      const ctx = canvas.getContext('2d')
-      if (!ctx) throw new Error("Browser does not support canvas.")
-      
-      ctx.drawImage(img, 0, 0, width, height)
-      
-      // Quality 0.4 for very small size
-      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.4) 
 
-      if (compressedBase64.length > 500000) {
-        throw new Error("Image is still too large. Try another photo.")
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error('Browser does not support canvas.')
+
+      ctx.drawImage(img, 0, 0, width, height)
+      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.4)
+
+      if (compressedBase64.length > 500_000) {
+        throw new Error('Image is still too large. Try another photo.')
       }
 
-      // 3. Send to Parent (ChatPage)
       await onImageReady(compressedBase64)
-
     } catch (err: any) {
-      console.error("Image Processing Error:", err)
-      showToast({ type: 'error', title: 'Processing Failed', message: err.message || 'Failed to process image.', duration: 4000 })
+      console.error('Image processing error:', err)
+      showToast({
+        type: 'error',
+        title: 'Processing failed',
+        message: err?.message ?? 'Failed to process image.',
+        duration: 4000,
+      })
     } finally {
       setIsScanning(false)
-      if (fileInputRef.current) fileInputRef.current.value = '' // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
-  // 💥 FIX: Fragment `<>` का यूज़ किया है ताकि Tailwind का flex लेआउट न फटे!
   return (
     <>
-      <button 
-        type="button" 
-        onClick={() => fileInputRef.current?.click()} 
+      <IconButton
+        type="button"
+        variant="subtle"
+        onClick={() => fileInputRef.current?.click()}
         disabled={isScanning || disabled}
-        className="px-3 py-3 rounded-xl border bg-gray-900 border-gray-800 text-gray-400 hover:text-white transition text-xl flex items-center justify-center min-w-[50px]"
+        aria-label="Attach image"
       >
-        {isScanning ? <Loader variant="spinner" /> : '📎'}
-      </button>
-      <input 
-        type="file" 
-        accept="image/*" 
-        ref={fileInputRef} 
-        className="hidden" 
-        onChange={processImage} 
+        {isScanning ? (
+          <span
+            className="w-3.5 h-3.5 rounded-full border-[1.5px] border-current border-t-transparent"
+            style={{ animation: 'spin 0.7s linear infinite' }}
+          />
+        ) : (
+          <Paperclip size={16} />
+        )}
+      </IconButton>
+      <input
+        type="file"
+        accept="image/*"
+        ref={fileInputRef}
+        className="hidden"
+        onChange={processImage}
       />
     </>
   )

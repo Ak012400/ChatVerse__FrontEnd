@@ -1,49 +1,60 @@
 import { useEffect, useRef, useState } from 'react'
+import {
+  Mic, MicOff, Video as VideoIcon, VideoOff, SkipForward, X, Flag, Loader2, Shuffle,
+} from 'lucide-react'
+
 import { useChatHub } from '../../hooks/useChatHub'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
-import Loader from '../../components/ui/Loader'
+import IconButton from '../../components/ui/IconButton'
 
-export default function VideoChat() {
+export default function VideoPage() {
   const { getConnection, safeInvoke } = useChatHub()
-  const user = useAuthStore(s => s.user)
+  const user = useAuthStore((s) => s.user)
   const { showToast } = useToastStore()
 
-  // ── 🎥 STATE & REFS ──
   const [isSearching, setIsSearching] = useState(false)
   const [partnerId, setPartnerId] = useState<string | null>(null)
   const [isMicOn, setIsMicOn] = useState(true)
   const [isCamOn, setIsCamOn] = useState(true)
+  const [callDuration, setCallDuration] = useState(0)
 
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const remoteVideoRef = useRef<HTMLVideoElement>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null)
+  const durationTimerRef = useRef<number | null>(null)
 
-  // WebRTC Configuration (Google's free STUN server)
-  const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+  const configuration: RTCConfiguration = {
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+  }
 
-  // ── 1. CAMERA/MIC SETUP ──
+  /* Camera + mic */
   useEffect(() => {
     const startLocalVideo = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         localStreamRef.current = stream
         if (localVideoRef.current) localVideoRef.current.srcObject = stream
-      } catch (err) {
-        showToast({ type: 'error', title: 'Camera Error', message: 'Please allow camera & mic access.', duration: 5000 })
+      } catch {
+        showToast({
+          type: 'error',
+          title: 'Camera unavailable',
+          message: 'Please allow camera & microphone access.',
+          duration: 5000,
+        })
       }
     }
     startLocalVideo()
 
     return () => {
-      // Component unmount par camera band karo
-      localStreamRef.current?.getTracks().forEach(track => track.stop())
+      localStreamRef.current?.getTracks().forEach((t) => t.stop())
       peerConnectionRef.current?.close()
+      if (durationTimerRef.current) window.clearInterval(durationTimerRef.current)
     }
   }, [])
 
-  // ── 2. WEBRTC & SIGNALR LOGIC ──
+  /* SignalR signaling */
   useEffect(() => {
     const connection = getConnection()
     if (!connection) return
@@ -52,17 +63,13 @@ export default function VideoChat() {
       const pc = new RTCPeerConnection(configuration)
       peerConnectionRef.current = pc
 
-      // Local tracks WebRTC me dalo
-      localStreamRef.current?.getTracks().forEach(track => {
+      localStreamRef.current?.getTracks().forEach((track) => {
         pc.addTrack(track, localStreamRef.current!)
       })
 
-      // Jab saamne wale ka video aaye
       pc.ontrack = (event) => {
         if (remoteVideoRef.current) remoteVideoRef.current.srcObject = event.streams[0]
       }
-
-      // Network rasta (ICE) mile toh backend ko bhejo
       pc.onicecandidate = (event) => {
         if (event.candidate) {
           safeInvoke('SendIceCandidate', pId, JSON.stringify(event.candidate))
@@ -71,12 +78,17 @@ export default function VideoChat() {
       return pc
     }
 
-    // 🟢 Event: Match Found!
-    connection.on("MatchFound", async (roomId: string, pId: string, isInitiator: boolean) => {
+    connection.on('MatchFound', async (_roomId: string, pId: string, isInitiator: boolean) => {
       setIsSearching(false)
       setPartnerId(pId)
-      const pc = setupPeerConnection(pId)
+      setCallDuration(0)
+      // start duration timer
+      if (durationTimerRef.current) window.clearInterval(durationTimerRef.current)
+      durationTimerRef.current = window.setInterval(() => {
+        setCallDuration((d) => d + 1)
+      }, 1000)
 
+      const pc = setupPeerConnection(pId)
       if (isInitiator) {
         const offer = await pc.createOffer()
         await pc.setLocalDescription(offer)
@@ -84,8 +96,7 @@ export default function VideoChat() {
       }
     })
 
-    // 🟢 Event: Receive Offer
-    connection.on("ReceiveOffer", async (callerId: string, sdpStr: string) => {
+    connection.on('ReceiveOffer', async (callerId: string, sdpStr: string) => {
       if (peerConnectionRef.current) {
         const offer = JSON.parse(sdpStr)
         await peerConnectionRef.current.setRemoteDescription(offer)
@@ -95,38 +106,35 @@ export default function VideoChat() {
       }
     })
 
-    // 🟢 Event: Receive Answer
-    connection.on("ReceiveAnswer", async (pId: string, sdpStr: string) => {
+    connection.on('ReceiveAnswer', async (_pId: string, sdpStr: string) => {
       if (peerConnectionRef.current) {
         const answer = JSON.parse(sdpStr)
         await peerConnectionRef.current.setRemoteDescription(answer)
       }
     })
 
-    // 🟢 Event: Receive ICE Candidate
-    connection.on("ReceiveIceCandidate", async (pId: string, candidateStr: string) => {
+    connection.on('ReceiveIceCandidate', async (_pId: string, candidateStr: string) => {
       if (peerConnectionRef.current) {
         const candidate = JSON.parse(candidateStr)
         await peerConnectionRef.current.addIceCandidate(candidate)
       }
     })
 
-    // 🔴 Event: Partner Skipped/Left
-    connection.on("PartnerLeft", () => {
-      showToast({ type: 'warning', title: 'Skipped', message: 'Partner left the chat.', duration: 2000 })
+    connection.on('PartnerLeft', () => {
+      showToast({ type: 'warning', title: 'Disconnected', message: 'Partner left the call.', duration: 2500 })
       handleStop()
     })
 
     return () => {
-      connection.off("MatchFound")
-      connection.off("ReceiveOffer")
-      connection.off("ReceiveAnswer")
-      connection.off("ReceiveIceCandidate")
-      connection.off("PartnerLeft")
+      connection.off('MatchFound')
+      connection.off('ReceiveOffer')
+      connection.off('ReceiveAnswer')
+      connection.off('ReceiveIceCandidate')
+      connection.off('PartnerLeft')
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getConnection])
 
-  // ── 3. BUTTON CONTROLS ──
   const handleStartMatching = () => {
     setIsSearching(true)
     safeInvoke('StartAutoMatch')
@@ -139,100 +147,195 @@ export default function VideoChat() {
     peerConnectionRef.current?.close()
     peerConnectionRef.current = null
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null
+    if (durationTimerRef.current) {
+      window.clearInterval(durationTimerRef.current)
+      durationTimerRef.current = null
+    }
+    setCallDuration(0)
+  }
+
+  const handleSkip = () => {
+    handleStop()
+    handleStartMatching()
+  }
+
+  const handleReport = () => {
+    if (!partnerId) return
+    showToast({
+      type: 'info',
+      title: 'Report submitted',
+      message: 'Our team will review the session.',
+      duration: 2500,
+    })
+    handleStop()
   }
 
   const toggleMic = () => {
-    if (localStreamRef.current) {
-      const audioTrack = localStreamRef.current.getAudioTracks()[0]
-      if (audioTrack) {
-        audioTrack.enabled = !isMicOn
-        setIsMicOn(!isMicOn)
-      }
+    const track = localStreamRef.current?.getAudioTracks()[0]
+    if (track) {
+      track.enabled = !isMicOn
+      setIsMicOn(!isMicOn)
     }
   }
 
   const toggleCam = () => {
-    if (localStreamRef.current) {
-      const videoTrack = localStreamRef.current.getVideoTracks()[0]
-      if (videoTrack) {
-        videoTrack.enabled = !isCamOn
-        setIsCamOn(!isCamOn)
-      }
+    const track = localStreamRef.current?.getVideoTracks()[0]
+    if (track) {
+      track.enabled = !isCamOn
+      setIsCamOn(!isCamOn)
     }
   }
 
-  // ── 🎥 UI RENDER ──
-  return (
-    <div className="flex flex-col h-screen bg-gray-950 text-white relative overflow-hidden">
-      
-      {/* ── REMOTE VIDEO (Full Screen Back) ── */}
-      <div className="absolute inset-0 bg-black flex items-center justify-center">
-        <video 
-          ref={remoteVideoRef} 
-          autoPlay 
-          playsInline 
-          className={`w-full h-full object-cover ${!partnerId ? 'opacity-0' : 'opacity-100'} transition-opacity duration-500`} 
-        />
-        
-        {/* Waiting State */}
-        {!partnerId && isSearching && (
-          <div className="flex flex-col items-center z-10">
-            <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-xl font-medium animate-pulse">Finding a random stranger...</p>
-          </div>
-        )}
+  const formatDuration = (s: number) => {
+    const m = Math.floor(s / 60)
+    const sec = s % 60
+    return `${m}:${sec.toString().padStart(2, '0')}`
+  }
 
-        {/* Start Screen */}
-        {!partnerId && !isSearching && (
-          <div className="flex flex-col items-center z-10 text-center px-4">
-            <div className="text-6xl mb-4">🌍</div>
-            <h1 className="text-3xl font-bold mb-2">Auto-Match Video</h1>
-            <p className="text-gray-400 mb-8 max-w-md">Meet new people instantly. Click start and we'll pair you with someone randomly.</p>
-            <button 
-              onClick={handleStartMatching}
-              className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 rounded-full text-xl font-bold transition shadow-[0_0_20px_rgba(79,70,229,0.4)]"
+  return (
+    <div className="relative w-full h-full bg-black text-white overflow-hidden">
+      {/* Remote video (fills) */}
+      <video
+        ref={remoteVideoRef}
+        autoPlay
+        playsInline
+        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500
+          ${partnerId ? 'opacity-100' : 'opacity-0'}`}
+      />
+
+      {/* Top status bar (only during call) */}
+      {partnerId && (
+        <div className="absolute top-0 inset-x-0 z-20 px-5 py-3 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent">
+          <div className="flex items-center gap-2.5">
+            <span className="dot-live" />
+            <span className="text-xs font-medium tracking-tight">Connected</span>
+            <span className="text-xs text-white/50 tabular-nums">· {formatDuration(callDuration)}</span>
+          </div>
+          <button
+            onClick={handleReport}
+            className="text-xs text-white/70 hover:text-white transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-white/10"
+          >
+            <Flag size={13} />
+            Report
+          </button>
+        </div>
+      )}
+
+      {/* Searching state */}
+      {!partnerId && isSearching && (
+        <div className="absolute inset-0 flex items-center justify-center z-10">
+          <div className="text-center max-w-sm px-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[var(--color-surface-1)] border border-[var(--color-line)] mb-5">
+              <Loader2 size={24} className="text-[var(--color-accent-fg)]" style={{ animation: 'spin 1s linear infinite' }} />
+            </div>
+            <h2 className="text-lg font-semibold mb-1.5">Finding a partner</h2>
+            <p className="text-sm text-white/50">
+              Hang tight — we're matching you with someone right now.
+            </p>
+            <button
+              onClick={handleStop}
+              className="mt-6 px-4 h-9 rounded-md text-sm bg-white/10 hover:bg-white/15 text-white transition-colors"
             >
-              Start Matching
+              Cancel
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* ── LOCAL VIDEO (Floating Bottom Right) ── */}
-      <div className="absolute bottom-24 right-6 w-32 sm:w-48 aspect-[3/4] bg-gray-900 rounded-2xl overflow-hidden shadow-2xl border-2 border-gray-800 z-20">
-        <video 
-          ref={localVideoRef} 
-          autoPlay 
-          playsInline 
-          muted 
-          className={`w-full h-full object-cover transform -scale-x-100 ${!isCamOn ? 'hidden' : ''}`} 
+      {/* Idle / start state */}
+      {!partnerId && !isSearching && (
+        <div className="absolute inset-0 flex items-center justify-center z-10 px-6">
+          <div className="text-center max-w-md">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[var(--color-surface-1)] border border-[var(--color-line)] mb-5">
+              <Shuffle size={22} className="text-[var(--color-accent-fg)]" />
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight mb-2">Meet someone new</h1>
+            <p className="text-sm text-white/55 mb-7 leading-relaxed">
+              We'll match you with another verified user. AI checks run on every session.
+            </p>
+            <button
+              onClick={handleStartMatching}
+              className="px-5 h-11 rounded-md bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-medium transition-colors inline-flex items-center gap-2 focus-ring"
+            >
+              Start matching
+            </button>
+            <p className="mt-4 text-[11px] text-white/35">
+              By starting, you agree to our community guidelines.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Local video PiP */}
+      <div
+        className="absolute bottom-24 right-5 w-32 sm:w-40 aspect-[3/4] rounded-lg overflow-hidden z-20 bg-[var(--color-surface-2)]"
+        style={{ boxShadow: 'var(--shadow-md)', border: '1px solid var(--color-line-strong)' }}
+      >
+        <video
+          ref={localVideoRef}
+          autoPlay
+          playsInline
+          muted
+          className={`w-full h-full object-cover transform -scale-x-100 ${isCamOn ? '' : 'hidden'}`}
         />
         {!isCamOn && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-3xl">📷❌</div>
+          <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-surface-2)]">
+            <VideoOff size={22} className="text-[var(--color-fg-mute)]" />
+          </div>
         )}
+        <div className="absolute bottom-1.5 left-1.5 text-[10px] text-white/80 bg-black/45 backdrop-blur px-1.5 py-0.5 rounded">
+          {user?.username ?? 'You'}
+        </div>
       </div>
 
-      {/* ── CONTROLS (Bottom Bar) ── */}
-      <div className="absolute bottom-0 inset-x-0 h-20 bg-gradient-to-t from-black/90 to-transparent flex items-center justify-center gap-4 z-30 pb-4">
-        
-        <button onClick={toggleMic} className={`w-12 h-12 rounded-full flex items-center justify-center text-xl transition ${isMicOn ? 'bg-gray-800 hover:bg-gray-700' : 'bg-red-600 hover:bg-red-500'}`}>
-          {isMicOn ? '🎤' : '🔇'}
-        </button>
+      {/* Controls bar */}
+      <div className="absolute bottom-0 inset-x-0 z-30 px-5 pb-5 pt-12 flex items-center justify-center gap-2 bg-gradient-to-t from-black/85 via-black/40 to-transparent">
+        <IconButton
+          variant="subtle"
+          size="lg"
+          onClick={toggleMic}
+          aria-label={isMicOn ? 'Mute' : 'Unmute'}
+          className={!isMicOn ? '!bg-[var(--color-danger)] !text-white !border-[var(--color-danger)]' : ''}
+        >
+          {isMicOn ? <Mic size={18} /> : <MicOff size={18} />}
+        </IconButton>
 
-        <button onClick={toggleCam} className={`w-12 h-12 rounded-full flex items-center justify-center text-xl transition ${isCamOn ? 'bg-gray-800 hover:bg-gray-700' : 'bg-red-600 hover:bg-red-500'}`}>
-          {isCamOn ? '📹' : '📵'}
-        </button>
+        <IconButton
+          variant="subtle"
+          size="lg"
+          onClick={toggleCam}
+          aria-label={isCamOn ? 'Stop camera' : 'Start camera'}
+          className={!isCamOn ? '!bg-[var(--color-danger)] !text-white !border-[var(--color-danger)]' : ''}
+        >
+          {isCamOn ? <VideoIcon size={18} /> : <VideoOff size={18} />}
+        </IconButton>
 
         {partnerId ? (
-          <button onClick={() => { handleStop(); handleStartMatching(); }} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-full font-bold transition flex items-center gap-2">
-            ⏭️ Skip
-          </button>
+          <>
+            <button
+              onClick={handleSkip}
+              className="h-11 px-5 rounded-md text-sm font-medium bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white inline-flex items-center gap-1.5 focus-ring transition-colors"
+            >
+              <SkipForward size={15} />
+              Skip
+            </button>
+            <button
+              onClick={handleStop}
+              className="h-11 px-4 rounded-md text-sm font-medium bg-[var(--color-danger)] hover:bg-[#dc2626] text-white inline-flex items-center gap-1.5 focus-ring transition-colors"
+            >
+              <X size={15} />
+              End
+            </button>
+          </>
         ) : isSearching ? (
-          <button onClick={handleStop} className="px-6 py-3 bg-red-600 hover:bg-red-500 rounded-full font-bold transition">
-            Stop Searching
+          <button
+            onClick={handleStop}
+            className="h-11 px-5 rounded-md text-sm font-medium bg-[var(--color-danger)] hover:bg-[#dc2626] text-white inline-flex items-center gap-1.5 focus-ring transition-colors"
+          >
+            <X size={15} />
+            Stop
           </button>
         ) : null}
-
       </div>
     </div>
   )

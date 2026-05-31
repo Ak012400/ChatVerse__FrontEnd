@@ -1,21 +1,80 @@
-export default function ChatSidebar({ rooms, slug, navigate }: any) {
-    const sections = ['General', 'Gaming', 'Tech', 'Fun'];
-    
-    return (
-      <div className="space-y-6">
-        {sections.map(section => (
-          <div key={section}>
-            <h3 className="text-xs font-bold text-gray-500 uppercase mb-2">{section}</h3>
-            <div className="space-y-1">
-              {rooms.filter((r: any) => r.category === section.toLowerCase()).map((r: any) => (
-                <button key={r.slug} onClick={() => navigate(`/chat/${r.slug}`)} 
-                  className={`w-full px-3 py-2 rounded-lg text-sm ${slug === r.slug ? 'bg-gray-800 text-white' : 'text-gray-400 hover:bg-gray-900'}`}>
-                  # {r.displayName}
-                </button>
-              ))}
-            </div>
+import { useMemo } from 'react'
+import { Hash, Plus } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import type { Room } from '../../../types'
+import { useChatStore } from '../../../stores/chatStore'
+
+interface Props {
+  slug?: string
+}
+
+export default function ChatSidebar({ slug }: Props) {
+  const rooms = useChatStore((s) => s.rooms)
+  const onlineCount = useChatStore((s) => s.onlineCount)
+  const navigate = useNavigate()
+
+  // Group rooms by category — fall back to "Rooms" if unknown.
+  const grouped = useMemo(() => {
+    const map = new Map<string, Room[]>()
+    for (const r of rooms) {
+      const key = (r.category ?? 'rooms').toString()
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(r)
+    }
+    return Array.from(map.entries())
+  }, [rooms])
+
+  return (
+    <div className="px-2 space-y-5">
+      {grouped.length === 0 && (
+        <div className="px-3 py-6 text-center">
+          <p className="text-xs text-[var(--color-fg-mute)]">No rooms yet.</p>
+        </div>
+      )}
+
+      {grouped.map(([section, items]) => (
+        <div key={section}>
+          <div className="px-2 mb-1 flex items-center justify-between">
+            <h3 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-fg-mute)]">
+              {section}
+            </h3>
+            {section === grouped[0]?.[0] && (
+              <button
+                aria-label="Add room"
+                className="opacity-0 hover:opacity-100 transition-opacity text-[var(--color-fg-mute)] hover:text-[var(--color-fg-dim)]"
+              >
+                <Plus size={12} />
+              </button>
+            )}
           </div>
-        ))}
-      </div>
-    );
-  }
+          <div className="space-y-0.5">
+            {items.map((r) => {
+              const active = slug === r.slug
+              const count = onlineCount[r.slug] ?? r.activeNow ?? 0
+              return (
+                <button
+                  key={r.slug}
+                  onClick={() => navigate(`/chat/${r.slug}`)}
+                  className={`group w-full pl-2 pr-2 py-1.5 rounded-md flex items-center gap-2 text-sm transition-colors
+                    ${
+                      active
+                        ? 'bg-[var(--color-surface-2)] text-[var(--color-fg)]'
+                        : 'text-[var(--color-fg-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)]'
+                    }`}
+                >
+                  <Hash size={14} className="text-[var(--color-fg-mute)] shrink-0" />
+                  <span className="flex-1 text-left truncate">{r.displayName}</span>
+                  {count > 0 && (
+                    <span className="text-[10px] text-[var(--color-fg-mute)] tabular-nums">
+                      {count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}

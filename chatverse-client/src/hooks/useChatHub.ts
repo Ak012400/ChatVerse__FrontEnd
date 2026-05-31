@@ -61,7 +61,7 @@ export function useChatHub() {
 
     const startPromise = hub.start()
       .then(() => { connectionRef.current = hub })
-      .catch((err) => { connectionRef.current = null })
+      .catch(() => { connectionRef.current = null })
       .finally(() => { connectionPromiseRef.current = null })
 
     connectionPromiseRef.current = startPromise
