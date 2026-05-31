@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/authStore'
 import { authApi } from './api/auth'
 
 import ToastContainer from './components/ui/ToastContainer'
+import AppLayout from './components/layout/AppLayout' // 💥 यहाँ अपना नया Layout import करो
 
 // Pages
 import LandingPage    from './pages/auth/LandingPage'
@@ -16,64 +17,50 @@ import ProfilePage    from './pages/profile/ProfilePage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const token = useAuthStore((s) => s.token)
-  return token ? <>{children}</> : <Navigate to="/" replace />
+  const { token, isReady } = useAuthStore()
+  if (!isReady) return null // Loading state handle krne ke liye
+  return token ? <AppLayout>{children}</AppLayout> : <Navigate to="/" replace />
 }
 
 function GuestRoute({ children }: { children: React.ReactNode }) {
-  const token = useAuthStore((s) => s.token)
+  const { token, isReady } = useAuthStore()
+  if (!isReady) return null
   return !token ? <>{children}</> : <Navigate to="/chat" replace />
 }
 
 export default function App() {
   const { token, setAuth, setReady } = useAuthStore()
 
-  // Validate stored token on app start
   useEffect(() => {
     if (!token) { setReady(true); return }
     authApi.me()
       .then((res) => setAuth(res.data.data, token))
-      .catch(() => {
-        useAuthStore.getState().clearAuth()
-      })
+      .catch(() => { useAuthStore.getState().clearAuth() })
       .finally(() => setReady(true))
   }, [])
 
   return (
     <>
-    <ToastContainer />
-    <BrowserRouter>
-      <Routes>
-        {/* Public */}
-        <Route path="/" element={
-          <GuestRoute><LandingPage /></GuestRoute>
-        } />
-        <Route path="/login" element={
-          <GuestRoute><LoginPage /></GuestRoute>
-        } />
-        <Route path="/register" element={
-          <GuestRoute><RegisterPage /></GuestRoute>
-        } />
-        <Route path="/verify-otp" element={<VerifyOtpPage />} />
+      <ToastContainer />
+      <BrowserRouter>
+        <Routes>
+          {/* Public */}
+          <Route path="/" element={<GuestRoute><LandingPage /></GuestRoute>} />
+          <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
+          <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
+          <Route path="/verify-otp" element={<VerifyOtpPage />} />
 
-        {/* Protected */}
-        <Route path="/chat" element={
-          <PrivateRoute><ChatPage /></PrivateRoute>
-        } />
-        <Route path="/chat/:slug" element={
-          <PrivateRoute><ChatPage /></PrivateRoute>
-        } />
-        <Route path="/video" element={
-          <PrivateRoute><VideoPage /></PrivateRoute>
-        } />
-        <Route path="/profile" element={
-          <PrivateRoute><ProfilePage /></PrivateRoute>
-        } />
+          {/* Protected - Inhe ab AppLayout milega */}
+          <Route path="/chat" element={<PrivateRoute><ChatPage /></PrivateRoute>} />
+          <Route path="/chat/:slug" element={<PrivateRoute><ChatPage /></PrivateRoute>} />
+          <Route path="/video" element={<PrivateRoute><VideoPage /></PrivateRoute>} />
+          <Route path="/video/:mode" element={<PrivateRoute><VideoPage /></PrivateRoute>} />
+          <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
 
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
     </>
   )
 }

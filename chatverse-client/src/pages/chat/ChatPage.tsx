@@ -6,8 +6,8 @@ import { useAuthStore } from '../../stores/authStore'
 import { useChatHub } from '../../hooks/useChatHub'
 import { useToastStore } from '../../stores/toastStore'
 import Loader from '../../components/ui/Loader'
-import EmojiPicker from 'emoji-picker-react' 
 import * as nsfwjs from 'nsfwjs'
+import EmojiPicker, { Theme } from 'emoji-picker-react';
 
 export default function ChatPage() {
   const { slug }                        = useParams()
@@ -251,7 +251,7 @@ export default function ChatPage() {
                     setInput(prev => prev + e.emoji)
                     if (slug) sendTyping(slug)
                   }} 
-                  theme="dark" 
+                  theme={Theme.DARK}
                 />
               </div>
             )}

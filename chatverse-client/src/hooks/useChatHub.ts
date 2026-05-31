@@ -113,12 +113,14 @@ export function useChatHub() {
   }
 
   return {
+    getConnection: () => connectionRef.current,
     joinRoom: (slug: string) => safeInvoke('JoinRoom', slug),
     leaveRoom: (slug: string) => safeInvoke('LeaveRoom', slug),
     sendMessage: (slug: string, content: string, type: string = "text", mediaUrl: string | null = null, replyToId?: string) => 
       safeInvoke('SendMessage', slug, content, type, mediaUrl, replyToId ?? null),
     sendTyping: (slug: string) => safeInvoke('SendTyping', slug),
     reactToMessage: (slug: string, messageId: string, emoji: string) => safeInvoke('ReactToMessage', slug, messageId, emoji),
-    isConnected: () => connectionRef.current?.state === signalR.HubConnectionState.Connected
+    isConnected: () => connectionRef.current?.state === signalR.HubConnectionState.Connected,
+    safeInvoke
   }
 }
