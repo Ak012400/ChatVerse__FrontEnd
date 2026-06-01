@@ -16,12 +16,20 @@ import {
 import { Track } from 'livekit-client'
 import '@livekit/components-styles'
 
-import { directCallApi } from '../../api'
+import { directCallApi, usersApi } from '../../api'
 import { useChatHub } from '../../hooks/useChatHub'
 import { useToastStore } from '../../stores/toastStore'
 import Button from '../../components/ui/Button'
 import IconButton from '../../components/ui/IconButton'
 import Input from '../../components/ui/Input'
+import Avatar from '../../components/ui/Avatar'
+
+interface UserSearchHit {
+  userId: string
+  username: string
+  trustScore: number
+  ageVerified: boolean
+}
 
 type CallState =
   | { kind: 'idle' }
@@ -38,6 +46,30 @@ export default function DirectCallPage() {
   const [state, setState] = useState<CallState>({ kind: 'idle' })
   const [targetInput, setTargetInput] = useState('')
   const [inviteMessage, setInviteMessage] = useState('')
+  const [searchHits, setSearchHits] = useState<UserSearchHit[]>([])
+  const [picked, setPicked] = useState<UserSearchHit | null>(null)
+  const [searching, setSearching] = useState(false)
+
+  /* Debounced username search */
+  useEffect(() => {
+    if (picked) return // already chose someone — stop searching
+    if (!targetInput.trim() || targetInput.trim().length < 2) {
+      setSearchHits([])
+      return
+    }
+    const handle = window.setTimeout(async () => {
+      setSearching(true)
+      try {
+        const res = await usersApi.search(targetInput.trim())
+        setSearchHits(res.data.data?.results ?? [])
+      } catch {
+        setSearchHits([])
+      } finally {
+        setSearching(false)
+      }
+    }, 220)
+    return () => window.clearTimeout(handle)
+  }, [targetInput, picked])
 
   /* Wire up hub events */
   useEffect(() => {
@@ -80,7 +112,7 @@ export default function DirectCallPage() {
       }
     }
 
-    const onCallDeclined = (payload: { inviteId: string }) => {
+    const onCallDeclined = (_payload: { inviteId: string }) => {
       showToast({
         type: 'info',
         title: 'Call declined',
@@ -127,8 +159,9 @@ export default function DirectCallPage() {
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!targetInput.trim()) return
-    await safeInvoke('InviteToCall', targetInput.trim(), inviteMessage || null)
+    const targetId = picked?.userId ?? targetInput.trim()
+    if (!targetId) return
+    await safeInvoke('InviteToCall', targetId, inviteMessage || null)
   }
 
   const handleAccept = async () => {
@@ -209,13 +242,77 @@ export default function DirectCallPage() {
             onSubmit={handleInvite}
             className="bg-[var(--color-surface-1)] border border-[var(--color-line)] rounded-md p-5 space-y-3"
           >
-            <Input
-              label="User ID"
-              placeholder="Paste the user's id"
-              value={targetInput}
-              onChange={(e) => setTargetInput(e.target.value)}
-              hint="You'll get a UI search field later — for now paste the recipient's UUID."
-            />
+            {picked ? (
+              <div className="p-3 rounded-md bg-[var(--color-accent-soft)] border border-[rgba(99,102,241,0.3)] flex items-center gap-3">
+                <Avatar name={picked.username} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-[var(--color-fg)]">
+                    {picked.username}
+                  </p>
+                  <p className="text-[11px] text-[var(--color-fg-faint)]">
+                    Trust {picked.trustScore}/100
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPicked(null)
+                    setTargetInput('')
+                  }}
+                  className="text-xs text-[var(--color-fg-faint)] hover:text-[var(--color-fg)] px-2 py-1 rounded-md hover:bg-[var(--color-surface-2)] transition-colors"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <Input
+                  label="Recipient"
+                  placeholder="Search by username…"
+                  value={targetInput}
+                  onChange={(e) => setTargetInput(e.target.value)}
+                  hint="Start typing — we'll show matching usernames."
+                  autoComplete="off"
+                />
+                {/* Typeahead dropdown */}
+                {targetInput.trim().length >= 2 && (
+                  <div className="absolute z-10 mt-1 w-full bg-[var(--color-surface-2)] border border-[var(--color-line)] rounded-md shadow-lg max-h-64 overflow-y-auto">
+                    {searching ? (
+                      <div className="p-3 text-xs text-[var(--color-fg-faint)] text-center">
+                        Searching…
+                      </div>
+                    ) : searchHits.length === 0 ? (
+                      <div className="p-3 text-xs text-[var(--color-fg-faint)] text-center">
+                        No matches. They might need to sign up first.
+                      </div>
+                    ) : (
+                      searchHits.map((hit) => (
+                        <button
+                          key={hit.userId}
+                          type="button"
+                          onClick={() => {
+                            setPicked(hit)
+                            setTargetInput(hit.username)
+                            setSearchHits([])
+                          }}
+                          className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-[var(--color-surface-3)] text-left transition-colors"
+                        >
+                          <Avatar name={hit.username} size="sm" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{hit.username}</p>
+                            <p className="text-[11px] text-[var(--color-fg-faint)]">
+                              Trust {hit.trustScore}/100
+                              {hit.ageVerified && ' · Age verified'}
+                            </p>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <Input
               label="Message (optional)"
               placeholder="Hey, got a sec?"
@@ -227,7 +324,7 @@ export default function DirectCallPage() {
               fullWidth
               size="lg"
               leftIcon={<PhoneCall size={15} />}
-              disabled={!targetInput.trim()}
+              disabled={!picked && !targetInput.trim()}
             >
               Ring them
             </Button>

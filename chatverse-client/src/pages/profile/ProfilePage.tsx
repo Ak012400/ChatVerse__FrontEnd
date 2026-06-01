@@ -42,21 +42,31 @@ export default function ProfilePage() {
 
   const trustPct = trust ? Math.max(0, Math.min(100, trust.score)) : 0
 
-  const verificationSteps = [
+  const verificationSteps: {
+    label: string
+    Icon: typeof Mail
+    done: boolean
+    /** What clicking the step opens (or null if it can't be acted on). */
+    href: string | null
+  }[] = [
     {
       label: 'Email verified',
       Icon: Mail,
       done: !!ageStatus?.gates?.gate1_emailVerified,
+      href: null,
     },
     {
       label: 'Age self-declared',
       Icon: CalendarCheck,
       done: !!ageStatus?.gates?.gate2_selfDeclared,
+      href: '/verify/age',
     },
     {
       label: 'AI maturity assessment',
       Icon: Bot,
       done: !!ageStatus?.gates?.gate3_aiPassed,
+      // Quiz requires age declaration first
+      href: ageStatus?.gates?.gate2_selfDeclared ? '/verify/ai-quiz' : '/verify/age',
     },
     {
       label: 'Tenure or document',
@@ -64,6 +74,7 @@ export default function ProfilePage() {
       done:
         !!ageStatus?.gates?.gate4a_tenureCleared ||
         ageStatus?.gates?.gate4b_docStatus === 'approved',
+      href: ageStatus?.gates?.gate3_aiPassed ? '/verify/document' : '/verify/age',
     },
   ]
 
@@ -155,39 +166,63 @@ export default function ProfilePage() {
           {ageStatus ? (
             <>
               <ul className="space-y-1.5">
-                {verificationSteps.map(({ label, Icon, done }) => (
-                  <li
-                    key={label}
-                    className={`flex items-center gap-3 px-2 py-2 rounded-md ${
-                      done ? 'bg-[var(--color-surface-2)]/50' : ''
-                    }`}
-                  >
-                    <span
-                      className={`w-7 h-7 rounded-md flex items-center justify-center
-                        ${
-                          done
-                            ? 'bg-[var(--color-success-soft)] text-[#86efac]'
-                            : 'bg-[var(--color-surface-2)] text-[var(--color-fg-mute)]'
+                {verificationSteps.map(({ label, Icon, done, href }) => {
+                  const inner = (
+                    <>
+                      <span
+                        className={`w-7 h-7 rounded-md flex items-center justify-center
+                          ${
+                            done
+                              ? 'bg-[var(--color-success-soft)] text-[#86efac]'
+                              : 'bg-[var(--color-surface-2)] text-[var(--color-fg-mute)]'
+                          }`}
+                      >
+                        {done ? <Check size={14} /> : <Icon size={14} />}
+                      </span>
+                      <span
+                        className={`text-sm ${
+                          done ? 'text-[var(--color-fg)]' : 'text-[var(--color-fg-faint)]'
                         }`}
-                    >
-                      {done ? <Check size={14} /> : <Icon size={14} />}
-                    </span>
-                    <span
-                      className={`text-sm ${
-                        done ? 'text-[var(--color-fg)]' : 'text-[var(--color-fg-faint)]'
-                      }`}
-                    >
-                      {label}
-                    </span>
-                    {!done && (
-                      <Circle
-                        size={6}
-                        className="ml-auto text-[var(--color-fg-mute)]"
-                        fill="currentColor"
-                      />
-                    )}
-                  </li>
-                ))}
+                      >
+                        {label}
+                      </span>
+                      {!done && (
+                        <Circle
+                          size={6}
+                          className="ml-auto text-[var(--color-fg-mute)]"
+                          fill="currentColor"
+                        />
+                      )}
+                    </>
+                  )
+
+                  if (done || !href) {
+                    return (
+                      <li
+                        key={label}
+                        className={`flex items-center gap-3 px-2 py-2 rounded-md ${
+                          done ? 'bg-[var(--color-surface-2)]/50' : ''
+                        }`}
+                      >
+                        {inner}
+                      </li>
+                    )
+                  }
+
+                  return (
+                    <li key={label}>
+                      <button
+                        onClick={() => navigate(href)}
+                        className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-[var(--color-surface-2)] text-left transition-colors group focus-ring"
+                      >
+                        {inner}
+                        <span className="ml-2 text-[10px] text-[var(--color-fg-mute)] group-hover:text-[var(--color-fg-faint)] transition-colors">
+                          Start →
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
 
               {ageStatus.ageVerified ? (

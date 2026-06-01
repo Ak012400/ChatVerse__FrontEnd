@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   Mic, MicOff, Video as VideoIcon, VideoOff, SkipForward, X, Flag, Loader2, Shuffle,
 } from 'lucide-react'
+import * as nsfwjs from 'nsfwjs'
 
 import { useChatHub } from '../../hooks/useChatHub'
 import { useAuthStore } from '../../stores/authStore'
@@ -134,6 +135,68 @@ export default function VideoPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getConnection])
+
+  /* ─── NSFW self-scan ─── *
+   * Runs every 2.5s on the local camera once we're paired with a
+   * partner. On a confident hit we tear down the call and inform
+   * the user — the partner sees a normal PartnerLeft. Self-detection
+   * means a malicious user can't weaponise it to kick others.       */
+  useEffect(() => {
+    if (!partnerId) return
+    let stopped = false
+    let interval: number | null = null
+    let model: any = null
+
+    const start = async () => {
+      try {
+        model = await nsfwjs.load()
+      } catch (err) {
+        console.warn('nsfwjs load failed — skipping self-scan', err)
+        return
+      }
+
+      interval = window.setInterval(async () => {
+        if (stopped || !model || !localVideoRef.current) return
+        const v = localVideoRef.current
+        if (v.readyState < 2 || v.videoWidth === 0) return
+
+        const canvas = document.createElement('canvas')
+        canvas.width = 224
+        canvas.height = 224
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return
+        ctx.drawImage(v, 0, 0, 224, 224)
+
+        try {
+          const preds = await model.classify(canvas)
+          const bad = preds.find(
+            (p: { className: string; probability: number }) =>
+              ['Porn', 'Hentai'].includes(p.className) && p.probability > 0.75,
+          )
+          if (bad) {
+            stopped = true
+            if (interval) window.clearInterval(interval)
+            showToast({
+              type: 'danger',
+              title: 'Call ended',
+              message: 'Inappropriate content detected on your camera.',
+              duration: 5000,
+            })
+            handleStop()
+          }
+        } catch {
+          /* ignore frame errors */
+        }
+      }, 2500)
+    }
+
+    start()
+    return () => {
+      stopped = true
+      if (interval) window.clearInterval(interval)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partnerId])
 
   const handleStartMatching = () => {
     setIsSearching(true)

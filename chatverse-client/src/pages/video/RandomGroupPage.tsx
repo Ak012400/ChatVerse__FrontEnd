@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff,
-  Users, Flag, ShieldAlert, Loader2, Sparkles,
+  Users, Flag, Loader2, Sparkles,
 } from 'lucide-react'
 import {
   LiveKitRoom,
@@ -36,7 +36,6 @@ type JoinData = {
 export default function RandomGroupPage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const { showToast } = useToastStore()
 
   const [joinData, setJoinData] = useState<JoinData | null>(null)
   const [isJoining, setIsJoining] = useState(false)

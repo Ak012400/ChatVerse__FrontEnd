@@ -36,6 +36,20 @@ export const ageApi = {
     cloudinaryPublicId: string
     cloudinaryUrl: string
   }) => api.post('/age/doc-upload', data),
+  /** All-in-one: upload file + create verification record server-side. */
+  uploadDocFile: (file: File, docType: string) => {
+    const form = new FormData()
+    form.append('docType', docType)
+    form.append('file', file)
+    return api.post('/age/doc-upload-file', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+}
+
+export const usersApi = {
+  search: (q: string, limit = 10) =>
+    api.get('/users/search', { params: { q, limit } }),
 }
 
 export const randomGroupApi = {
