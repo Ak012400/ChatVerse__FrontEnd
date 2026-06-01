@@ -50,14 +50,6 @@ export default function ChatSidebar({ slug }: Props) {
             <h3 className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-fg-mute)]">
               {section}
             </h3>
-            {section === grouped[0]?.[0] && (
-              <button
-                aria-label="Add room"
-                className="opacity-0 hover:opacity-100 transition-opacity text-[var(--color-fg-mute)] hover:text-[var(--color-fg-dim)]"
-              >
-                <Plus size={12} />
-              </button>
-            )}
           </div>
           <div className="space-y-0.5">
             {items.map((r) => {
@@ -71,4 +63,22 @@ export default function ChatSidebar({ slug }: Props) {
                     ${
                       active
                         ? 'bg-[var(--color-surface-2)] text-[var(--color-fg)]'
-                        : 'text-[var(--color-fg-dim)] hover:bg-[var(--color-surface-2)] hover:text-[
+                        : 'text-[var(--color-fg-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)]'
+                    }`}
+                >
+                  <Hash size={14} className="text-[var(--color-fg-mute)] shrink-0" />
+                  <span className="flex-1 text-left truncate">{r.displayName}</span>
+                  {count > 0 && (
+                    <span className="text-[10px] text-[var(--color-fg-mute)] tabular-nums">
+                      {count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
