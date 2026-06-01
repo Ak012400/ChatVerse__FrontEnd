@@ -3,6 +3,7 @@ import * as signalR from '@microsoft/signalr'
 import { useChatStore } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
+import { useDmStore, type DmMessage } from '../stores/dmStore'
 import type { Message } from '../types'
 
 const HUB_URL = (import.meta.env.VITE_API_URL ?? 'https://localhost:7217/api').replace('/api', '') + '/hubs/chat'

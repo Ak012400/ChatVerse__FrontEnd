@@ -52,6 +52,14 @@ export const usersApi = {
     api.get('/users/search', { params: { q, limit } }),
 }
 
+export const dmsApi = {
+  conversations: () => api.get('/dms'),
+  thread: (otherUserId: string, skip = 0, limit = 50) =>
+    api.get(`/dms/${otherUserId}`, { params: { skip, limit } }),
+  send: (otherUserId: string, content: string) =>
+    api.post(`/dms/${otherUserId}`, { content }),
+}
+
 export const adminApi = {
   whoami:    () => api.get('/admin/whoami'),
   stats:     () => api.get('/admin/stats'),
