@@ -1,0 +1,92 @@
+{
+  "common": {
+    "back": "Back",
+    "save": "Save",
+    "cancel": "Cancel",
+    "continue": "Continue",
+    "loading": "Loading…",
+    "send": "Send",
+    "search": "Search",
+    "report": "Report",
+    "skip": "Skip",
+    "end": "End",
+    "leave": "Leave",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "nav": {
+    "chat": "Chat",
+    "video": "Video",
+    "dms": "Direct messages",
+    "profile": "Profile",
+    "settings": "Settings",
+    "pricing": "Upgrade",
+    "admin": "Admin",
+    "signOut": "Sign out"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signUp": "Create account",
+    "welcomeBack": "Welcome back",
+    "signInSubtitle": "Sign in to your ChatVerse account.",
+    "email": "Email",
+    "password": "Password",
+    "username": "Username",
+    "newHere": "New here?",
+    "alreadyMember": "Already a member?",
+    "forgotPassword": "Forgot password?",
+    "signingIn": "Signing in…",
+    "invalidCredentials": "Invalid credentials",
+    "guestCta": "Jump in as guest",
+    "createAccountCta": "Create account",
+    "freeForever": "No sign-up needed to try · Free forever"
+  },
+  "video": {
+    "modes": {
+      "random": "Random 1-on-1",
+      "randomGroup": "Random group",
+      "directCall": "Direct call",
+      "hostedGroup": "Hosted group"
+    },
+    "lobbyTitle": "How do you want to chat?",
+    "guestSubtitle": "You're browsing as a guest. Random modes are open to everyone — verified ones unlock after sign-up.",
+    "registeredSubtitle": "Pick a mode. Every session is monitored — keep it real.",
+    "findStranger": "Start matching",
+    "findingPartner": "Finding a partner",
+    "callEnded": "Call ended",
+    "partnerLeft": "Partner left the call.",
+    "muteAria": "Mute",
+    "unmuteAria": "Unmute",
+    "cameraOnAria": "Start camera",
+    "cameraOffAria": "Stop camera"
+  },
+  "chat": {
+    "pickRoom": "Pick a room",
+    "pickRoomSubtitle": "Choose any room from the sidebar to start chatting.",
+    "noMessages": "No messages yet. Be the first to say something.",
+    "messagePlaceholder": "Message #{{slug}}",
+    "newRoom": "New room",
+    "connected": "Connected",
+    "connecting": "Connecting…"
+  },
+  "profile": {
+    "title": "Profile",
+    "trustScore": "Trust score",
+    "trustSubtitle": "Higher score unlocks more features.",
+    "ageVerification": "Age verification",
+    "ageSubtitle": "Required to unlock video chat and 18+ rooms.",
+    "completeSteps": "Complete all steps to unlock video chat and 18+ rooms.",
+    "ageVerifiedBanner": "Age verified — all features unlocked.",
+    "step": {
+      "emailVerified": "Email verified",
+      "ageDeclared": "Age self-declared",
+      "aiQuiz": "AI maturity assessment",
+      "tenureOrDoc": "Tenure or document"
+    },
+    "language": "Language"
+  },
+  "lang": {
+    "english": "English",
+    "hindi": "हिंदी"
+  }
+}

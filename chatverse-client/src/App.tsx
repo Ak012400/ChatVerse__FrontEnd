@@ -11,6 +11,8 @@ import LandingPage      from './pages/auth/LandingPage'
 import LoginPage        from './pages/auth/LoginPage'
 import RegisterPage     from './pages/auth/RegisterPage'
 import VerifyOtpPage    from './pages/auth/VerifyOtpPage'
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
+import ResetPasswordPage  from './pages/auth/ResetPasswordPage'
 import ChatPage         from './pages/chat/ChatPage'
 import VideoLobbyPage   from './pages/video/VideoLobbyPage'
 import VideoPage        from './pages/video/VideoPage'           // random 1-on-1
@@ -23,6 +25,8 @@ import AiQuizPage          from './pages/verify/AiQuizPage'
 import DocumentUploadPage  from './pages/verify/DocumentUploadPage'
 import PricingPage         from './pages/billing/PricingPage'
 import AdminDashboardPage  from './pages/admin/AdminDashboardPage'
+import DmsPage             from './pages/dms/DmsPage'
+import CreateRoomPage      from './pages/rooms/CreateRoomPage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {

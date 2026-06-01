@@ -75,16 +75,26 @@ export default function LoginPage() {
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               leftIcon={<Mail size={15} />}
             />
-            <Input
-              label="Password"
-              type="password"
-              autoComplete="current-password"
-              required
-              placeholder="Your password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              leftIcon={<Lock size={15} />}
-            />
+            <div>
+              <Input
+                label="Password"
+                type="password"
+                autoComplete="current-password"
+                required
+                placeholder="Your password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                leftIcon={<Lock size={15} />}
+              />
+              <div className="mt-1.5 text-right">
+                <Link
+                  to="/forgot-password"
+                  className="text-xs text-[var(--color-fg-faint)] hover:text-[var(--color-accent-fg)] transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            </div>
 
             {error && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-[var(--color-danger-soft)] border border-[rgba(239,68,68,0.3)] text-[#fca5a5] text-xs">

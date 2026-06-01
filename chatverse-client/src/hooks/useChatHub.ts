@@ -60,6 +60,27 @@ export function useChatHub() {
     hub.on('UserLeft', ({ activeCount, roomSlug }: any) => setOnlineCount(roomSlug, activeCount))
     hub.on('Error', (msg: string) => showToast({ type: 'error', title: 'Error', message: msg, duration: 4000 }))
 
+    // ─── DM events ────────────────────────────────────────────
+    hub.on('ReceiveDm', (msg: DmMessage) => {
+      const me = useAuthStore.getState().user?.userId
+      if (!me) return
+      const dm = useDmStore.getState()
+      const otherUserId = msg.senderId === me ? msg.recipientId : msg.senderId
+      dm.appendToThread(otherUserId, msg)
+      dm.upsertConversationFromMessage(msg, me)
+    })
+
+    hub.on('DmTyping', ({ conversationId, senderName }: { conversationId: string; senderName: string }) => {
+      useDmStore.getState().setTyping(conversationId, senderName)
+    })
+
+    hub.on('DmRead', ({ readerId }: { conversationId: string; readerId: string }) => {
+      // The OTHER side just read our messages → clear unread on our side
+      // is N/A (we'd never have unread for outgoing). This event is mostly
+      // for "Read" receipts; we ignore for now beyond optionally toasting.
+      void readerId
+    })
+
     const startPromise = hub.start()
       .then(() => { connectionRef.current = hub })
       .catch(() => { connectionRef.current = null })
@@ -101,7 +122,7 @@ export function useChatHub() {
         // 💥 CHUPE HUYE DUSHMAN KO YAHAN ROKA HAI:
         // JoinRoom, LeaveRoom aur SendTyping par faltu toast mat dikhao
         if (method !== 'JoinRoom' && method !== 'LeaveRoom' && method !== 'SendTyping') {
-          showToast({ type: 'error', title: 'Network Issue', message: 'Reconnecting to chat...', duration: 2000 })
+          showToast({ type: 'error', title: 'Network Issue', message: 'Reconnecting to chat...', duration: 200})
         }
       }
     } catch (err) {
