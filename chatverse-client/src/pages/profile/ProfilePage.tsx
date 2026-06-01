@@ -65,7 +65,6 @@ export default function ProfilePage() {
       label: 'AI maturity assessment',
       Icon: Bot,
       done: !!ageStatus?.gates?.gate3_aiPassed,
-      // Quiz requires age declaration first
       href: ageStatus?.gates?.gate2_selfDeclared ? '/verify/ai-quiz' : '/verify/age',
     },
     {
@@ -232,7 +231,7 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <div className="mt-4 text-xs text-[var(--color-fg-faint)] text-center">
-                  Complete all steps to unlock video chat.
+                  Complete all steps to unlock video chat and 18+ rooms.
                 </div>
               )}
             </>

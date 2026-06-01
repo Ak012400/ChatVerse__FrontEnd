@@ -98,7 +98,7 @@ export default function VideoSidebar() {
             <span className="text-xs font-medium">Guest mode</span>
           </div>
           <p className="text-[11px] text-[var(--color-fg-dim)] leading-relaxed">
-            Create an account to unlock direct invites &amp; hosted rooms.
+            Create an account to unlock direct invites and hosted rooms.
           </p>
         </div>
       )}

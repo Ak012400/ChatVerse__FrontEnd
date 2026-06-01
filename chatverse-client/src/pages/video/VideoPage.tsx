@@ -83,7 +83,6 @@ export default function VideoPage() {
       setIsSearching(false)
       setPartnerId(pId)
       setCallDuration(0)
-      // start duration timer
       if (durationTimerRef.current) window.clearInterval(durationTimerRef.current)
       durationTimerRef.current = window.setInterval(() => {
         setCallDuration((d) => d + 1)
@@ -136,11 +135,9 @@ export default function VideoPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getConnection])
 
-  /* ─── NSFW self-scan ─── *
-   * Runs every 2.5s on the local camera once we're paired with a
-   * partner. On a confident hit we tear down the call and inform
-   * the user — the partner sees a normal PartnerLeft. Self-detection
-   * means a malicious user can't weaponise it to kick others.       */
+  /* NSFW self-scan — runs every 2.5s while paired with a partner.
+   * Self-detection means a malicious user can't weaponise it to kick
+   * others. On a confident hit we tear down the call. */
   useEffect(() => {
     if (!partnerId) return
     let stopped = false
@@ -185,7 +182,7 @@ export default function VideoPage() {
             handleStop()
           }
         } catch {
-          /* ignore frame errors */
+          /* ignore individual frame errors */
         }
       }, 2500)
     }

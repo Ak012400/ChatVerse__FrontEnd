@@ -14,7 +14,6 @@ type ModeDef = {
   desc: string
   tag: string | null
   tone: 'accent' | 'success' | 'neutral'
-  /** What account state is required for this mode. */
   requires: 'guest' | 'registered'
 }
 

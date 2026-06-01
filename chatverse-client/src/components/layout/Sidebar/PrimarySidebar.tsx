@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MessagesSquare, Video, LogOut, Settings } from 'lucide-react'
+import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { authApi } from '../../../api/auth'
+import { adminApi } from '../../../api'
 import IconButton from '../../ui/IconButton'
 import Avatar from '../../ui/Avatar'
 
@@ -15,6 +17,25 @@ interface Props {
 export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
   const navigate = useNavigate()
   const { user, clearAuth } = useAuthStore()
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  /* Probe admin status once on mount. Skip for guests — admin allow-list
+   * is server-side and only enforces for registered users. */
+  useEffect(() => {
+    if (!user || user.isGuest) return
+    let cancelled = false
+    adminApi
+      .whoami()
+      .then((r) => {
+        if (!cancelled) setIsAdmin(!!r.data.data?.isAdmin)
+      })
+      .catch(() => {
+        /* not admin — keep default */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
   const handleLogout = async () => {
     await authApi.logout().catch(() => {})
@@ -62,9 +83,27 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
         </IconButton>
       </nav>
 
-      {/* Bottom: settings + avatar/logout */}
+      {/* Bottom: pricing + (admin) + settings + profile + logout */}
       <div className="flex flex-col items-center gap-2 pb-1">
-        <IconButton variant="ghost" aria-label="Settings">
+        {!user?.isGuest && (
+          <IconButton
+            variant="ghost"
+            onClick={() => navigate('/pricing')}
+            aria-label="Upgrade"
+          >
+            <CreditCard size={18} />
+          </IconButton>
+        )}
+        {isAdmin && (
+          <IconButton
+            variant="ghost"
+            onClick={() => navigate('/admin')}
+            aria-label="Admin dashboard"
+          >
+            <ShieldCheck size={18} />
+          </IconButton>
+        )}
+        <IconButton variant="ghost" aria-label="Settings" onClick={() => navigate('/profile')}>
           <Settings size={18} />
         </IconButton>
         <button

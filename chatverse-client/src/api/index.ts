@@ -52,6 +52,19 @@ export const usersApi = {
     api.get('/users/search', { params: { q, limit } }),
 }
 
+export const adminApi = {
+  whoami:    () => api.get('/admin/whoami'),
+  stats:     () => api.get('/admin/stats'),
+  reports:   (status = 'pending', limit = 50) =>
+    api.get('/admin/reports', { params: { status, limit } }),
+  reviewReport: (reportId: string, outcome: 'valid' | 'invalid' | 'dismissed', note?: string) =>
+    api.post(`/admin/reports/${reportId}/review`, { outcome, note }),
+  documents: (status = 'pending', limit = 50) =>
+    api.get('/admin/documents', { params: { status, limit } }),
+  reviewDocument: (docId: string, outcome: 'approve' | 'reject', rejectReason?: string) =>
+    api.post(`/admin/documents/${docId}/review`, { outcome, rejectReason }),
+}
+
 export const randomGroupApi = {
   join: () =>
     api.post('/random-group/join'),

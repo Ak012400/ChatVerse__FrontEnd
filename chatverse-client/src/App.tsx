@@ -4,7 +4,7 @@ import { useAuthStore } from './stores/authStore'
 import { authApi } from './api/auth'
 
 import ToastContainer from './components/ui/ToastContainer'
-import AppLayout from './components/layout/AppLayout' // 💥 यहाँ अपना नया Layout import करो
+import AppLayout from './components/layout/AppLayout'
 
 // Pages
 import LandingPage      from './pages/auth/LandingPage'
@@ -22,11 +22,12 @@ import AgeDeclarePage      from './pages/verify/AgeDeclarePage'
 import AiQuizPage          from './pages/verify/AiQuizPage'
 import DocumentUploadPage  from './pages/verify/DocumentUploadPage'
 import PricingPage         from './pages/billing/PricingPage'
+import AdminDashboardPage  from './pages/admin/AdminDashboardPage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { token, isReady } = useAuthStore()
-  if (!isReady) return null // Loading state handle krne ke liye
+  if (!isReady) return null
   return token ? <AppLayout>{children}</AppLayout> : <Navigate to="/" replace />
 }
 
@@ -71,7 +72,7 @@ export default function App() {
           <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
           <Route path="/verify-otp" element={<VerifyOtpPage />} />
 
-          {/* Protected - Inhe ab AppLayout milega */}
+          {/* Protected — Chat */}
           <Route path="/chat" element={<PrivateRoute><ChatPage /></PrivateRoute>} />
           <Route path="/chat/:slug" element={<PrivateRoute><ChatPage /></PrivateRoute>} />
 
@@ -91,6 +92,9 @@ export default function App() {
 
           {/* Billing */}
           <Route path="/pricing" element={<PrivateRoute><PricingPage /></PrivateRoute>} />
+
+          {/* Admin — page itself checks /admin/whoami */}
+          <Route path="/admin" element={<RegisteredRoute><AdminDashboardPage /></RegisteredRoute>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -52,7 +52,7 @@ export default function DirectCallPage() {
 
   /* Debounced username search */
   useEffect(() => {
-    if (picked) return // already chose someone — stop searching
+    if (picked) return
     if (!targetInput.trim() || targetInput.trim().length < 2) {
       setSearchHits([])
       return
@@ -83,14 +83,12 @@ export default function DirectCallPage() {
       roomName: string
       message?: string
     }) => {
-      // Only show modal if we're not busy with another call.
       setState((prev) =>
         prev.kind === 'idle' ? { kind: 'incoming', ...payload } : prev,
       )
     }
 
     const onCallAccepted = async (payload: { inviteId: string; roomName: string }) => {
-      // Both caller and callee land here. Fetch our token, switch to in-call.
       try {
         setState({ kind: 'connecting', roomName: payload.roomName })
         const res = await directCallApi.token(payload.roomName)
@@ -127,7 +125,7 @@ export default function DirectCallPage() {
         payload.reason === 'expired_or_invalid'
           ? 'Invite expired.'
           : payload.reason === 'not_invited'
-            ? 'You weren\'t the recipient of this invite.'
+            ? "You weren't the recipient of this invite."
             : 'Invite failed.'
       showToast({ type: 'warning', title: 'Call invite', message: msg, duration: 3000 })
       setState({ kind: 'idle' })
@@ -183,7 +181,7 @@ export default function DirectCallPage() {
     setState({ kind: 'idle' })
   }
 
-  /* In-call: render LiveKit room */
+  /* In-call */
   if (state.kind === 'in-call') {
     return (
       <LiveKitRoom
@@ -202,7 +200,7 @@ export default function DirectCallPage() {
     )
   }
 
-  /* Connecting screen */
+  /* Connecting */
   if (state.kind === 'connecting') {
     return (
       <div className="h-full flex flex-col items-center justify-center bg-[var(--color-bg)] text-[var(--color-fg)] gap-3">
@@ -212,7 +210,7 @@ export default function DirectCallPage() {
     )
   }
 
-  /* Idle / inviting / incoming — all share the lobby canvas */
+  /* Idle / inviting / incoming */
   return (
     <div className="h-full overflow-y-auto bg-[var(--color-bg)] text-[var(--color-fg)]">
       <div className="max-w-md mx-auto px-6 py-10">
@@ -274,7 +272,6 @@ export default function DirectCallPage() {
                   hint="Start typing — we'll show matching usernames."
                   autoComplete="off"
                 />
-                {/* Typeahead dropdown */}
                 {targetInput.trim().length >= 2 && (
                   <div className="absolute z-10 mt-1 w-full bg-[var(--color-surface-2)] border border-[var(--color-line)] rounded-md shadow-lg max-h-64 overflow-y-auto">
                     {searching ? (
@@ -339,7 +336,7 @@ export default function DirectCallPage() {
         </button>
       </div>
 
-      {/* Incoming call modal — overlays the page */}
+      {/* Incoming call modal */}
       {state.kind === 'incoming' && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="w-full max-w-sm bg-[var(--color-surface-1)] border border-[var(--color-line)] rounded-lg p-6 shadow-2xl">
@@ -381,9 +378,7 @@ export default function DirectCallPage() {
   )
 }
 
-/* ─────────────────────────────────────────────────────────────
-   In-call view for direct 1-on-1 — minimal controls.
-───────────────────────────────────────────────────────────── */
+/* In-call view for direct 1-on-1 */
 function DirectCallUI({
   roomName,
   onLeave,
