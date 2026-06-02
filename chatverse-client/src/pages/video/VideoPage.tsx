@@ -5,6 +5,7 @@ import {
 import * as nsfwjs from 'nsfwjs'
 
 import { useChatHub } from '../../hooks/useChatHub'
+import { useIceServers } from '../../hooks/useIceServers'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import IconButton from '../../components/ui/IconButton'
@@ -26,11 +27,10 @@ export default function VideoPage() {
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null)
   const durationTimerRef = useRef<number | null>(null)
 
-  const configuration: RTCConfiguration = {
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-  }
+  // Pulled server-side so TURN credentials can rotate without a redeploy.
+  const iceServers = useIceServers()
+  const configuration: RTCConfiguration = { iceServers }
 
-  /* Camera + mic */
   useEffect(() => {
     const startLocalVideo = async () => {
       try {
@@ -55,7 +55,6 @@ export default function VideoPage() {
     }
   }, [])
 
-  /* SignalR signaling */
   useEffect(() => {
     const connection = getConnection()
     if (!connection) return
@@ -135,9 +134,7 @@ export default function VideoPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getConnection])
 
-  /* NSFW self-scan — runs every 2.5s while paired with a partner.
-   * Self-detection means a malicious user can't weaponise it to kick
-   * others. On a confident hit we tear down the call. */
+  /* NSFW self-scan — runs every 2.5s while paired with a partner. */
   useEffect(() => {
     if (!partnerId) return
     let stopped = false
@@ -254,16 +251,13 @@ export default function VideoPage() {
 
   return (
     <div className="relative w-full h-full bg-black text-white overflow-hidden">
-      {/* Remote video (fills) */}
       <video
         ref={remoteVideoRef}
         autoPlay
         playsInline
-        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500
-          ${partnerId ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${partnerId ? 'opacity-100' : 'opacity-0'}`}
       />
 
-      {/* Top status bar (only during call) */}
       {partnerId && (
         <div className="absolute top-0 inset-x-0 z-20 px-5 py-3 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent">
           <div className="flex items-center gap-2.5">
@@ -281,7 +275,6 @@ export default function VideoPage() {
         </div>
       )}
 
-      {/* Searching state */}
       {!partnerId && isSearching && (
         <div className="absolute inset-0 flex items-center justify-center z-10">
           <div className="text-center max-w-sm px-6">
@@ -289,9 +282,7 @@ export default function VideoPage() {
               <Loader2 size={24} className="text-[var(--color-accent-fg)]" style={{ animation: 'spin 1s linear infinite' }} />
             </div>
             <h2 className="text-lg font-semibold mb-1.5">Finding a partner</h2>
-            <p className="text-sm text-white/50">
-              Hang tight — we're matching you with someone right now.
-            </p>
+            <p className="text-sm text-white/50">Hang tight — we're matching you with someone right now.</p>
             <button
               onClick={handleStop}
               className="mt-6 px-4 h-9 rounded-md text-sm bg-white/10 hover:bg-white/15 text-white transition-colors"
@@ -302,7 +293,6 @@ export default function VideoPage() {
         </div>
       )}
 
-      {/* Idle / start state */}
       {!partnerId && !isSearching && (
         <div className="absolute inset-0 flex items-center justify-center z-10 px-6">
           <div className="text-center max-w-md">
@@ -326,7 +316,6 @@ export default function VideoPage() {
         </div>
       )}
 
-      {/* Local video PiP */}
       <div
         className="absolute bottom-24 right-5 w-32 sm:w-40 aspect-[3/4] rounded-lg overflow-hidden z-20 bg-[var(--color-surface-2)]"
         style={{ boxShadow: 'var(--shadow-md)', border: '1px solid var(--color-line-strong)' }}
@@ -348,7 +337,6 @@ export default function VideoPage() {
         </div>
       </div>
 
-      {/* Controls bar */}
       <div className="absolute bottom-0 inset-x-0 z-30 px-5 pb-5 pt-12 flex items-center justify-center gap-2 bg-gradient-to-t from-black/85 via-black/40 to-transparent">
         <IconButton
           variant="subtle"

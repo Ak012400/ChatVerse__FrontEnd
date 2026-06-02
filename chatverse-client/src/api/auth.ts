@@ -24,4 +24,10 @@ export const authApi = {
 
   upgrade: (data: { username: string; email: string; password: string }) =>
     api.post('/auth/upgrade', data),
+
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }),
+
+  resetPassword: (data: { email: string; code: string; newPassword: string }) =>
+    api.post('/auth/reset-password', data),
 }

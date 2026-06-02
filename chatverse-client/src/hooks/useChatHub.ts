@@ -8,7 +8,7 @@ import type { Message } from '../types'
 
 const HUB_URL = (import.meta.env.VITE_API_URL ?? 'https://localhost:7217/api').replace('/api', '') + '/hubs/chat'
 
-let globalLastWarnedScore: number | null = null;
+let globalLastWarnedScore: number | null = null
 
 export function useChatHub() {
   const connectionRef = useRef<signalR.HubConnection | null>(null)
@@ -19,14 +19,14 @@ export function useChatHub() {
   const { showToast } = useToastStore()
 
   const connect = useCallback(async () => {
-    if (!token) return;
-    if (connectionRef.current?.state === signalR.HubConnectionState.Connected) return;
-    if (connectionPromiseRef.current) return connectionPromiseRef.current;
+    if (!token) return
+    if (connectionRef.current?.state === signalR.HubConnectionState.Connected) return
+    if (connectionPromiseRef.current) return connectionPromiseRef.current
 
     const hub = new signalR.HubConnectionBuilder()
       .withUrl(`${HUB_URL}?access_token=${token}`, {
         transport: signalR.HttpTransportType.WebSockets,
-        skipNegotiation: true
+        skipNegotiation: true,
       })
       .withAutomaticReconnect()
       .build()
@@ -49,7 +49,7 @@ export function useChatHub() {
       const auth = useAuthStore.getState()
       if (globalLastWarnedScore !== score && score < (auth.user?.trustScore ?? 100)) {
         globalLastWarnedScore = score
-        showToast({ type: 'warning', title: '⚠️ Score Dropped', message: `Score: ${score}/100`, duration: 5000 })
+        showToast({ type: 'warning', title: '⚠️ Score dropped', message: `Score: ${score}/100`, duration: 5000 })
       }
     })
     hub.on('UserTyping', ({ username }: { username: string }) => {
@@ -75,9 +75,6 @@ export function useChatHub() {
     })
 
     hub.on('DmRead', ({ readerId }: { conversationId: string; readerId: string }) => {
-      // The OTHER side just read our messages → clear unread on our side
-      // is N/A (we'd never have unread for outgoing). This event is mostly
-      // for "Read" receipts; we ignore for now beyond optionally toasting.
       void readerId
     })
 
@@ -92,7 +89,7 @@ export function useChatHub() {
 
   const disconnect = useCallback(async () => {
     if (connectionPromiseRef.current) {
-      try { await connectionPromiseRef.current } catch (e) { /* ignore */ }
+      try { await connectionPromiseRef.current } catch { /* ignore */ }
     }
     if (connectionRef.current) {
       await connectionRef.current.stop()
@@ -105,31 +102,26 @@ export function useChatHub() {
     return () => { disconnect() }
   }, [connect, disconnect])
 
-  // ── 💥 FIX: Smart & Silent Auto-Reconnect ──
+  /* Smart + silent auto-reconnect — quiet for ambient calls */
   const safeInvoke = async (method: string, ...args: any[]) => {
     try {
       if (connectionRef.current?.state === signalR.HubConnectionState.Disconnected) {
-        await connect();
+        await connect()
       } else if (!connectionRef.current && connectionPromiseRef.current) {
-        await connectionPromiseRef.current;
+        await connectionPromiseRef.current
       } else if (!connectionRef.current) {
-        await connect();
+        await connect()
       }
 
       if (connectionRef.current?.state === signalR.HubConnectionState.Connected) {
         await connectionRef.current.invoke(method, ...args)
-      } else {
-        // 💥 CHUPE HUYE DUSHMAN KO YAHAN ROKA HAI:
-        // JoinRoom, LeaveRoom aur SendTyping par faltu toast mat dikhao
-        if (method !== 'JoinRoom' && method !== 'LeaveRoom' && method !== 'SendTyping') {
-          showToast({ type: 'error', title: 'Network Issue', message: 'Reconnecting to chat...', duration: 200})
-        }
+      } else if (method !== 'JoinRoom' && method !== 'LeaveRoom' && method !== 'SendTyping' && method !== 'SendDmTyping') {
+        showToast({ type: 'error', title: 'Network issue', message: 'Reconnecting to chat…', duration: 2000 })
       }
     } catch (err) {
-      console.error(`[ChatHub] Action ${method} failed:`, err);
-      // Try-Catch mein bhi same rule apply kiya hai
-      if (method !== 'JoinRoom' && method !== 'LeaveRoom' && method !== 'SendTyping') {
-        showToast({ type: 'error', title: 'Action Failed', message: 'Could not complete request.', duration: 2000 })
+      console.error(`[ChatHub] Action ${method} failed:`, err)
+      if (method !== 'JoinRoom' && method !== 'LeaveRoom' && method !== 'SendTyping' && method !== 'SendDmTyping') {
+        showToast({ type: 'error', title: 'Action failed', message: 'Could not complete request.', duration: 2000 })
       }
     }
   }
@@ -138,11 +130,14 @@ export function useChatHub() {
     getConnection: () => connectionRef.current,
     joinRoom: (slug: string) => safeInvoke('JoinRoom', slug),
     leaveRoom: (slug: string) => safeInvoke('LeaveRoom', slug),
-    sendMessage: (slug: string, content: string, type: string = "text", mediaUrl: string | null = null, replyToId?: string) => 
+    sendMessage: (slug: string, content: string, type = 'text', mediaUrl: string | null = null, replyToId?: string) =>
       safeInvoke('SendMessage', slug, content, type, mediaUrl, replyToId ?? null),
     sendTyping: (slug: string) => safeInvoke('SendTyping', slug),
     reactToMessage: (slug: string, messageId: string, emoji: string) => safeInvoke('ReactToMessage', slug, messageId, emoji),
+    sendDm: (recipientId: string, content: string) => safeInvoke('SendDm', recipientId, content),
+    sendDmTyping: (recipientId: string) => safeInvoke('SendDmTyping', recipientId),
+    markDmRead: (otherUserId: string) => safeInvoke('MarkDmRead', otherUserId),
     isConnected: () => connectionRef.current?.state === signalR.HubConnectionState.Connected,
-    safeInvoke
+    safeInvoke,
   }
 }

@@ -7,19 +7,19 @@ import ToastContainer from './components/ui/ToastContainer'
 import AppLayout from './components/layout/AppLayout'
 
 // Pages
-import LandingPage      from './pages/auth/LandingPage'
-import LoginPage        from './pages/auth/LoginPage'
-import RegisterPage     from './pages/auth/RegisterPage'
-import VerifyOtpPage    from './pages/auth/VerifyOtpPage'
-import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
-import ResetPasswordPage  from './pages/auth/ResetPasswordPage'
-import ChatPage         from './pages/chat/ChatPage'
-import VideoLobbyPage   from './pages/video/VideoLobbyPage'
-import VideoPage        from './pages/video/VideoPage'           // random 1-on-1
-import RandomGroupPage  from './pages/video/RandomGroupPage'
-import DirectCallPage   from './pages/video/DirectCallPage'
-import HostedGroupPage  from './pages/video/HostedGroupPage'
-import ProfilePage      from './pages/profile/ProfilePage'
+import LandingPage         from './pages/auth/LandingPage'
+import LoginPage           from './pages/auth/LoginPage'
+import RegisterPage        from './pages/auth/RegisterPage'
+import VerifyOtpPage       from './pages/auth/VerifyOtpPage'
+import ForgotPasswordPage  from './pages/auth/ForgotPasswordPage'
+import ResetPasswordPage   from './pages/auth/ResetPasswordPage'
+import ChatPage            from './pages/chat/ChatPage'
+import VideoLobbyPage      from './pages/video/VideoLobbyPage'
+import VideoPage           from './pages/video/VideoPage'           // random 1-on-1
+import RandomGroupPage     from './pages/video/RandomGroupPage'
+import DirectCallPage      from './pages/video/DirectCallPage'
+import HostedGroupPage     from './pages/video/HostedGroupPage'
+import ProfilePage         from './pages/profile/ProfilePage'
 import AgeDeclarePage      from './pages/verify/AgeDeclarePage'
 import AiQuizPage          from './pages/verify/AiQuizPage'
 import DocumentUploadPage  from './pages/verify/DocumentUploadPage'
@@ -43,8 +43,8 @@ function GuestRoute({ children }: { children: React.ReactNode }) {
 
 /**
  * RegisteredRoute — wraps PrivateRoute and additionally redirects guests
- * back to the lobby. Used for video modes that only registered users can
- * access (direct invite, hosted group). The lobby explains why.
+ * back to the lobby. Used for features that only registered users can
+ * access (direct invite, hosted group, DMs, verification, admin).
  */
 function RegisteredRoute({ children }: { children: React.ReactNode }) {
   const { token, user, isReady } = useAuthStore()
@@ -75,10 +75,19 @@ export default function App() {
           <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
           <Route path="/register" element={<GuestRoute><RegisterPage /></GuestRoute>} />
           <Route path="/verify-otp" element={<VerifyOtpPage />} />
+          <Route path="/forgot-password" element={<GuestRoute><ForgotPasswordPage /></GuestRoute>} />
+          <Route path="/reset-password" element={<GuestRoute><ResetPasswordPage /></GuestRoute>} />
 
           {/* Protected — Chat */}
           <Route path="/chat" element={<PrivateRoute><ChatPage /></PrivateRoute>} />
           <Route path="/chat/:slug" element={<PrivateRoute><ChatPage /></PrivateRoute>} />
+
+          {/* DMs — registered only */}
+          <Route path="/dms" element={<RegisteredRoute><DmsPage /></RegisteredRoute>} />
+          <Route path="/dms/:otherUserId" element={<RegisteredRoute><DmsPage /></RegisteredRoute>} />
+
+          {/* Create-room — registered only */}
+          <Route path="/rooms/new" element={<RegisteredRoute><CreateRoomPage /></RegisteredRoute>} />
 
           {/* Video — lobby + four call modes (last two need an account) */}
           <Route path="/video" element={<PrivateRoute><VideoLobbyPage /></PrivateRoute>} />

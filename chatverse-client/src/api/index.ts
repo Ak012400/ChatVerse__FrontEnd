@@ -7,6 +7,17 @@ export const roomsApi = {
     api.get(`/rooms/${slug}`),
   getMessages: (slug: string, skip = 0, limit = 50) =>
     api.get(`/rooms/${slug}/messages`, { params: { skip, limit } }),
+  create: (data: {
+    displayName: string
+    description?: string
+    category?: string
+    iconEmoji?: string
+    rules?: string[]
+  }) => api.post('/rooms', data),
+  previewByInvite: (token: string) =>
+    api.get(`/rooms/join/${token}`),
+  deactivate: (slug: string) =>
+    api.delete(`/rooms/${slug}`),
 }
 
 export const trustApi = {
@@ -50,6 +61,15 @@ export const ageApi = {
 export const usersApi = {
   search: (q: string, limit = 10) =>
     api.get('/users/search', { params: { q, limit } }),
+  me: () => api.get('/users/me'),
+  updateMe: (data: { username?: string }) => api.patch('/users/me', data),
+  uploadAvatar: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post('/users/me/avatar', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
 }
 
 export const dmsApi = {
@@ -58,6 +78,12 @@ export const dmsApi = {
     api.get(`/dms/${otherUserId}`, { params: { skip, limit } }),
   send: (otherUserId: string, content: string) =>
     api.post(`/dms/${otherUserId}`, { content }),
+}
+
+export const iceApi = {
+  /** RTCPeerConnection config — STUN + TURN if available. Server-side
+   *  so we can rotate credentials without a frontend release. */
+  get: () => api.get('/ice-servers'),
 }
 
 export const adminApi = {

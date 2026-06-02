@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard } from 'lucide-react'
+import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { authApi } from '../../../api/auth'
 import { adminApi } from '../../../api'
@@ -26,15 +26,9 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
     let cancelled = false
     adminApi
       .whoami()
-      .then((r) => {
-        if (!cancelled) setIsAdmin(!!r.data.data?.isAdmin)
-      })
-      .catch(() => {
-        /* not admin — keep default */
-      })
-    return () => {
-      cancelled = true
-    }
+      .then((r) => { if (!cancelled) setIsAdmin(!!r.data.data?.isAdmin) })
+      .catch(() => { /* not admin */ })
+    return () => { cancelled = true }
   }, [user])
 
   const handleLogout = async () => {
@@ -50,13 +44,10 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
 
   return (
     <aside className="w-14 shrink-0 h-screen bg-[var(--color-bg)] border-r border-[var(--color-line)] flex flex-col items-center py-3">
-      {/* Logo mark */}
       <button
         onClick={() => navigate('/chat')}
         className="w-9 h-9 rounded-md flex items-center justify-center text-white mb-4 focus-ring"
-        style={{
-          background: 'linear-gradient(135deg, var(--color-accent) 0%, #8b5cf6 100%)',
-        }}
+        style={{ background: 'linear-gradient(135deg, var(--color-accent) 0%, #8b5cf6 100%)' }}
         aria-label="ChatVerse home"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -65,52 +56,34 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
       </button>
 
       <nav className="flex flex-col items-center gap-1 flex-1">
-        <IconButton
-          variant="ghost"
-          active={activeTab === 'chat'}
-          onClick={() => navTo('chat')}
-          aria-label="Chat"
-        >
+        <IconButton variant="ghost" active={activeTab === 'chat'} onClick={() => navTo('chat')} aria-label="Chat">
           <MessagesSquare size={18} />
         </IconButton>
-        <IconButton
-          variant="ghost"
-          active={activeTab === 'video'}
-          onClick={() => navTo('video')}
-          aria-label="Video"
-        >
+        <IconButton variant="ghost" active={activeTab === 'video'} onClick={() => navTo('video')} aria-label="Video">
           <Video size={18} />
         </IconButton>
+        {!user?.isGuest && (
+          <IconButton variant="ghost" onClick={() => navigate('/dms')} aria-label="Direct messages">
+            <Mail size={18} />
+          </IconButton>
+        )}
       </nav>
 
-      {/* Bottom: pricing + (admin) + settings + profile + logout */}
       <div className="flex flex-col items-center gap-2 pb-1">
         {!user?.isGuest && (
-          <IconButton
-            variant="ghost"
-            onClick={() => navigate('/pricing')}
-            aria-label="Upgrade"
-          >
+          <IconButton variant="ghost" onClick={() => navigate('/pricing')} aria-label="Upgrade">
             <CreditCard size={18} />
           </IconButton>
         )}
         {isAdmin && (
-          <IconButton
-            variant="ghost"
-            onClick={() => navigate('/admin')}
-            aria-label="Admin dashboard"
-          >
+          <IconButton variant="ghost" onClick={() => navigate('/admin')} aria-label="Admin dashboard">
             <ShieldCheck size={18} />
           </IconButton>
         )}
         <IconButton variant="ghost" aria-label="Settings" onClick={() => navigate('/profile')}>
           <Settings size={18} />
         </IconButton>
-        <button
-          onClick={() => navigate('/profile')}
-          className="focus-ring rounded-full"
-          aria-label="Your profile"
-        >
+        <button onClick={() => navigate('/profile')} className="focus-ring rounded-full" aria-label="Your profile">
           <Avatar size="sm" name={user?.username ?? 'U'} />
         </button>
         <IconButton variant="ghost" onClick={handleLogout} aria-label="Sign out">

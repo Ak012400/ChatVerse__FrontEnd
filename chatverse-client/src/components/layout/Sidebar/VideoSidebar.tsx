@@ -1,7 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import {
-  Shuffle, Users, UserPlus, Video as VideoIcon, ShieldCheck, Lock,
-} from 'lucide-react'
+import { Shuffle, Users, UserPlus, Video as VideoIcon, ShieldCheck, Lock } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { useToastStore } from '../../../stores/toastStore'
 
@@ -15,10 +13,10 @@ type Mode = {
 }
 
 const MODES: Mode[] = [
-  { id: 'random',       path: '/video/random',       Icon: Shuffle,   title: 'Random 1-on-1',  desc: 'Match with one stranger',           requires: 'guest' },
-  { id: 'random-group', path: '/video/random-group', Icon: Users,     title: 'Random group',   desc: 'Drop into a group of strangers',     requires: 'guest' },
-  { id: 'invite',       path: '/video/invite',       Icon: UserPlus,  title: 'Invite to call', desc: 'Call a specific user',               requires: 'registered' },
-  { id: 'hosted',       path: '/video/hosted',       Icon: VideoIcon, title: 'Hosted group',   desc: 'Create or join a named room',         requires: 'registered' },
+  { id: 'random',       path: '/video/random',       Icon: Shuffle,   title: 'Random 1-on-1',  desc: 'Match with one stranger',          requires: 'guest' },
+  { id: 'random-group', path: '/video/random-group', Icon: Users,     title: 'Random group',   desc: 'Drop into a group of strangers',    requires: 'guest' },
+  { id: 'invite',       path: '/video/invite',       Icon: UserPlus,  title: 'Invite to call', desc: 'Call a specific user',              requires: 'registered' },
+  { id: 'hosted',       path: '/video/hosted',       Icon: VideoIcon, title: 'Hosted group',   desc: 'Create or join a named room',        requires: 'registered' },
 ]
 
 export default function VideoSidebar() {

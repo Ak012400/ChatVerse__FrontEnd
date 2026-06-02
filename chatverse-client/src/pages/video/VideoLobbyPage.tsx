@@ -1,7 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import {
-  Shuffle, Users, UserPlus, Video as VideoIcon, ShieldAlert, Sparkles, Lock,
-} from 'lucide-react'
+import { Shuffle, Users, UserPlus, Video as VideoIcon, ShieldAlert, Sparkles, Lock } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import Card from '../../components/ui/Card'
@@ -89,7 +87,7 @@ export default function VideoLobbyPage() {
           <h1 className="text-2xl font-semibold tracking-tight">How do you want to chat?</h1>
           <p className="text-sm text-[var(--color-fg-faint)] mt-1">
             {isGuest
-              ? 'You\'re browsing as a guest. Random modes are open to everyone — verified ones unlock after sign-up.'
+              ? "You're browsing as a guest. Random modes are open to everyone — verified ones unlock after sign-up."
               : 'Pick a mode. Every session is monitored — keep it real.'}
           </p>
         </div>
@@ -103,18 +101,13 @@ export default function VideoLobbyPage() {
                 onClick={() => handlePick(mode)}
                 className="text-left relative"
               >
-                <Card
-                  padding="lg"
-                  hover={!locked}
-                  className={`h-full ${locked ? 'opacity-55' : ''}`}
-                >
+                <Card padding="lg" hover={!locked} className={`h-full ${locked ? 'opacity-55' : ''}`}>
                   <div className="flex items-start gap-3">
                     <span
                       className={`w-10 h-10 shrink-0 rounded-md flex items-center justify-center
-                        ${
-                          locked
-                            ? 'bg-[var(--color-surface-2)] text-[var(--color-fg-mute)]'
-                            : 'bg-[var(--color-surface-2)] text-[var(--color-accent-fg)]'
+                        ${locked
+                          ? 'bg-[var(--color-surface-2)] text-[var(--color-fg-mute)]'
+                          : 'bg-[var(--color-surface-2)] text-[var(--color-accent-fg)]'
                         }`}
                     >
                       {locked ? <Lock size={16} /> : <mode.Icon size={18} />}
@@ -145,12 +138,10 @@ export default function VideoLobbyPage() {
           <div className="mt-6 px-4 py-3 rounded-md bg-[var(--color-accent-soft)] border border-[rgba(99,102,241,0.3)] flex items-start gap-2.5">
             <Sparkles size={14} className="text-[var(--color-accent-fg)] mt-0.5 shrink-0" />
             <div className="flex-1">
-              <p className="text-xs text-[var(--color-fg)] font-medium mb-0.5">
-                Want more?
-              </p>
+              <p className="text-xs text-[var(--color-fg)] font-medium mb-0.5">Want more?</p>
               <p className="text-xs text-[var(--color-fg-dim)] leading-relaxed">
-                Create an account to direct-call specific users, host named rooms,
-                and start earning trust toward 18+ access.{' '}
+                Create an account to direct-call specific users, host named rooms, and start
+                earning trust toward 18+ access.{' '}
                 <button
                   onClick={() => navigate('/register')}
                   className="text-[var(--color-accent-fg)] hover:text-[var(--color-fg)] underline-offset-2 hover:underline transition-colors font-medium"
@@ -166,8 +157,8 @@ export default function VideoLobbyPage() {
           <ShieldAlert size={14} className="text-[var(--color-fg-faint)] mt-0.5 shrink-0" />
           <p className="text-xs text-[var(--color-fg-dim)] leading-relaxed">
             <span className="text-[var(--color-fg)] font-medium">Safety first.</span>{' '}
-            Your camera feed is scanned for inappropriate content in your browser. Violations
-            end the session and reduce your trust score. CSAM detection is always on.
+            Your camera feed is scanned for inappropriate content in your browser. Violations end
+            the session and reduce your trust score. CSAM detection is always on.
           </p>
         </div>
       </div>
