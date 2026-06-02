@@ -13,10 +13,13 @@ export interface Room {
   slug:          string
   displayName:   string
   description:   string
-  category:      'public' | '18plus'
+  category:      'public' | '18plus' | string
   iconEmoji:     string
   activeNow:     number
   totalMessages: number
+  /** True if this is a user-created invite-only room. Drives the
+   *  "My rooms" section in the sidebar. */
+  isPrivate?:    boolean
 }
 
 export interface Message {

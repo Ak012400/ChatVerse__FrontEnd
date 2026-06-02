@@ -16,6 +16,12 @@ export const roomsApi = {
   }) => api.post('/rooms', data),
   previewByInvite: (token: string) =>
     api.get(`/rooms/join/${token}`),
+  /** Actually join (adds to user's joined-rooms set). Works for guests too. */
+  joinByInvite: (token: string) =>
+    api.post(`/rooms/join/${token}`),
+  /** Private rooms the current user has joined. */
+  mine: () =>
+    api.get('/rooms/mine'),
   deactivate: (slug: string) =>
     api.delete(`/rooms/${slug}`),
 }

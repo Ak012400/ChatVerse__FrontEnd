@@ -38,10 +38,21 @@ export default function ChatPage() {
 
   useEffect(() => {
     setIsPageLoading(true)
-    roomsApi
-      .getAll()
-      .then((res) => setRooms(res.data.data ?? []))
-      .catch((err) => console.error(err))
+    // Fetch public list + the user's joined private rooms in parallel.
+    // Merging here keeps the sidebar a single source of truth.
+    Promise.all([
+      roomsApi.getAll().catch(() => null),
+      roomsApi.mine().catch(() => null),
+    ])
+      .then(([publicRes, mineRes]) => {
+        const publics = (publicRes?.data?.data ?? []) as any[]
+        const mine = ((mineRes?.data?.data ?? []) as any[]).map((r) => ({ ...r, isPrivate: true }))
+        // Dedupe by slug; private wins so the badge survives.
+        const map = new Map<string, any>()
+        for (const r of publics) map.set(r.slug, r)
+        for (const r of mine) map.set(r.slug, r)
+        setRooms(Array.from(map.values()))
+      })
       .finally(() => setIsPageLoading(false))
   }, [setRooms])
 
