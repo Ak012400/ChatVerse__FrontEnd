@@ -12,10 +12,13 @@ import Loader from '../../components/ui/Loader'
 import Input from '../../components/ui/Input'
 import Badge from '../../components/ui/Badge'
 
+// 👇 FIX: Declare a constant stable reference for empty arrays to prevent infinite re-renders
+const EMPTY_ARRAY: any[] = []
+
 /**
  * DMs page. Two layouts in one:
- *   - left rail   → conversation list (always visible on desktop)
- *   - right pane  → either the active thread or a "pick someone" CTA
+ * - left rail  → conversation list (always visible on desktop)
+ * - right pane → either the active thread or a "pick someone" CTA
  *
  * Realtime: ReceiveDm + DmTyping events flow through useChatHub and
  * land in the Zustand store. This page reads from the store; the hub
@@ -29,13 +32,17 @@ export default function DmsPage() {
 
   const conversations = useDmStore((s) => s.conversations)
   const setConversations = useDmStore((s) => s.setConversations)
-  const thread = useDmStore((s) => (otherUserId ? s.threads[otherUserId] ?? [] : []))
+  
+  // 👇 FIX: Use EMPTY_ARRAY instead of inline []
+  const thread = useDmStore((s) => (otherUserId ? s.threads[otherUserId] ?? EMPTY_ARRAY : EMPTY_ARRAY))
   const setThread = useDmStore((s) => s.setThread)
   const markThreadRead = useDmStore((s) => s.markThreadRead)
+  
+  // 👇 FIX: Use EMPTY_ARRAY instead of inline []
   const typingIn = useDmStore((s) =>
     otherUserId
-      ? s.typingIn[`dm:${[me?.userId ?? '', otherUserId].sort().join('-')}`] ?? []
-      : [],
+      ? s.typingIn[`dm:${[me?.userId ?? '', otherUserId].sort().join('-')}`] ?? EMPTY_ARRAY
+      : EMPTY_ARRAY,
   )
 
   const [convsLoading, setConvsLoading] = useState(true)
