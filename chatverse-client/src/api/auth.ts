@@ -30,4 +30,10 @@ export const authApi = {
 
   resetPassword: (data: { email: string; code: string; newPassword: string }) =>
     api.post('/auth/reset-password', data),
+
+  /** Exchange a Google ID token for our session JWT. The backend
+   *  verifies the token, creates the user if new (auto-username +
+   *  email_verified=true), and returns the same shape as login(). */
+  googleSignIn: (credential: string) =>
+    api.post('/auth/google', { credential }),
 }

@@ -5,6 +5,7 @@ import PrimarySidebar from './Sidebar/PrimarySidebar'
 import SecondarySidebar from './Sidebar/SecondarySidebar'
 import ChatSidebar from './Sidebar/ChatSidebar'
 import VideoSidebar from './Sidebar/VideoSidebar'
+import OnlineBadge from '../ui/OnlineBadge'
 import { useUiStore } from '../../stores/uiStore'
 
 type Tab = 'chat' | 'video'
@@ -62,7 +63,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </button>
       )}
 
-      <main className="flex-1 min-w-0 overflow-hidden relative">{children}</main>
+      <main className="flex-1 min-w-0 overflow-hidden relative">
+        {/* Global presence pill — floats in the top-right corner of the
+            main canvas without taking layout space. Self-hides until
+            the first /presence/stats response. */}
+        <OnlineBadge className="absolute top-3 right-4 z-20" />
+        {children}
+      </main>
     </div>
   )
 }

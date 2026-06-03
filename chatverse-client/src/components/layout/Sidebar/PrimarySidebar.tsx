@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail } from 'lucide-react'
+import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
+import { useUiStore } from '../../../stores/uiStore'
 import { authApi } from '../../../api/auth'
 import { adminApi } from '../../../api'
 import IconButton from '../../ui/IconButton'
@@ -17,6 +18,8 @@ interface Props {
 export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
   const navigate = useNavigate()
   const { user, clearAuth } = useAuthStore()
+  const theme = useUiStore((s) => s.theme)
+  const toggleTheme = useUiStore((s) => s.toggleTheme)
   const [isAdmin, setIsAdmin] = useState(false)
 
   /* Probe admin status once on mount. Skip for guests — admin allow-list
@@ -80,6 +83,14 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
             <ShieldCheck size={18} />
           </IconButton>
         )}
+        <IconButton
+          variant="ghost"
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </IconButton>
         <IconButton variant="ghost" aria-label="Settings" onClick={() => navigate('/profile')}>
           <Settings size={18} />
         </IconButton>

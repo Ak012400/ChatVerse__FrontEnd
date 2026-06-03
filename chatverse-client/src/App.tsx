@@ -1,10 +1,16 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { GoogleOAuthProvider } from '@react-oauth/google'
 import { useAuthStore } from './stores/authStore'
 import { authApi } from './api/auth'
 
 import ToastContainer from './components/ui/ToastContainer'
+import ThemeProvider from './components/ui/ThemeProvider'
 import AppLayout from './components/layout/AppLayout'
+
+// Google OAuth — exposes the popup/button machinery. If the client ID
+// isn't set we still render the app (Login page renders a disabled button).
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
 
 // Pages
 import LandingPage         from './pages/auth/LandingPage'
@@ -65,8 +71,8 @@ export default function App() {
       .finally(() => setReady(true))
   }, [])
 
-  return (
-    <>
+  const tree = (
+    <ThemeProvider>
       <ToastContainer />
       <BrowserRouter>
         <Routes>
@@ -113,6 +119,13 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
-    </>
+    </ThemeProvider>
   )
+
+  // Only mount the OAuth provider when the client ID is configured —
+  // an empty clientId crashes the popup. Without a client ID the rest
+  // of the app still loads; the Google button stays disabled.
+  return GOOGLE_CLIENT_ID
+    ? <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>{tree}</GoogleOAuthProvider>
+    : tree
 }

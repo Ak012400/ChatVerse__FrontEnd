@@ -6,6 +6,7 @@ import { useAuthStore } from '../../stores/authStore'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Logo from '../../components/ui/Logo'
+import GoogleSignInButton from '../../components/auth/GoogleSignInButton'
 
 export default function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })

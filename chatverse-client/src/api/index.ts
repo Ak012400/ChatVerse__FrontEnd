@@ -92,6 +92,16 @@ export const iceApi = {
   get: () => api.get('/ice-servers'),
 }
 
+export const presenceApi = {
+  /** Live online counts. `rooms` is comma-separated slugs — only those
+   *  rooms have their counts returned. Endpoint is anonymous-safe so the
+   *  landing page can render the global "X online now" badge too. */
+  stats: (rooms?: string[]) =>
+    api.get<{
+      data: { globalOnline: number; byRoom: Record<string, number> }
+    }>('/presence/stats', { params: rooms?.length ? { rooms: rooms.join(',') } : {} }),
+}
+
 export const adminApi = {
   whoami:    () => api.get('/admin/whoami'),
   stats:     () => api.get('/admin/stats'),
