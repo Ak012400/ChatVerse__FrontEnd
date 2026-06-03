@@ -115,6 +115,14 @@ export default function LoginPage() {
             </Button>
           </form>
 
+          {/* OR divider + Google sign-in */}
+          <div className="my-5 flex items-center gap-3" aria-hidden="true">
+            <span className="flex-1 h-px bg-[var(--color-line)]" />
+            <span className="text-[10px] uppercase tracking-wider text-[var(--color-fg-mute)]">or</span>
+            <span className="flex-1 h-px bg-[var(--color-line)]" />
+          </div>
+          <GoogleSignInButton redirectTo="/chat" />
+
           <p className="mt-6 text-center">
             <Link
               to="/"

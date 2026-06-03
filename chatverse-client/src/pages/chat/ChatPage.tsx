@@ -274,8 +274,19 @@ export default function ChatPage() {
                     className={`flex flex-col max-w-[70%] ${isMine ? 'items-end' : 'items-start'}`}
                   >
                     {showHeader && !isMine && (
-                      <p className="text-[11px] text-[var(--color-fg-faint)] mb-0.5 px-0.5 font-medium">
-                        {msg.senderName}
+                      <p className="text-[11px] text-[var(--color-fg-faint)] mb-0.5 px-0.5 font-medium flex items-center gap-1.5">
+                        <span>{msg.senderName}</span>
+                        {/* AI host badge — backend marks these with
+                            senderType="ai_host". We disclose to users that
+                            some hosts in low-activity rooms are AI. */}
+                        {(msg as any).senderType === 'ai_host' && (
+                          <span
+                            title="This user is an AI host that keeps rooms active when humans are away."
+                            className="inline-flex items-center px-1.5 py-px rounded-full text-[9px] font-semibold uppercase tracking-wider bg-[var(--color-accent-soft)] text-[var(--color-accent-fg)] border border-[var(--color-accent-soft)]"
+                          >
+                            AI
+                          </span>
+                        )}
                       </p>
                     )}
 

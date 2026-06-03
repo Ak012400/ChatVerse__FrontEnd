@@ -5,6 +5,7 @@ import { authApi } from '../../api/auth'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Logo from '../../components/ui/Logo'
+import GoogleSignInButton from '../../components/auth/GoogleSignInButton'
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ username: '', email: '', password: '' })
@@ -106,6 +107,15 @@ export default function RegisterPage() {
               {loading ? 'Creating account…' : 'Create account'}
             </Button>
           </form>
+
+          {/* OR divider + Google sign-up. Backend's /api/auth/google
+              upserts — so the same button works for both flows. */}
+          <div className="my-5 flex items-center gap-3" aria-hidden="true">
+            <span className="flex-1 h-px bg-[var(--color-line)]" />
+            <span className="text-[10px] uppercase tracking-wider text-[var(--color-fg-mute)]">or</span>
+            <span className="flex-1 h-px bg-[var(--color-line)]" />
+          </div>
+          <GoogleSignInButton redirectTo="/chat" />
 
           <p className="mt-5 text-center text-[11px] leading-relaxed text-[var(--color-fg-mute)]">
             By signing up, you agree to our{' '}
