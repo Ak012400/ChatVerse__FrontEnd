@@ -1,0 +1,92 @@
+{
+  "common": {
+    "back": "वापस",
+    "save": "सेव करें",
+    "cancel": "रद्द करें",
+    "continue": "आगे बढ़ें",
+    "loading": "लोड हो रहा है…",
+    "send": "भेजें",
+    "search": "खोजें",
+    "report": "रिपोर्ट",
+    "skip": "स्किप",
+    "end": "समाप्त",
+    "leave": "बाहर निकलें",
+    "yes": "हाँ",
+    "no": "नहीं"
+  },
+  "nav": {
+    "chat": "चैट",
+    "video": "वीडियो",
+    "dms": "डायरेक्ट मैसेज",
+    "profile": "प्रोफ़ाइल",
+    "settings": "सेटिंग्स",
+    "pricing": "अपग्रेड",
+    "admin": "एडमिन",
+    "signOut": "साइन आउट"
+  },
+  "auth": {
+    "signIn": "साइन इन",
+    "signUp": "अकाउंट बनाएँ",
+    "welcomeBack": "वापस आपका स्वागत है",
+    "signInSubtitle": "अपने ChatVerse अकाउंट में साइन इन करें।",
+    "email": "ईमेल",
+    "password": "पासवर्ड",
+    "username": "यूज़रनेम",
+    "newHere": "नए यहाँ?",
+    "alreadyMember": "पहले से सदस्य हैं?",
+    "forgotPassword": "पासवर्ड भूल गए?",
+    "signingIn": "साइन इन हो रहा है…",
+    "invalidCredentials": "अमान्य लॉगिन जानकारी",
+    "guestCta": "गेस्ट के तौर पर आगे बढ़ें",
+    "createAccountCta": "अकाउंट बनाएँ",
+    "freeForever": "ट्राय करने के लिए साइन-अप ज़रूरी नहीं · हमेशा मुफ़्त"
+  },
+  "video": {
+    "modes": {
+      "random": "रैंडम 1-ऑन-1",
+      "randomGroup": "रैंडम ग्रुप",
+      "directCall": "डायरेक्ट कॉल",
+      "hostedGroup": "होस्टेड ग्रुप"
+    },
+    "lobbyTitle": "कैसे बात करना चाहोगे?",
+    "guestSubtitle": "आप गेस्ट के तौर पर देख रहे हैं। रैंडम मोड सबके लिए खुले हैं — बाकी साइन-अप के बाद अनलॉक होंगे।",
+    "registeredSubtitle": "मोड चुनें। हर सेशन पर AI मॉनिटरिंग चलती है — असली रहो।",
+    "findStranger": "मैचिंग शुरू करें",
+    "findingPartner": "पार्टनर ढूँढ रहे हैं",
+    "callEnded": "कॉल समाप्त",
+    "partnerLeft": "पार्टनर ने कॉल छोड़ दिया।",
+    "muteAria": "म्यूट",
+    "unmuteAria": "अनम्यूट",
+    "cameraOnAria": "कैमरा चालू",
+    "cameraOffAria": "कैमरा बंद"
+  },
+  "chat": {
+    "pickRoom": "एक रूम चुनें",
+    "pickRoomSubtitle": "साइडबार से कोई भी रूम चुनकर बात शुरू करें।",
+    "noMessages": "अभी कोई मैसेज नहीं है। पहले कुछ कहो।",
+    "messagePlaceholder": "#{{slug}} में मैसेज करें",
+    "newRoom": "नया रूम",
+    "connected": "कनेक्टेड",
+    "connecting": "कनेक्ट हो रहा है…"
+  },
+  "profile": {
+    "title": "प्रोफ़ाइल",
+    "trustScore": "ट्रस्ट स्कोर",
+    "trustSubtitle": "स्कोर ज़्यादा = और फ़ीचर अनलॉक।",
+    "ageVerification": "उम्र वेरिफ़िकेशन",
+    "ageSubtitle": "वीडियो चैट और 18+ रूम्स के लिए ज़रूरी।",
+    "completeSteps": "वीडियो चैट और 18+ रूम्स अनलॉक करने के लिए सारे स्टेप पूरे करें।",
+    "ageVerifiedBanner": "उम्र वेरिफाई हो गई — सारे फ़ीचर अनलॉक।",
+    "step": {
+      "emailVerified": "ईमेल वेरिफ़ाइड",
+      "ageDeclared": "उम्र डिक्लेयर्ड",
+      "aiQuiz": "AI मैच्योरिटी टेस्ट",
+      "tenureOrDoc": "टेन्योर या डॉक्युमेंट"
+    },
+    "language": "भाषा"
+  },
+  "lang": {
+    "english": "English",
+    "hindi": "हिंदी"
+  }
+}
