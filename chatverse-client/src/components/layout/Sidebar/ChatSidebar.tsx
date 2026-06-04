@@ -189,11 +189,13 @@ export default function ChatSidebar({ slug }: Props) {
                 <button
                   key={r.slug}
                   onClick={() => navigate(`/chat/${r.slug}`)}
-                  className={`group w-full pl-2 pr-2 py-1.5 rounded-md flex items-center gap-2 text-sm transition-colors
+                  className={`group relative w-full pl-2.5 pr-2 py-1.5 rounded-md flex items-center gap-2 text-sm
+                    transition-[background-color,color,transform] duration-150 ease-out
+                    active:scale-[0.98]
                     ${
                       active
-                        ? 'bg-[var(--color-surface-2)] text-[var(--color-fg)]'
-                        : 'text-[var(--color-fg-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)]'
+                        ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent-fg)] shadow-[inset_2px_0_0_0_var(--color-accent)]'
+                        : 'text-[var(--color-fg-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)] hover:translate-x-px'
                     }`}
                 >
                   <span className="text-xs shrink-0">{r.iconEmoji || '💬'}</span>
@@ -232,11 +234,13 @@ export default function ChatSidebar({ slug }: Props) {
                 <button
                   key={r.slug}
                   onClick={() => navigate(`/chat/${r.slug}`)}
-                  className={`group w-full pl-2 pr-2 py-1.5 rounded-md flex items-center gap-2 text-sm transition-colors
+                  className={`group relative w-full pl-2.5 pr-2 py-1.5 rounded-md flex items-center gap-2 text-sm
+                    transition-[background-color,color,transform] duration-150 ease-out
+                    active:scale-[0.98]
                     ${
                       active
-                        ? 'bg-[var(--color-surface-2)] text-[var(--color-fg)]'
-                        : 'text-[var(--color-fg-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)]'
+                        ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent-fg)] shadow-[inset_2px_0_0_0_var(--color-accent)]'
+                        : 'text-[var(--color-fg-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)] hover:translate-x-px'
                     }`}
                 >
                   <Hash size={14} className="text-[var(--color-fg-mute)] shrink-0" />

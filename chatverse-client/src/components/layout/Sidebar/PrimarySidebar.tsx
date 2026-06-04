@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { useUiStore } from '../../../stores/uiStore'
@@ -17,10 +17,22 @@ interface Props {
 
 export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const { user, clearAuth } = useAuthStore()
   const theme = useUiStore((s) => s.theme)
   const toggleTheme = useUiStore((s) => s.toggleTheme)
   const [isAdmin, setIsAdmin] = useState(false)
+
+  // Each nav icon's "selected" state is computed from the current route,
+  // not just the parent's activeTab — so the DMs / pricing / admin /
+  // profile icons also get the prominent accent when the user is on
+  // those routes (was previously dim regardless).
+  const onChat    = pathname.startsWith('/chat')
+  const onVideo   = pathname.startsWith('/video')
+  const onDms     = pathname.startsWith('/dms')
+  const onPricing = pathname.startsWith('/pricing')
+  const onAdmin   = pathname.startsWith('/admin')
+  const onProfile = pathname.startsWith('/profile')
 
   /* Probe admin status once on mount. Skip for guests — admin allow-list
    * is server-side and only enforces for registered users. */
@@ -59,14 +71,14 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
       </button>
 
       <nav className="flex flex-col items-center gap-1 flex-1">
-        <IconButton variant="ghost" active={activeTab === 'chat'} onClick={() => navTo('chat')} aria-label="Chat">
+        <IconButton variant="ghost" active={onChat || activeTab === 'chat'} onClick={() => navTo('chat')} aria-label="Chat" title="Chat">
           <MessagesSquare size={18} />
         </IconButton>
-        <IconButton variant="ghost" active={activeTab === 'video'} onClick={() => navTo('video')} aria-label="Video">
+        <IconButton variant="ghost" active={onVideo || activeTab === 'video'} onClick={() => navTo('video')} aria-label="Video" title="Video">
           <Video size={18} />
         </IconButton>
         {!user?.isGuest && (
-          <IconButton variant="ghost" onClick={() => navigate('/dms')} aria-label="Direct messages">
+          <IconButton variant="ghost" active={onDms} onClick={() => navigate('/dms')} aria-label="Direct messages" title="Direct messages">
             <Mail size={18} />
           </IconButton>
         )}
@@ -74,12 +86,12 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
 
       <div className="flex flex-col items-center gap-2 pb-1">
         {!user?.isGuest && (
-          <IconButton variant="ghost" onClick={() => navigate('/pricing')} aria-label="Upgrade">
+          <IconButton variant="ghost" active={onPricing} onClick={() => navigate('/pricing')} aria-label="Upgrade" title="Upgrade">
             <CreditCard size={18} />
           </IconButton>
         )}
         {isAdmin && (
-          <IconButton variant="ghost" onClick={() => navigate('/admin')} aria-label="Admin dashboard">
+          <IconButton variant="ghost" active={onAdmin} onClick={() => navigate('/admin')} aria-label="Admin dashboard" title="Admin">
             <ShieldCheck size={18} />
           </IconButton>
         )}
@@ -91,7 +103,7 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
         >
           {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </IconButton>
-        <IconButton variant="ghost" aria-label="Settings" onClick={() => navigate('/profile')}>
+        <IconButton variant="ghost" active={onProfile} aria-label="Settings" title="Settings" onClick={() => navigate('/profile')}>
           <Settings size={18} />
         </IconButton>
         <button onClick={() => navigate('/profile')} className="focus-ring rounded-full" aria-label="Your profile">

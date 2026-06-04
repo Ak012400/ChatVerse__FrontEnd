@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   PhoneCall, PhoneOff, UserPlus, X, Mic, MicOff,
   Video as VideoIcon, VideoOff, Loader2,
@@ -40,6 +40,7 @@ type CallState =
 
 export default function DirectCallPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { showToast } = useToastStore()
   const { getConnection, safeInvoke } = useChatHub()
 
@@ -49,6 +50,36 @@ export default function DirectCallPage() {
   const [searchHits, setSearchHits] = useState<UserSearchHit[]>([])
   const [picked, setPicked] = useState<UserSearchHit | null>(null)
   const [searching, setSearching] = useState(false)
+
+  // When the user clicked "Accept" in IncomingCallModal we navigate
+  // here with state {autoJoinRoomName, peerName}. Pick that up on mount
+  // and jump straight into the connecting state — no manual search step.
+  useEffect(() => {
+    const navState = (location.state as { autoJoinRoomName?: string; peerName?: string } | null) ?? null
+    if (!navState?.autoJoinRoomName) return
+    const roomName = navState.autoJoinRoomName
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        setState({ kind: 'connecting', roomName })
+        const r = await directCallApi.token(roomName)
+        const data = r.data?.data
+        if (cancelled) return
+        if (!data?.token || !data?.serverUrl) throw new Error('empty token payload')
+        setState({ kind: 'in-call', roomName, token: data.token, serverUrl: data.serverUrl })
+      } catch {
+        if (cancelled) return
+        showToast({ type: 'error', title: 'Could not join', message: 'The call could not start. Please try again.', duration: 3000 })
+        setState({ kind: 'idle' })
+      }
+    })()
+
+    // Clear the location state so a hard refresh doesn't replay auto-join.
+    window.history.replaceState({}, '')
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (picked) return
