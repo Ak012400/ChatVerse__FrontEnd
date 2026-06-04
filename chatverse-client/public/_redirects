@@ -1,0 +1,8 @@
+# Cloudflare Pages SPA fallback.
+# Every path that doesn't match a real file gets index.html, so React
+# Router can handle /login, /chat/:slug, /verify/age, etc. without 404.
+# The "200" code means Cloudflare rewrites (not redirects) — the URL
+# in the browser stays the requested path, but the served file is
+# index.html. React Router reads window.location on mount and renders
+# the right page.
+/*  /index.html  200
