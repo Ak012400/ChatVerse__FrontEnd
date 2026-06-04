@@ -98,10 +98,20 @@ export default function DmsPage() {
     [conversations, otherUserId],
   )
 
+  // Mobile layout switch — narrow screens can't fit conv-list + thread
+  // side by side. When a thread is open, the list hides; when no thread
+  // is picked, the list takes the full canvas. Desktop (sm+) keeps the
+  // classic two-column layout.
+  const onMobileShowList = !otherUserId
+  const onMobileShowThread = !!otherUserId
+
   return (
     <div className="flex h-full bg-[var(--color-bg)] text-[var(--color-fg)]">
       {/* Conversation list */}
-      <aside className="w-72 shrink-0 border-r border-[var(--color-line)] flex flex-col">
+      <aside
+        className={`${onMobileShowList ? 'flex' : 'hidden'} sm:flex
+          w-full sm:w-72 shrink-0 border-r border-[var(--color-line)] flex-col`}
+      >
         <div className="h-14 px-4 flex items-center justify-between border-b border-[var(--color-line)]">
           <h2 className="text-sm font-semibold tracking-tight">Direct messages</h2>
           <button
@@ -149,11 +159,13 @@ export default function DmsPage() {
                   <li key={c.conversationId}>
                     <button
                       onClick={() => navigate(`/dms/${c.otherUserId}`)}
-                      className={`w-full px-2.5 py-2 rounded-md flex items-center gap-2.5 text-left transition-colors
+                      className={`group w-full px-2.5 py-2 rounded-md flex items-center gap-2.5 text-left
+                        transition-[background-color,color,transform] duration-150 ease-out
+                        active:scale-[0.98]
                         ${
                           active
-                            ? 'bg-[var(--color-surface-2)]'
-                            : 'hover:bg-[var(--color-surface-2)]'
+                            ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent-fg)] shadow-[inset_2px_0_0_0_var(--color-accent)]'
+                            : 'hover:bg-[var(--color-surface-2)] hover:translate-x-px'
                         }`}
                     >
                       <Avatar name={c.otherUsername} size="sm" />
@@ -182,13 +194,13 @@ export default function DmsPage() {
         </div>
       </aside>
 
-      {/* Thread pane */}
+      {/* Thread pane — full width on mobile when active, hidden when none picked */}
       {otherUserId ? (
-        <main className="flex-1 flex flex-col min-w-0">
+        <main className={`${onMobileShowThread ? 'flex' : 'hidden'} sm:flex flex-1 flex-col min-w-0`}>
           <header className="h-14 px-5 border-b border-[var(--color-line)] flex items-center gap-3 shrink-0">
             <button
               onClick={() => navigate('/dms')}
-              className="md:hidden w-7 h-7 rounded-md text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] hover:bg-[var(--color-surface-2)] inline-flex items-center justify-center transition-colors"
+              className="sm:hidden w-8 h-8 rounded-md text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] hover:bg-[var(--color-surface-2)] inline-flex items-center justify-center transition-colors"
               aria-label="Back to list"
             >
               <ArrowLeft size={14} />
@@ -267,7 +279,9 @@ export default function DmsPage() {
           </form>
         </main>
       ) : (
-        <main className="flex-1 flex items-center justify-center text-[var(--color-fg-faint)]">
+        // Empty state — desktop only; on mobile the conv-list takes the
+        // full canvas so this would be redundant clutter.
+        <main className="hidden sm:flex flex-1 items-center justify-center text-[var(--color-fg-faint)]">
           <div className="text-center">
             <MessageSquare size={28} className="mx-auto text-[var(--color-fg-mute)] mb-3" />
             <p className="text-sm font-medium text-[var(--color-fg)]">Pick a conversation</p>

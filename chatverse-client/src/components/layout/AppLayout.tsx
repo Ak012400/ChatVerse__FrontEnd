@@ -6,7 +6,9 @@ import SecondarySidebar from './Sidebar/SecondarySidebar'
 import ChatSidebar from './Sidebar/ChatSidebar'
 import VideoSidebar from './Sidebar/VideoSidebar'
 import OnlineBadge from '../ui/OnlineBadge'
+import IncomingCallModal from '../call/IncomingCallModal'
 import { useUiStore } from '../../stores/uiStore'
+import { useChatHub } from '../../hooks/useChatHub'
 
 type Tab = 'chat' | 'video'
 
@@ -15,6 +17,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { slug } = useParams()
   const collapsed = useUiStore((s) => s.secondaryCollapsed)
   const toggleSecondary = useUiStore((s) => s.toggleSecondary)
+
+  // Mount the chat hub at the layout level so the SignalR connection
+  // is alive for every logged-in route. IncomingCallModal reads from
+  // useCallStore, which the hub populates on "IncomingCall" events —
+  // without this hook call, the connection never opens and no incoming
+  // call ever fires.
+  useChatHub()
+
+  // Best-effort: ask for desktop-notification permission once the user
+  // is past auth. If they decline, calls still ring inside the app —
+  // they just won't pop a system notification when the tab is hidden.
+  useEffect(() => {
+    if (typeof Notification === 'undefined') return
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {})
+    }
+  }, [])
 
   // Derive initial tab from URL so deep-links land on the right secondary panel.
   const [activeTab, setActiveTab] = useState<Tab>(
@@ -70,6 +89,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <OnlineBadge className="absolute top-3 right-4 z-20" />
         {children}
       </main>
+
+      {/* Global incoming-call modal — always mounted for logged-in users
+          so any direct-invite call surfaces regardless of which route
+          the recipient is on. Self-hides when no invite is pending. */}
+      <IncomingCallModal />
     </div>
   )
 }

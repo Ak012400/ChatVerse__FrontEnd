@@ -4,6 +4,7 @@ import { useChatStore } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
 import { useDmStore, type DmMessage } from '../stores/dmStore'
+import { useCallStore } from '../stores/callStore'
 import type { Message } from '../types'
 
 const HUB_URL = (import.meta.env.VITE_API_URL ?? 'https://localhost:7217/api').replace('/api', '') + '/hubs/chat'
@@ -78,6 +79,68 @@ export function useChatHub() {
       void readerId
     })
 
+    // ─── Direct-call invite events (GLOBAL — not page-scoped) ─
+    // Without these here, an invite that arrives while the user is on
+    // /chat or /profile or anywhere outside the DirectCallPage simply
+    // gets swallowed and the recipient has no idea they were called.
+    //
+    // Writes to useCallStore so a single global <IncomingCallModal>
+    // mounted in AppLayout can render the ringing UI regardless of
+    // route.
+    hub.on('IncomingCall', (payload: {
+      inviteId: string
+      callerId: string
+      callerName: string
+      roomName: string
+      message?: string
+      expiresInSeconds?: number
+    }) => {
+      useCallStore.getState().setIncoming({
+        inviteId: payload.inviteId,
+        callerId: payload.callerId,
+        callerName: payload.callerName,
+        roomName: payload.roomName,
+        message: payload.message,
+        receivedAt: Date.now(),
+      })
+
+      // Desktop notification (only if user has granted permission).
+      // No-op on mobile / when permission denied.
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          const n = new Notification(`Incoming call from ${payload.callerName}`, {
+            body: payload.message || 'Tap to answer',
+            icon: '/favicon.svg',
+            tag: `incoming-call-${payload.inviteId}`,
+            requireInteraction: false,
+          })
+          // Clicking the OS notification focuses the tab so the user
+          // can hit Accept/Decline in the in-app modal.
+          n.onclick = () => { window.focus(); n.close() }
+        }
+      } catch { /* notifications are best-effort */ }
+    })
+
+    // Caller receives this when the OTHER party accepts — IncomingCallModal
+    // or DirectCallPage uses this to navigate into the live call.
+    hub.on('CallAccepted', ({ inviteId, roomName }: { inviteId: string; roomName: string }) => {
+      window.dispatchEvent(new CustomEvent('chatverse:call-accepted', { detail: { inviteId, roomName } }))
+    })
+
+    hub.on('CallDeclined', ({ inviteId }: { inviteId: string }) => {
+      window.dispatchEvent(new CustomEvent('chatverse:call-declined', { detail: { inviteId } }))
+      showToast({ type: 'info', title: 'Call declined', message: 'The other person didn\'t pick up.', duration: 4000 })
+    })
+
+    hub.on('CallInviteSent', ({ inviteId, targetUserId, roomName }: { inviteId: string; targetUserId: string; roomName: string }) => {
+      window.dispatchEvent(new CustomEvent('chatverse:call-invite-sent', { detail: { inviteId, targetUserId, roomName } }))
+    })
+
+    hub.on('CallError', ({ reason }: { reason: string }) => {
+      const msg = reason === 'expired_or_invalid' ? 'Call invite expired' : 'Call failed'
+      showToast({ type: 'error', title: 'Call error', message: msg, duration: 4000 })
+    })
+
     const startPromise = hub.start()
       .then(() => { connectionRef.current = hub })
       .catch(() => { connectionRef.current = null })
@@ -137,6 +200,13 @@ export function useChatHub() {
     sendDm: (recipientId: string, content: string) => safeInvoke('SendDm', recipientId, content),
     sendDmTyping: (recipientId: string) => safeInvoke('SendDmTyping', recipientId),
     markDmRead: (otherUserId: string) => safeInvoke('MarkDmRead', otherUserId),
+
+    // ── Direct-call helpers ─────────────────────────────────────
+    inviteToCall: (targetUserId: string, message?: string) =>
+      safeInvoke('InviteToCall', targetUserId, message ?? null),
+    acceptCall: (inviteId: string) => safeInvoke('AcceptCall', inviteId),
+    declineCall: (inviteId: string) => safeInvoke('DeclineCall', inviteId),
+
     isConnected: () => connectionRef.current?.state === signalR.HubConnectionState.Connected,
     safeInvoke,
   }
