@@ -7,6 +7,7 @@ import ChatSidebar from './Sidebar/ChatSidebar'
 import VideoSidebar from './Sidebar/VideoSidebar'
 import OnlineBadge from '../ui/OnlineBadge'
 import IncomingCallModal from '../call/IncomingCallModal'
+import MobileBottomNav from './MobileBottomNav'
 import { useUiStore } from '../../stores/uiStore'
 import { useChatHub } from '../../hooks/useChatHub'
 
@@ -58,14 +59,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const showSecondary = !skipSecondary
 
+  // On mobile, when the user has drilled into a specific chat/video
+  // session (/chat/:slug, /video/random, etc), hiding the secondary
+  // sidebar gives the content the full screen. Showing the secondary
+  // sidebar AND the content side-by-side at < 380px would crush both.
+  // Desktop ignores this — it has plenty of horizontal room.
+  const mobileDrillDown =
+    /^\/chat\/.+/.test(pathname) ||
+    /^\/video\/.+/.test(pathname)
+  const secondaryMobileClass = mobileDrillDown ? 'hidden sm:flex' : 'flex'
+
   return (
     <div className="flex h-screen bg-[var(--color-bg)] text-[var(--color-fg)] overflow-hidden">
       <PrimarySidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {showSecondary && (
-        <SecondarySidebar title={activeTab === 'chat' ? 'Rooms' : 'Video'}>
-          {activeTab === 'chat' ? <ChatSidebar slug={slug} /> : <VideoSidebar />}
-        </SecondarySidebar>
+        <div className={secondaryMobileClass}>
+          <SecondarySidebar title={activeTab === 'chat' ? 'Rooms' : 'Video'}>
+            {activeTab === 'chat' ? <ChatSidebar slug={slug} /> : <VideoSidebar />}
+          </SecondarySidebar>
+        </div>
       )}
 
       {/* Expand handle — only visible when sidebar is collapsed AND this
@@ -82,13 +95,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </button>
       )}
 
-      <main className="flex-1 min-w-0 overflow-hidden relative">
+      <main className="flex-1 min-w-0 overflow-hidden relative pb-14 sm:pb-0">
         {/* Global presence pill — floats in the top-right corner of the
             main canvas without taking layout space. Self-hides until
             the first /presence/stats response. */}
         <OnlineBadge className="absolute top-3 right-4 z-20" />
         {children}
       </main>
+
+      {/* Mobile bottom nav — replaces the vertical PrimarySidebar on
+          phones. Hidden on sm and above. */}
+      <MobileBottomNav />
 
       {/* Global incoming-call modal — always mounted for logged-in users
           so any direct-invite call surfaces regardless of which route

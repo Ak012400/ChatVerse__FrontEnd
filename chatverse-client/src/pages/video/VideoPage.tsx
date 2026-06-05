@@ -134,12 +134,31 @@ export default function VideoPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getConnection])
 
-  /* NSFW self-scan — runs every 2.5s while paired with a partner. */
+  /* NSFW self-scan — runs every 4s while paired with a partner.
+   *
+   * IMPORTANT — false-positive resistance:
+   * The previous 0.75 threshold on a SINGLE frame was triggering
+   * false positives within 25 seconds on innocent face-close-up
+   * video in good lighting (skin-tone false positives are a known
+   * NSFW.JS weakness). The result was that calls were auto-ending
+   * after about 25 seconds with "Inappropriate content detected" —
+   * with no actual inappropriate content involved.
+   *
+   * Fix: require BOTH (a) a much higher per-frame threshold (0.92),
+   * AND (b) three CONSECUTIVE flagged frames before we cut the call.
+   * Real adult content easily clears both bars in ~12 seconds; an
+   * occasional false-positive resets the counter and the call
+   * continues. Detected category is logged to console so we can
+   * tune the threshold from real feedback. */
   useEffect(() => {
     if (!partnerId) return
     let stopped = false
     let interval: number | null = null
     let model: any = null
+    let consecutiveBad = 0
+    const FRAME_THRESHOLD = 0.92
+    const CONSECUTIVE_REQUIRED = 3
+    const SCAN_INTERVAL_MS = 4000
 
     const start = async () => {
       try {
@@ -165,23 +184,33 @@ export default function VideoPage() {
           const preds = await model.classify(canvas)
           const bad = preds.find(
             (p: { className: string; probability: number }) =>
-              ['Porn', 'Hentai'].includes(p.className) && p.probability > 0.75,
+              ['Porn', 'Hentai'].includes(p.className) && p.probability > FRAME_THRESHOLD,
           )
           if (bad) {
-            stopped = true
-            if (interval) window.clearInterval(interval)
-            showToast({
-              type: 'danger',
-              title: 'Call ended',
-              message: 'Inappropriate content detected on your camera.',
-              duration: 5000,
-            })
-            handleStop()
+            consecutiveBad++
+            console.warn(`[nsfw] frame ${consecutiveBad}/${CONSECUTIVE_REQUIRED} flagged as ${bad.className} (${(bad.probability * 100).toFixed(0)}%)`)
+            if (consecutiveBad >= CONSECUTIVE_REQUIRED) {
+              stopped = true
+              if (interval) window.clearInterval(interval)
+              showToast({
+                type: 'danger',
+                title: 'Call ended',
+                message: 'Inappropriate content detected on your camera.',
+                duration: 5000,
+              })
+              handleStop()
+            }
+          } else {
+            // Clean frame resets the streak — false positives don't cluster.
+            if (consecutiveBad > 0) {
+              console.log(`[nsfw] streak reset (${consecutiveBad} → 0)`)
+              consecutiveBad = 0
+            }
           }
         } catch {
           /* ignore individual frame errors */
         }
-      }, 2500)
+      }, SCAN_INTERVAL_MS)
     }
 
     start()

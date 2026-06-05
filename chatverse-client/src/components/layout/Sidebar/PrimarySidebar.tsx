@@ -58,7 +58,7 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
   }
 
   return (
-    <aside className="w-14 shrink-0 h-screen bg-[var(--color-bg)] border-r border-[var(--color-line)] flex flex-col items-center py-3">
+    <aside className="hidden sm:flex w-14 shrink-0 h-screen bg-[var(--color-bg)] border-r border-[var(--color-line)] flex-col items-center py-3">
       <button
         onClick={() => navigate('/chat')}
         className="w-9 h-9 rounded-md flex items-center justify-center text-white mb-4 focus-ring"

@@ -180,11 +180,20 @@ function GroupRoomUI({
     navigate('/video')
   }
 
-  /* ─── NSFW self-scan loop (browser-side, runs every 2.5s) ─── */
+  /* ─── NSFW self-scan loop — see VideoPage for false-positive rationale.
+   * Same two-gate guard applied here: 0.92 per-frame threshold AND
+   * three consecutive flagged frames before auto-removal. Without this
+   * pair, innocent face video was being kicked at the ~25s mark in
+   * production due to skin-tone false positives. */
   useEffect(() => {
     let stopped = false
     let interval: number | null = null
     let model: any = null
+    let consecutiveBad = 0
+    let lastBad: { className: string; probability: number } | null = null
+    const FRAME_THRESHOLD = 0.92
+    const CONSECUTIVE_REQUIRED = 3
+    const SCAN_INTERVAL_MS = 4000
 
     const start = async () => {
       try {
@@ -214,30 +223,41 @@ function GroupRoomUI({
           const preds = await model.classify(canvas)
           const bad = preds.find(
             (p: { className: string; probability: number }) =>
-              ['Porn', 'Hentai'].includes(p.className) && p.probability > 0.75,
+              ['Porn', 'Hentai'].includes(p.className) && p.probability > FRAME_THRESHOLD,
           )
           if (bad) {
-            stopped = true
-            if (interval) window.clearInterval(interval)
-            showToast({
-              type: 'danger',
-              title: 'Removed',
-              message: 'Inappropriate content detected on your camera.',
-              duration: 5000,
-            })
-            await randomGroupApi.report({
-              roomName,
-              violatorUserId: currentUserId,
-              selfReport: true,
-              label: bad.className,
-              confidence: bad.probability,
-            })
-            await leave()
+            consecutiveBad++
+            lastBad = bad
+            console.warn(`[nsfw] frame ${consecutiveBad}/${CONSECUTIVE_REQUIRED} flagged as ${bad.className} (${(bad.probability * 100).toFixed(0)}%)`)
+            if (consecutiveBad >= CONSECUTIVE_REQUIRED) {
+              stopped = true
+              if (interval) window.clearInterval(interval)
+              showToast({
+                type: 'danger',
+                title: 'Removed',
+                message: 'Inappropriate content detected on your camera.',
+                duration: 5000,
+              })
+              await randomGroupApi.report({
+                roomName,
+                violatorUserId: currentUserId,
+                selfReport: true,
+                label: lastBad!.className,
+                confidence: lastBad!.probability,
+              })
+              await leave()
+            }
+          } else {
+            if (consecutiveBad > 0) {
+              console.log(`[nsfw] streak reset (${consecutiveBad} → 0)`)
+              consecutiveBad = 0
+              lastBad = null
+            }
           }
         } catch {
           /* ignore individual frame errors */
         }
-      }, 2500)
+      }, SCAN_INTERVAL_MS)
     }
 
     start()
