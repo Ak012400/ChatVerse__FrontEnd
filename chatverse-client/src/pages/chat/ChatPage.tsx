@@ -308,12 +308,14 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Composer */}
-      <div className="px-5 py-3 border-t border-[var(--color-line)] relative shrink-0">
+      {/* Composer — tighter padding + smaller icons on mobile so all of
+          emoji/attach/send + input fit on a 360px screen without
+          horizontal scroll. */}
+      <div className="px-2.5 sm:px-5 py-2 sm:py-3 border-t border-[var(--color-line)] relative shrink-0">
         {showEmoji && (
           <div
             ref={emojiRef}
-            className="absolute bottom-[68px] left-5 z-50 rounded-md overflow-hidden shadow-lg"
+            className="absolute bottom-[62px] sm:bottom-[68px] left-2 sm:left-5 right-2 sm:right-auto z-50 rounded-md overflow-hidden shadow-lg"
             style={{ boxShadow: 'var(--shadow-md)' }}
           >
             <EmojiPicker
@@ -326,23 +328,27 @@ export default function ChatPage() {
           </div>
         )}
 
-        <form onSubmit={handleSend} className="flex items-center gap-2">
+        <form onSubmit={handleSend} className="flex items-center gap-1.5 sm:gap-2">
           <IconButton
             type="button"
             variant="subtle"
+            size="sm"
             aria-label="Pick emoji"
             onClick={() => setShowEmoji((s) => !s)}
             active={showEmoji}
+            className="sm:w-9 sm:h-9 shrink-0"
           >
-            <Smile size={16} />
+            <Smile size={15} />
           </IconButton>
 
           <IconButton
             type="button"
             variant="subtle"
+            size="sm"
             aria-label="Attach image"
             onClick={() => fileInputRef.current?.click()}
             disabled={isImageScanning || !isConnected()}
+            className="sm:w-9 sm:h-9 shrink-0"
           >
             {isImageScanning ? (
               <span
@@ -379,10 +385,11 @@ export default function ChatPage() {
           <button
             type="submit"
             disabled={!input.trim() || isSending || !isConnected()}
-            className="h-9 px-3.5 rounded-md bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)]
-              text-white text-sm font-medium transition-colors
+            className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3.5 rounded-md bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)]
+              text-white text-sm font-medium
+              transition-[background-color,transform] duration-150 active:scale-[0.92]
               disabled:opacity-40 disabled:cursor-not-allowed
-              inline-flex items-center justify-center gap-1.5 focus-ring"
+              inline-flex items-center justify-center gap-1.5 focus-ring shrink-0"
             aria-label="Send"
           >
             <Send size={14} />

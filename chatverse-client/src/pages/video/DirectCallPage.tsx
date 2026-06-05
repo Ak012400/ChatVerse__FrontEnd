@@ -13,7 +13,7 @@ import {
   RoomAudioRenderer,
   useRoomContext,
 } from '@livekit/components-react'
-import { Track } from 'livekit-client'
+import { Track, RoomOptions, ConnectionState, DisconnectReason } from 'livekit-client'
 import '@livekit/components-styles'
 
 import { directCallApi, usersApi } from '../../api'
@@ -177,6 +177,63 @@ export default function DirectCallPage() {
   const handleHangUpInvite = async () => { setState({ kind: 'idle' }) }
   const handleEndCall = () => { setState({ kind: 'idle' }) }
 
+  // Track whether the user pressed "Leave" themselves vs LiveKit dropping
+  // the connection without our say-so. We only collapse to idle on a
+  // user-initiated leave OR on a final unrecoverable disconnect; LiveKit's
+  // built-in auto-reconnect handles transient network blips silently.
+  const userInitiatedLeaveRef = (typeof window !== 'undefined' ? (window as any).__cv_call_leave_ref ??= { current: false } : { current: false })
+
+  // LiveKit room options tuned for one-on-one direct calls:
+  //  • adaptiveStream: drops resolution on poor uplinks instead of cutting
+  //  • dynacast: only encodes layers we actually need (reduces CPU)
+  //  • reconnectPolicy: aggressive — keep retrying for 30s before giving up
+  const roomOptions: RoomOptions = {
+    adaptiveStream: true,
+    dynacast: true,
+    publishDefaults: {
+      videoSimulcastLayers: [
+        { width: 640, height: 360, encoding: { maxBitrate: 600_000, maxFramerate: 24 } },
+      ],
+    },
+    reconnectPolicy: {
+      nextRetryDelayInMs: (context) => {
+        // Exponential backoff capped at 4s, stop trying after 30s total.
+        if (context.elapsedMs > 30_000) return null
+        return Math.min(500 * 2 ** context.retryCount, 4000)
+      },
+    },
+  }
+
+  // Map LiveKit's DisconnectReason enum to a friendly toast + decide whether
+  // the call should truly end. Network blips don't reach this callback —
+  // they fire onReconnecting / onReconnected instead.
+  const handleDisconnected = (reason?: DisconnectReason) => {
+    const reasonName = reason !== undefined ? DisconnectReason[reason] : 'unknown'
+    console.log(`[direct-call] disconnected (reason=${reasonName}, userInitiated=${userInitiatedLeaveRef.current})`)
+
+    // Only nag the user if it wasn't them who hung up.
+    if (!userInitiatedLeaveRef.current) {
+      const msg =
+        reason === DisconnectReason.SERVER_SHUTDOWN ? 'Server restarted — please try the call again.'
+        : reason === DisconnectReason.DUPLICATE_IDENTITY ? 'You joined this call from another tab. That session won.'
+        : reason === DisconnectReason.PARTICIPANT_REMOVED ? 'You were removed from the call by a moderator.'
+        : reason === DisconnectReason.ROOM_DELETED ? 'The call ended.'
+        : 'The call connection was lost.'
+      showToast({ type: 'info', title: 'Call ended', message: msg, duration: 3000 })
+    }
+    userInitiatedLeaveRef.current = false
+    setState({ kind: 'idle' })
+  }
+
+  const handleReconnecting = () => {
+    console.log('[direct-call] reconnecting…')
+    showToast({ type: 'info', title: 'Reconnecting…', message: 'Network blip — hold on.', duration: 2000 })
+  }
+  const handleReconnected = () => {
+    console.log('[direct-call] reconnected')
+    showToast({ type: 'success', title: 'Reconnected', message: 'You\'re back in the call.', duration: 1500 })
+  }
+
   if (state.kind === 'in-call') {
     return (
       <LiveKitRoom
@@ -185,12 +242,20 @@ export default function DirectCallPage() {
         video
         audio
         connect
-        onDisconnected={handleEndCall}
+        options={roomOptions}
+        onDisconnected={handleDisconnected}
+        onConnected={() => console.log('[direct-call] connected to', state.roomName)}
+        onError={(err) => console.error('[direct-call] LiveKit error', err)}
         data-lk-theme="default"
         style={{ height: '100%', background: 'var(--color-bg)' }}
       >
         <RoomAudioRenderer />
-        <DirectCallUI roomName={state.roomName} onLeave={handleEndCall} />
+        <DirectCallUI
+          roomName={state.roomName}
+          onLeave={() => { userInitiatedLeaveRef.current = true; handleEndCall() }}
+          onReconnecting={handleReconnecting}
+          onReconnected={handleReconnected}
+        />
       </LiveKitRoom>
     )
   }
@@ -341,24 +406,78 @@ export default function DirectCallPage() {
   )
 }
 
-function DirectCallUI({ roomName, onLeave }: { roomName: string; onLeave: () => void }) {
+function DirectCallUI({
+  roomName,
+  onLeave,
+  onReconnecting,
+  onReconnected,
+}: {
+  roomName: string
+  onLeave: () => void
+  onReconnecting?: () => void
+  onReconnected?: () => void
+}) {
   const navigate = useNavigate()
   const room = useRoomContext()
   const { localParticipant } = useLocalParticipant()
   const tracks = useTracks([Track.Source.Camera])
   const [micOn, setMicOn] = useState(true)
   const [camOn, setCamOn] = useState(true)
+  const [callSeconds, setCallSeconds] = useState(0)
+  const [isReconnecting, setIsReconnecting] = useState(false)
+
+  // Subscribe to room-level reconnect events so we can show a translucent
+  // overlay rather than letting the user think the call has died.
+  useEffect(() => {
+    if (!room) return
+    const handleReconnecting = () => { setIsReconnecting(true); onReconnecting?.() }
+    const handleReconnected = () => { setIsReconnecting(false); onReconnected?.() }
+    const handleStateChange = (state: ConnectionState) => {
+      console.log(`[direct-call] connection state: ${state}`)
+    }
+    room.on('reconnecting', handleReconnecting)
+    room.on('reconnected', handleReconnected)
+    room.on('connectionStateChanged', handleStateChange)
+    return () => {
+      room.off('reconnecting', handleReconnecting)
+      room.off('reconnected', handleReconnected)
+      room.off('connectionStateChanged', handleStateChange)
+    }
+  }, [room, onReconnecting, onReconnected])
+
+  // Wall-clock duration display so the user can see how long the call
+  // has been running — also a useful sanity check if calls feel short.
+  useEffect(() => {
+    const t = window.setInterval(() => setCallSeconds((s) => s + 1), 1000)
+    return () => window.clearInterval(t)
+  }, [])
 
   const toggleMic = async () => { const n = !micOn; await localParticipant.setMicrophoneEnabled(n); setMicOn(n) }
   const toggleCam = async () => { const n = !camOn; await localParticipant.setCameraEnabled(n); setCamOn(n) }
   const leave = async () => { await room.disconnect(); onLeave(); navigate('/video') }
 
+  const mm = String(Math.floor(callSeconds / 60)).padStart(2, '0')
+  const ss = String(callSeconds % 60).padStart(2, '0')
+
   return (
     <div className="relative h-full bg-black text-white">
       <header className="absolute top-0 inset-x-0 z-20 px-5 py-3 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent">
-        <div className="text-xs font-medium tracking-tight">Direct call</div>
+        <div className="text-xs font-medium tracking-tight flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-[var(--color-success)] animate-pulse" />
+          Direct call · {mm}:{ss}
+        </div>
         <div className="text-[10px] text-white/40 font-mono">{roomName}</div>
       </header>
+
+      {/* Reconnecting overlay — appears during transient network blips
+          (LiveKit auto-retries internally). Call DOES NOT end here. */}
+      {isReconnecting && (
+        <div className="absolute inset-0 z-40 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 pointer-events-none">
+          <Loader2 size={28} className="text-white" style={{ animation: 'spin 1s linear infinite' }} />
+          <p className="text-sm font-medium">Reconnecting…</p>
+          <p className="text-[11px] text-white/60">Hold on, network blip — we&apos;ll be right back.</p>
+        </div>
+      )}
 
       <div className="h-full pt-14 pb-24">
         {tracks.length > 0 ? (
