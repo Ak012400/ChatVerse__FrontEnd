@@ -13,7 +13,11 @@ import {
   RoomAudioRenderer,
   useRoomContext,
 } from '@livekit/components-react'
-import { Track, RoomOptions, ConnectionState, DisconnectReason } from 'livekit-client'
+// `RoomOptions` is exported as a TypeScript type only (not a runtime value),
+// so it needs the inline `type` modifier or the bundler errors out with
+// "is not exported by livekit-client". `ConnectionState` and `DisconnectReason`
+// are real enums and can be imported normally.
+import { Track, ConnectionState, DisconnectReason, type RoomOptions } from 'livekit-client'
 import '@livekit/components-styles'
 
 import { directCallApi, usersApi } from '../../api'
