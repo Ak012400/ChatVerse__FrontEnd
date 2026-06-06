@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff,
-  Users, Flag, Loader2, Sparkles,
+  Users, Flag, Loader2, Sparkles, ShieldAlert,
 } from 'lucide-react'
 import {
   LiveKitRoom,
@@ -11,6 +11,7 @@ import {
   useTracks,
   useLocalParticipant,
   useParticipants,
+  useMaybeParticipantContext,
   RoomAudioRenderer,
   useRoomContext,
 } from '@livekit/components-react'
@@ -365,4 +366,48 @@ function GroupRoomUI({
         </button>
       </div>
 
-      {/* Local-video 
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────────────────────
+// ParticipantTileWithReport
+// Wraps LiveKit's default ParticipantTile with a small "report"
+// overlay button that lets one participant flag another for review.
+// We deliberately use the default tile underneath so we get all the
+// stock behaviour (mute indicator, focus styles, screenshare handling)
+// for free, and only paint the report button on top.
+// ──────────────────────────────────────────────────────────────
+function ParticipantTileWithReport({
+  currentUserId,
+  onReport,
+}: {
+  currentUserId: string
+  onReport: (violatorUserId: string) => void
+}) {
+  // GridLayout wraps each rendered tile in a ParticipantContext, so we
+  // can pull the current participant out via the maybe-context hook
+  // without throwing if (somehow) the context isn't there.
+  const participant = useMaybeParticipantContext()
+  const isSelf = participant?.identity === currentUserId
+
+  return (
+    <div className="relative h-full">
+      <ParticipantTile />
+      {!isSelf && participant && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onReport(participant.identity)
+          }}
+          className="absolute top-2 right-2 z-10 inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-black/60 hover:bg-[var(--color-danger)] text-white backdrop-blur-sm transition-colors"
+          aria-label={`Report ${participant.name ?? participant.identity}`}
+        >
+          <ShieldAlert size={11} />
+          Report
+        </button>
+      )}
+    </div>
+  )
+}
