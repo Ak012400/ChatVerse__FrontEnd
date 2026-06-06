@@ -1,5 +1,9 @@
 import api from './client'
 
+// Re-export the Gaming Hall REST client so callers can pull it from
+// the same barrel as everything else: `import { gamesApi } from '../api'`.
+export { gamesApi } from './games'
+
 export const roomsApi = {
   getAll: () =>
     api.get('/rooms'),

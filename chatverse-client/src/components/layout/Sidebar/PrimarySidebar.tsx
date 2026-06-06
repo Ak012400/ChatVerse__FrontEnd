@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon } from 'lucide-react'
+import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2 } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { useUiStore } from '../../../stores/uiStore'
 import { authApi } from '../../../api/auth'
@@ -29,6 +29,7 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
   // those routes (was previously dim regardless).
   const onChat    = pathname.startsWith('/chat')
   const onVideo   = pathname.startsWith('/video')
+  const onGames   = pathname.startsWith('/games')
   const onDms     = pathname.startsWith('/dms')
   const onPricing = pathname.startsWith('/pricing')
   const onAdmin   = pathname.startsWith('/admin')
@@ -77,6 +78,14 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
         <IconButton variant="ghost" active={onVideo || activeTab === 'video'} onClick={() => navTo('video')} aria-label="Video" title="Video">
           <Video size={18} />
         </IconButton>
+        {/* Gaming Hall — quiz rooms + future Chess/Ludo. Registered-only
+            at the route level; hidden for guests here so they aren't
+            led into a redirect by the icon. */}
+        {!user?.isGuest && (
+          <IconButton variant="ghost" active={onGames} onClick={() => navigate('/games')} aria-label="Gaming Hall" title="Gaming Hall">
+            <Gamepad2 size={18} />
+          </IconButton>
+        )}
         {!user?.isGuest && (
           <IconButton variant="ghost" active={onDms} onClick={() => navigate('/dms')} aria-label="Direct messages" title="Direct messages">
             <Mail size={18} />

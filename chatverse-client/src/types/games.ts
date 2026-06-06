@@ -1,0 +1,122 @@
+// ============================================================
+//  Gaming Hall — TypeScript types mirroring the backend DTOs.
+//
+//  Enum values are PascalCase strings because every backend enum
+//  has a [JsonConverter(typeof(JsonStringEnumConverter))] attribute
+//  (see GameModels.cs). If you ever change the backend casing
+//  policy, this file is the single point of update on the client.
+// ============================================================
+
+export type GameType = 'Quiz' | 'Jokes' | 'Trivia' | 'Chess' | 'Ludo'
+export type GameRole = 'Player' | 'Spectator'
+export type GameStatus = 'Lobby' | 'Playing' | 'Ended'
+
+export type QuizDifficulty = 'Any' | 'Easy' | 'Medium' | 'Hard'
+
+export type QuizCategory =
+  | 'Any' | 'General' | 'Books' | 'Film' | 'Music'
+  | 'Sports' | 'Geography' | 'History' | 'Politics'
+  | 'Science' | 'Computers' | 'Mythology' | 'Animals'
+
+// ─── REST request/response shapes ──────────────────────────────
+
+export interface CreateGameRoomRequest {
+  name: string
+  type: GameType
+  maxPlayers: number
+  category: QuizCategory
+  difficulty: QuizDifficulty
+  questionCount: number
+  secondsPerQuestion: number
+}
+
+export interface JoinGameRoomRequest {
+  role: GameRole
+}
+
+export interface GameRoomDto {
+  slug: string
+  name: string
+  type: GameType
+  status: GameStatus
+  playerCount: number
+  maxPlayers: number
+  spectatorCount: number
+  hostUsername: string
+  createdAtUtc: string
+}
+
+// ─── Quiz payloads ─────────────────────────────────────────────
+
+/**
+ * Public-safe question — the correct index is NEVER sent to the
+ * client until the round ends, so spectators can't whisper the
+ * answer to players via chat.
+ */
+export interface QuizQuestionPublic {
+  id: string
+  category: string
+  difficulty: string
+  question: string
+  options: string[]
+  questionNumber: number
+  totalQuestions: number
+  /** ISO 8601 UTC string */
+  deadlineUtc: string
+}
+
+export interface PlayerChoice {
+  choiceIndex: number
+  responseTimeMs: number
+}
+
+export interface QuizAnswerReveal {
+  questionId: string
+  correctIndex: number
+  correctAnswer: string
+  choicesByPlayer: Record<string, PlayerChoice>
+  roundDurationMs: number
+}
+
+export interface ScoreEntry {
+  userId: string
+  username: string
+  score: number
+  correctAnswers: number
+  answeredCount: number
+  averageResponseMs: number
+}
+
+export interface GameParticipant {
+  userId: string
+  username: string
+  role: GameRole
+  isHost: boolean
+  isOnline: boolean
+}
+
+export interface GameChatMessage {
+  id: string
+  senderId: string
+  senderUsername: string
+  senderRole: GameRole
+  text: string
+  /** ISO 8601 UTC string */
+  atUtc: string
+}
+
+/**
+ * What the server pushes when a fresh client joins (or reconnects).
+ * Contains everything needed to paint the room in one shot — no
+ * follow-up requests required for first render.
+ */
+export interface GameRoomSnapshot {
+  room: GameRoomDto
+  /** Null if the viewer is not a participant (e.g. browsing from
+   *  the lobby). Drives whether the Submit button is rendered. */
+  viewerRole: GameRole | null
+  currentQuestion: QuizQuestionPublic | null
+  scoreboard: ScoreEntry[]
+  participants: GameParticipant[]
+  recentChat: GameChatMessage[]
+}
