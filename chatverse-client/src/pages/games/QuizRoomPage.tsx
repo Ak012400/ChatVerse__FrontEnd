@@ -5,7 +5,7 @@ import {
   PhoneOff, Trophy, Copy, Check,
 } from 'lucide-react'
 import { gamesApi } from '../../api'
-import { useGameHub } from '../../hooks/useGameHub'
+import { useGameHub, HubNotReadyError } from '../../hooks/useGameHub'
 import { useGameStore } from '../../stores/gameStore'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
@@ -38,7 +38,7 @@ export default function QuizRoomPage() {
   const navigate = useNavigate()
   const { showToast } = useToastStore()
   const me = useAuthStore((s) => s.user)
-  const { joinRoom, leaveRoom, startQuiz, submitAnswer, sendChat } = useGameHub()
+  const { hubState, joinRoom, leaveRoom, startQuiz, submitAnswer, sendChat } = useGameHub()
 
   const snapshot = useGameStore((s) => s.snapshot)
   const currentQuestion = useGameStore((s) => s.currentQuestion)
@@ -156,13 +156,51 @@ export default function QuizRoomPage() {
   }
 
   const handleStart = async () => {
-    try { await startQuiz(slug) }
-    catch (err: any) {
+    // ─── Pre-flight validations ────────────────────────────────
+    // Surface clear, actionable messages BEFORE invoking — this is
+    // what was previously bubbling up as the cryptic "WebSocket
+    // failed to connect" log line. Order matters: check the cheapest
+    // thing (hub state) before the round-trip.
+
+    if (hubState !== 'connected') {
+      const reason =
+        hubState === 'failed'      ? 'Game server is not reachable. Try refreshing the page.' :
+        hubState === 'connecting'  ? 'Still connecting to the game server. Try again in a second.' :
+                                     'Not connected to the game server yet.'
+      showToast({
+        type: 'warning',
+        title: 'Hold on…',
+        message: reason,
+        duration: 3000,
+      })
+      return
+    }
+
+    // Solo start safety net — server permits 1 player, but if the host
+    // is alone they probably meant to wait for others. Warn first
+    // instead of silently launching.
+    const playerCount = participants.filter((p) => p.role === 'Player').length
+    if (playerCount < 2) {
+      const proceed = window.confirm(
+        'You are alone in the room. Start the quiz anyway?\n\nYou can keep waiting for others to join.',
+      )
+      if (!proceed) return
+    }
+
+    try {
+      await startQuiz(slug)
+    } catch (err: any) {
+      // HubNotReadyError comes from our wrapper — show its friendly
+      // message verbatim. Everything else is unexpected and gets a
+      // generic fallback with the underlying reason for debugging.
+      const friendly = err instanceof HubNotReadyError
+        ? err.message
+        : err?.message ?? 'Try again.'
       showToast({
         type: 'danger',
         title: 'Could not start',
-        message: err?.message ?? 'Try again.',
-        duration: 3000,
+        message: friendly,
+        duration: 3500,
       })
     }
   }
@@ -202,6 +240,7 @@ export default function QuizRoomPage() {
         roomSlug={room.slug}
         status={room.status}
         viewerRole={viewerRole}
+        hubState={hubState}
         onHangup={handleHangup}
       />
 
@@ -212,6 +251,7 @@ export default function QuizRoomPage() {
             maxPlayers={room.maxPlayers}
             isHost={isHost}
             hostUsername={room.hostUsername}
+            hubState={hubState}
             onStart={handleStart}
             chat={chat}
             onSendChat={(t) => sendChat(slug, t)}
@@ -256,12 +296,13 @@ export default function QuizRoomPage() {
 // ============================================================
 
 function RoomHeader({
-  roomName, roomSlug, status, viewerRole, onHangup,
+  roomName, roomSlug, status, viewerRole, hubState, onHangup,
 }: {
   roomName: string
   roomSlug: string
   status: 'Lobby' | 'Playing' | 'Ended'
   viewerRole: 'Player' | 'Spectator' | null
+  hubState: 'disconnected' | 'connecting' | 'connected' | 'failed'
   onHangup: () => void
 }) {
   const [copied, setCopied] = useState(false)
@@ -286,6 +327,12 @@ function RoomHeader({
             <Eye size={9} /> Spectator
           </Badge>
         )}
+        {/* Connection indicator — gives the user a heads-up that
+            "Start" / "Submit" might be blocked, before they click it. */}
+        {hubState === 'connected'    && <Badge tone="success" size="sm" dot>Online</Badge>}
+        {hubState === 'connecting'   && <Badge tone="warning" size="sm" dot>Connecting…</Badge>}
+        {hubState === 'failed'       && <Badge tone="danger"  size="sm" dot>Offline</Badge>}
+        {hubState === 'disconnected' && <Badge tone="neutral" size="sm" dot>Idle</Badge>}
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <button
@@ -313,18 +360,33 @@ function RoomHeader({
 // ============================================================
 
 function LobbyView({
-  participants, maxPlayers, isHost, hostUsername, onStart, chat, onSendChat,
+  participants, maxPlayers, isHost, hostUsername, hubState, onStart, chat, onSendChat,
 }: {
   participants: ReturnType<typeof useGameStore.getState>['participants']
   maxPlayers: number
   isHost: boolean
   hostUsername: string
+  hubState: 'disconnected' | 'connecting' | 'connected' | 'failed'
   onStart: () => void
   chat: ReturnType<typeof useGameStore.getState>['chat']
   onSendChat: (t: string) => void
 }) {
   const players = participants.filter((p) => p.role === 'Player')
   const spectators = participants.filter((p) => p.role === 'Spectator')
+
+  // Start button gates on TWO conditions:
+  //   1. Hub must be live (else invoke would 404 with the cryptic
+  //      "endpoint may not be a SignalR endpoint" error)
+  //   2. At least one player must exist (server enforces ≥1 too,
+  //      but client-side gate avoids a round-trip on the empty case)
+  const canStart = hubState === 'connected' && players.length >= 1
+  const startHint =
+    hubState === 'failed'      ? 'Server unreachable — refresh page' :
+    hubState === 'connecting'  ? 'Connecting to server…' :
+    hubState !== 'connected'   ? 'Waiting for game server' :
+    players.length < 1         ? 'Need at least one player' :
+    players.length < 2         ? 'You can start alone, or wait for others' :
+                                 null
 
   return (
     <div className="h-full grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 p-4 overflow-hidden">
@@ -337,15 +399,20 @@ function LobbyView({
           </p>
 
           {isHost && (
-            <Button
-              size="lg"
-              leftIcon={<Play size={15} />}
-              onClick={onStart}
-              className="mt-5"
-              disabled={players.length < 1}
-            >
-              Start quiz
-            </Button>
+            <>
+              <Button
+                size="lg"
+                leftIcon={<Play size={15} />}
+                onClick={onStart}
+                className="mt-5"
+                disabled={!canStart}
+              >
+                Start quiz
+              </Button>
+              {startHint && (
+                <p className="mt-2 text-[11px] text-[var(--color-fg-mute)]">{startHint}</p>
+              )}
+            </>
           )}
         </div>
 

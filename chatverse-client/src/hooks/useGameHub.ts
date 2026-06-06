@@ -1,5 +1,34 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import * as signalR from '@microsoft/signalr'
+
+// ============================================================
+//  HubConnectionState — what callers consume.
+//
+//  We deliberately surface a SIMPLER state machine than SignalR's
+//  underlying one. The hub library has 5 states (Disconnected,
+//  Connecting, Connected, Disconnecting, Reconnecting) but for our
+//  UI purposes the distinctions that matter are:
+//    'disconnected' — never tried, OR tried and failed
+//    'connecting'   — initial connect or reconnect in flight
+//    'connected'    — fully ready, can invoke
+//    'failed'       — last connect attempt errored (e.g. /hubs/game
+//                     endpoint not deployed). Distinct from 'disconnected'
+//                     because UI can show "server unavailable" vs
+//                     "not started yet" differently.
+// ============================================================
+export type GameHubState = 'disconnected' | 'connecting' | 'connected' | 'failed'
+
+/**
+ * Typed error thrown when a server invoke is attempted before the hub
+ * is ready. The page layer catches this and shows a friendly toast
+ * instead of the cryptic underlying SignalR error.
+ */
+export class HubNotReadyError extends Error {
+  constructor(public readonly state: GameHubState, message?: string) {
+    super(message ?? `Game hub is ${state}`)
+    this.name = 'HubNotReadyError'
+  }
+}
 import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
 import { useGameStore } from '../stores/gameStore'
@@ -40,6 +69,11 @@ const HUB_URL =
 export function useGameHub() {
   const connectionRef = useRef<signalR.HubConnection | null>(null)
   const connectionPromiseRef = useRef<Promise<void> | null>(null)
+
+  // Surfaceable connection state — drives the UI's connection badge
+  // and Start button guards. Mirror of the ref's underlying state but
+  // React-friendly (triggers re-renders).
+  const [hubState, setHubState] = useState<GameHubState>('disconnected')
 
   const token = useAuthStore((s) => s.token)
   const { showToast } = useToastStore()
@@ -164,6 +198,7 @@ export function useGameHub() {
     })
 
     hub.onreconnecting(() => {
+      setHubState('connecting')
       showToast({
         type: 'warning',
         title: 'Reconnecting',
@@ -173,6 +208,7 @@ export function useGameHub() {
     })
 
     hub.onreconnected(async () => {
+      setHubState('connected')
       showToast({
         type: 'success',
         title: 'Reconnected',
@@ -187,11 +223,19 @@ export function useGameHub() {
       }
     })
 
+    // onclose covers the case where the hub gives up reconnecting OR
+    // where the initial start() succeeded but the socket dropped soon
+    // after. Without this, hubState would lie about being 'connected'.
+    hub.onclose(() => { setHubState('disconnected') })
+
+    setHubState('connecting')
     connectionPromiseRef.current = hub.start().then(() => {
       connectionRef.current = hub
+      setHubState('connected')
     }).catch((err) => {
       console.error('[useGameHub] connect failed', err)
       connectionPromiseRef.current = null
+      setHubState('failed')
       throw err
     })
 
@@ -199,11 +243,25 @@ export function useGameHub() {
   }, [token, showToast])
 
   // Server-call wrappers. Each one ensures the connection is up before
-  // invoking, so callers don't have to chain connect() → invoke() by hand.
+  // invoking. If the connect attempt fails (e.g. /hubs/game endpoint
+  // isn't deployed yet) we throw a typed HubNotReadyError so the page
+  // layer can show a friendly toast instead of leaking the raw SignalR
+  // "WebSocket failed to connect" message into the UI.
 
   const ensureConnected = useCallback(async () => {
-    if (connectionRef.current?.state !== signalR.HubConnectionState.Connected) {
+    if (connectionRef.current?.state === signalR.HubConnectionState.Connected) return
+    try {
       await connect()
+    } catch (err) {
+      throw new HubNotReadyError(
+        'failed',
+        'Game server is not reachable. Please wait or refresh the page.',
+      )
+    }
+    // Double-check — connect() resolved but the socket may have closed
+    // immediately (e.g. server kicked us). Don't proceed to invoke().
+    if (connectionRef.current?.state !== signalR.HubConnectionState.Connected) {
+      throw new HubNotReadyError('disconnected', 'Connection dropped before invoke.')
     }
   }, [connect])
 
@@ -214,7 +272,11 @@ export function useGameHub() {
   }, [ensureConnected])
 
   const leaveRoom = useCallback(async (slug: string) => {
-    if (connectionRef.current?.state !== signalR.HubConnectionState.Connected) return
+    if (connectionRef.current?.state !== signalR.HubConnectionState.Connected) {
+      // Already gone — just clear the store so the page can navigate cleanly.
+      useGameStore.getState().resetRoom()
+      return
+    }
     try { await connectionRef.current.invoke('LeaveRoom', slug) }
     catch { /* swallow — disconnect path already removes us */ }
     useGameStore.getState().resetRoom()
@@ -258,6 +320,8 @@ export function useGameHub() {
   }, [])
 
   return {
+    /** Current connection state — bind to UI for indicators / button guards. */
+    hubState,
     connect,
     joinRoom,
     leaveRoom,
