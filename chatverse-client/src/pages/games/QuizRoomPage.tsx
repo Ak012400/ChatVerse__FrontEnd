@@ -53,18 +53,32 @@ export default function QuizRoomPage() {
   const [joinError, setJoinError] = useState<string | null>(null)
 
   // ─── Join sequence ─────────────────────────────────────────────
+  //
+  // Three-step entry: REST join → REST snapshot → hub attach. Each
+  // step is independently catchable so the failure surfaces in the
+  // toast (and console) telling us *which* step blew up — generic
+  // "Could not enter the room" was hiding the actual cause.
+  //
+  // Critical: we deliberately do NOT auto-leave on unmount. That
+  // cleanup was racing with React StrictMode's double-mount in dev
+  // — the first mount's cleanup would call leaveRoom() which kills
+  // the SignalR connection AND wipes the store, and the second
+  // mount would then race against a half-torn-down hub. Explicit
+  // hangup button is the only path that frees the slot now.
   useEffect(() => {
     if (!slug) return
     let cancelled = false
 
     const run = async () => {
+      let step: 'join' | 'snapshot' | 'hub' = 'join'
       try {
-        // 1) Join as Player by default — backend falls back to Spectator
-        //    automatically if the player slots are already full.
+        // 1) REST join — idempotent server-side, so repeat calls
+        //    return the existing role rather than double-adding.
+        step = 'join'
         const joinRes = await gamesApi.join(slug, 'Player')
         if (cancelled) return
-        const assignedRole = joinRes.data.data.assignedRole
-        if (joinRes.data.data.note) {
+        const assignedRole = joinRes.data.data?.assignedRole ?? 'Player'
+        if (joinRes.data.data?.note) {
           showToast({
             type: 'info',
             title: 'Spectator mode',
@@ -74,18 +88,47 @@ export default function QuizRoomPage() {
         }
 
         // 2) Snapshot — paint immediately so the room doesn't flash blank.
+        step = 'snapshot'
         const snapRes = await gamesApi.snapshot(slug)
         if (cancelled) return
-        useGameStore.getState().applySnapshot(snapRes.data.data)
+        const snap = snapRes.data?.data
+        if (!snap?.room) {
+          throw new Error('snapshot returned empty payload')
+        }
+        useGameStore.getState().applySnapshot(snap)
         useGameStore.getState().setRole(assignedRole)
 
-        // 3) Hub attach — subscribes to live events.
-        await joinRoom(slug)
+        // 3) Hub attach — subscribes to live events. Failure here
+        //    isn't fatal: the REST snapshot covers everything we
+        //    need to render the lobby. The hub will retry via
+        //    .withAutomaticReconnect() in the background.
+        step = 'hub'
+        try {
+          await joinRoom(slug)
+        } catch (hubErr) {
+          // Don't fail the whole page — log + toast and proceed.
+          console.warn('[QuizRoomPage] hub.joinRoom failed (will reconnect):', hubErr)
+          showToast({
+            type: 'warning',
+            title: 'Live updates pending',
+            message: 'Reconnecting to the game server…',
+            duration: 2500,
+          })
+        }
+
         if (cancelled) return
         setJoining(false)
       } catch (err: any) {
         if (cancelled) return
-        setJoinError(err.response?.data?.error ?? 'Could not enter the room.')
+        // Surface the exact failure so we can debug from the toast/console
+        // rather than seeing the opaque "Could not enter" forever.
+        const serverMsg = err?.response?.data?.error
+        const statusCode = err?.response?.status
+        const reason = serverMsg
+          ? `${serverMsg} (HTTP ${statusCode ?? '?'})`
+          : err?.message ?? 'unknown failure'
+        console.error(`[QuizRoomPage] join sequence failed at step "${step}":`, err)
+        setJoinError(`${step} step failed — ${reason}`)
         setJoining(false)
       }
     }
@@ -93,22 +136,12 @@ export default function QuizRoomPage() {
     run()
 
     return () => {
+      // Just mark this run as obsolete. Do NOT call leaveRoom here —
+      // doing so makes a strict-mode double-mount race against itself.
       cancelled = true
-      // Don't auto-leave on every effect re-run — only the explicit
-      // hangup button calls leaveRoom. This effect's cleanup just
-      // disposes our intent.
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug])
-
-  // Detach hub + reset store ONLY when navigating away from this page.
-  useEffect(() => {
-    return () => {
-      // Fire-and-forget; we don't want to block React's unmount.
-      leaveRoom(slug).catch(() => {})
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   const room = snapshot?.room
   const viewerRole = snapshot?.viewerRole ?? null
