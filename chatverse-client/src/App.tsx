@@ -33,6 +33,8 @@ import PricingPage         from './pages/billing/PricingPage'
 import AdminDashboardPage  from './pages/admin/AdminDashboardPage'
 import DmsPage             from './pages/dms/DmsPage'
 import CreateRoomPage      from './pages/rooms/CreateRoomPage'
+import GamingHallPage      from './pages/games/GamingHallPage'
+import QuizRoomPage         from './pages/games/QuizRoomPage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -94,6 +96,13 @@ export default function App() {
 
           {/* Create-room — registered only */}
           <Route path="/rooms/new" element={<RegisteredRoute><CreateRoomPage /></RegisteredRoute>} />
+
+          {/* Gaming Hall — registered only (no guests).
+              GamingHallPage is the entry + room browser; QuizRoomPage
+              is the live room view. Both gated behind RegisteredRoute
+              because scoreboards/persistence need a stable user identity. */}
+          <Route path="/games" element={<RegisteredRoute><GamingHallPage /></RegisteredRoute>} />
+          <Route path="/games/:slug" element={<RegisteredRoute><QuizRoomPage /></RegisteredRoute>} />
 
           {/* Video — lobby + four call modes (last two need an account) */}
           <Route path="/video" element={<PrivateRoute><VideoLobbyPage /></PrivateRoute>} />
