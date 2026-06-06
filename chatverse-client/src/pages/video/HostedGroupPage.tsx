@@ -331,7 +331,7 @@ function HostedGroupUI({
         </IconButton>
         <button
           onClick={leave}
-          className="h-11 px-5 rounded-md text-sm font-medium bg-[var(--color-danger)] hover:bg-[#dc2626] text-white inline-flex items-center gap-1.5 transition-colors"
+          className="h-11 px-5 rounded-md text-sm font-medium bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-white inline-flex items-center gap-1.5 transition-colors"
         >
           <PhoneOff size={15} />
           Leave
