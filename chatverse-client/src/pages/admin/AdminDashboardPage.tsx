@@ -142,7 +142,7 @@ export default function AdminDashboardPage() {
     return (
       <div className="h-full overflow-y-auto bg-[var(--color-bg)] text-[var(--color-fg)]">
         <div className="max-w-md mx-auto px-6 py-12 text-center">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[var(--color-danger-soft)] border border-[rgba(239,68,68,0.3)] text-[var(--color-danger)] mb-4">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[var(--color-danger-soft)] border border-[var(--color-danger-border)] text-[var(--color-danger)] mb-4">
             <ShieldCheck size={22} />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight mb-2">Not authorised</h1>
@@ -224,9 +224,9 @@ function StatCard({
   tone: 'warning' | 'accent' | 'success' | 'neutral'
 }) {
   const colors = {
-    warning: 'text-[var(--color-warning)] bg-[var(--color-warning-soft)] border-[rgba(245,158,11,0.3)]',
+    warning: 'text-[var(--color-warning)] bg-[var(--color-warning-soft)] border-[var(--color-warning-border)]',
     accent:  'text-[var(--color-accent-fg)] bg-[var(--color-accent-soft)] border-[rgba(99,102,241,0.3)]',
-    success: 'text-[#86efac] bg-[var(--color-success-soft)] border-[rgba(34,197,94,0.3)]',
+    success: 'text-[var(--color-success-fg)] bg-[var(--color-success-soft)] border-[var(--color-success-border)]',
     neutral: 'text-[var(--color-fg-dim)] bg-[var(--color-surface-2)] border-[var(--color-line)]',
   }[tone]
 

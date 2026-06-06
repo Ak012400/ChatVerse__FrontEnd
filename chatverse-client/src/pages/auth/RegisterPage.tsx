@@ -91,7 +91,7 @@ export default function RegisterPage() {
             />
 
             {error && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-[var(--color-danger-soft)] border border-[rgba(239,68,68,0.3)] text-[#fca5a5] text-xs">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-[var(--color-danger-soft)] border border-[var(--color-danger-border)] text-[var(--color-danger-fg)] text-xs">
                 <AlertCircle size={14} />
                 <span>{error}</span>
               </div>

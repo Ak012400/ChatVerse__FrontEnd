@@ -30,7 +30,7 @@ const variants: Record<Variant, string> = {
     'bg-transparent text-[var(--color-fg-dim)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)] ' +
     'border border-transparent',
   danger:
-    'bg-[var(--color-danger)] text-white hover:bg-[#dc2626] border border-[var(--color-danger)]',
+    'bg-[var(--color-danger)] text-white hover:bg-[var(--color-danger-hover)] border border-[var(--color-danger)]',
 }
 
 const sizes: Record<Size, string> = {

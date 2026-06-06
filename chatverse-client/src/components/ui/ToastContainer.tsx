@@ -2,44 +2,48 @@ import { CheckCircle2, AlertTriangle, AlertOctagon, Info, ShieldAlert, X } from 
 import { useToastStore } from '../../stores/toastStore'
 import type { Toast } from '../../stores/toastStore'
 
+// All colors resolved via CSS variables so toasts retheme automatically
+// when the user toggles between light and dark. Hardcoded hex / rgba was
+// fine on the original dark theme but disappeared into the light theme
+// background (pale yellow-on-cream, pale red-on-white were unreadable).
 const META: Record<
   Toast['type'],
   { Icon: typeof Info; bg: string; border: string; text: string; bar: string }
 > = {
   success: {
     Icon: CheckCircle2,
-    bg: 'rgba(34,197,94,0.10)',
-    border: 'rgba(34,197,94,0.3)',
-    text: '#86efac',
-    bar: '#22c55e',
+    bg: 'var(--color-success-soft)',
+    border: 'var(--color-success-border)',
+    text: 'var(--color-success-fg)',
+    bar: 'var(--color-success)',
   },
   info: {
     Icon: Info,
-    bg: 'rgba(99,102,241,0.10)',
+    bg: 'var(--color-accent-soft)',
     border: 'rgba(99,102,241,0.3)',
-    text: '#c7c9fb',
-    bar: '#6366f1',
+    text: 'var(--color-accent-fg)',
+    bar: 'var(--color-accent)',
   },
   warning: {
     Icon: AlertTriangle,
-    bg: 'rgba(245,158,11,0.10)',
-    border: 'rgba(245,158,11,0.3)',
-    text: '#fcd34d',
-    bar: '#f59e0b',
+    bg: 'var(--color-warning-soft)',
+    border: 'var(--color-warning-border)',
+    text: 'var(--color-warning-fg)',
+    bar: 'var(--color-warning)',
   },
   error: {
     Icon: AlertOctagon,
-    bg: 'rgba(239,68,68,0.10)',
-    border: 'rgba(239,68,68,0.3)',
-    text: '#fca5a5',
-    bar: '#ef4444',
+    bg: 'var(--color-danger-soft)',
+    border: 'var(--color-danger-border)',
+    text: 'var(--color-danger-fg)',
+    bar: 'var(--color-danger)',
   },
   danger: {
     Icon: ShieldAlert,
-    bg: 'rgba(239,68,68,0.10)',
-    border: 'rgba(239,68,68,0.3)',
-    text: '#fca5a5',
-    bar: '#ef4444',
+    bg: 'var(--color-danger-soft)',
+    border: 'var(--color-danger-border)',
+    text: 'var(--color-danger-fg)',
+    bar: 'var(--color-danger)',
   },
 }
 

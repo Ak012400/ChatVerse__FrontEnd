@@ -13,6 +13,8 @@ import { useToastStore } from '../../stores/toastStore'
 import Loader from '../../components/ui/Loader'
 import Avatar from '../../components/ui/Avatar'
 import IconButton from '../../components/ui/IconButton'
+import TranslateButton from '../../components/chat/TranslateButton'
+import { useTranslation, detectLanguage, preferredLanguageCode } from '../../hooks/useTranslation'
 
 export default function ChatPage() {
   const { slug } = useParams()
@@ -35,6 +37,21 @@ export default function ChatPage() {
 
   const room = rooms.find((r) => r.slug === slug)
   const liveCount = slug ? onlineCount[slug] ?? room?.activeNow ?? 0 : 0
+
+  // Per-message translation. The reader's preferred language is sniffed
+  // once at mount; we re-sniff on focus events in case the user changes
+  // it via the i18n switcher mid-session.
+  const translation = useTranslation()
+  const [readerLang, setReaderLang] = useState<string>(() => preferredLanguageCode())
+  useEffect(() => {
+    const refresh = () => setReaderLang(preferredLanguageCode())
+    window.addEventListener('focus', refresh)
+    window.addEventListener('languagechange', refresh)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('languagechange', refresh)
+    }
+  }, [])
 
   useEffect(() => {
     setIsPageLoading(true)
@@ -291,6 +308,39 @@ export default function ChatPage() {
                     )}
 
                     <MessageBubble msg={msg} isMine={isMine} />
+
+                    {/* Translate trigger — only for plain text messages
+                        whose language differs from the reader's. Skip
+                        for own messages (you understand your own
+                        language) and AI host messages (already in your
+                        room's mix). */}
+                    {(() => {
+                      if (isMine) return null
+                      if ((msg as any).senderType === 'ai_host') return null
+                      if (msg.type && msg.type !== 'text') return null
+                      const detected = detectLanguage(msg.content)
+                      if (!detected || detected === readerLang) return null
+                      const tx = translation.get(msg.id)
+                      const state =
+                        tx?.loading ? 'loading'
+                          : tx?.translated ? 'shown'
+                          : tx?.error ? 'error'
+                          : 'idle'
+                      return (
+                        <div className="mt-0.5 px-0.5 flex flex-col gap-0.5">
+                          {tx?.translated && (
+                            <p className="text-[12px] text-[var(--color-fg-dim)] italic leading-snug border-l-2 border-[var(--color-accent-soft)] pl-2">
+                              {tx.translated}
+                            </p>
+                          )}
+                          <TranslateButton
+                            state={state as any}
+                            onTranslate={() => translation.translate(msg.id, msg.content, readerLang)}
+                            onHide={() => translation.clear(msg.id)}
+                          />
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
               )
@@ -414,7 +464,7 @@ function MessageBubble({
 
   if (msg.modStatus === 'flagged') {
     return (
-      <div className="px-3 py-2 rounded-md bg-[var(--color-warning-soft)] border border-[rgba(245,158,11,0.3)]
+      <div className="px-3 py-2 rounded-md bg-[var(--color-warning-soft)] border border-[var(--color-warning-border)]
         text-[var(--color-warning)] text-xs flex items-center gap-2 italic">
         <ShieldAlert size={13} />
         Hidden by moderation.
@@ -424,7 +474,7 @@ function MessageBubble({
 
   if (msg.modStatus === 'blocked') {
     return (
-      <div className="px-3 py-2 rounded-md bg-[var(--color-danger-soft)] border border-[rgba(239,68,68,0.3)]
+      <div className="px-3 py-2 rounded-md bg-[var(--color-danger-soft)] border border-[var(--color-danger-border)]
         text-[var(--color-danger)] text-xs flex items-center gap-2 italic">
         <Ban size={13} />
         Removed by moderation.

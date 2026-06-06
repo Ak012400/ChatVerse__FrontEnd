@@ -182,7 +182,7 @@ export default function PricingPage() {
         </div>
 
         {error && (
-          <div className="mb-6 max-w-md mx-auto flex items-center gap-2 px-3 py-2 rounded-md bg-[var(--color-danger-soft)] border border-[rgba(239,68,68,0.3)] text-[#fca5a5] text-xs">
+          <div className="mb-6 max-w-md mx-auto flex items-center gap-2 px-3 py-2 rounded-md bg-[var(--color-danger-soft)] border border-[var(--color-danger-border)] text-[var(--color-danger-fg)] text-xs">
             <AlertCircle size={14} />
             <span>{error}</span>
           </div>
@@ -226,7 +226,7 @@ export default function PricingPage() {
                 <ul className="space-y-2 mb-6">
                   {plan.features.map((f) => (
                     <li key={f} className="flex items-start gap-2 text-[13px] text-[var(--color-fg-dim)]">
-                      <Check size={13} className="text-[#86efac] mt-0.5 shrink-0" />
+                      <Check size={13} className="text-[var(--color-success-fg)] mt-0.5 shrink-0" />
                       <span>{f}</span>
                     </li>
                   ))}

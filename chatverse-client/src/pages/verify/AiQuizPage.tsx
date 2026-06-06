@@ -146,8 +146,8 @@ export default function AiQuizPage() {
           <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full border mb-5
             ${
               result.passed
-                ? 'bg-[var(--color-success-soft)] border-[rgba(34,197,94,0.3)] text-[#86efac]'
-                : 'bg-[var(--color-warning-soft)] border-[rgba(245,158,11,0.3)] text-[#fcd34d]'
+                ? 'bg-[var(--color-success-soft)] border-[var(--color-success-border)] text-[var(--color-success-fg)]'
+                : 'bg-[var(--color-warning-soft)] border-[var(--color-warning-border)] text-[var(--color-warning-fg)]'
             }`}>
             {result.passed ? <CheckCircle2 size={26} /> : <XCircle size={26} />}
           </div>

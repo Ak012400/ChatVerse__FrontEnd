@@ -13,9 +13,9 @@ interface Props {
 const tones: Record<Tone, string> = {
   neutral: 'bg-[var(--color-surface-2)] text-[var(--color-fg-dim)] border-[var(--color-line)]',
   accent:  'bg-[var(--color-accent-soft)] text-[var(--color-accent-fg)] border-[rgba(99,102,241,0.3)]',
-  success: 'bg-[var(--color-success-soft)] text-[#86efac] border-[rgba(34,197,94,0.3)]',
-  warning: 'bg-[var(--color-warning-soft)] text-[#fcd34d] border-[rgba(245,158,11,0.3)]',
-  danger:  'bg-[var(--color-danger-soft)] text-[#fca5a5] border-[rgba(239,68,68,0.3)]',
+  success: 'bg-[var(--color-success-soft)] text-[var(--color-success-fg)] border-[var(--color-success-border)]',
+  warning: 'bg-[var(--color-warning-soft)] text-[var(--color-warning-fg)] border-[var(--color-warning-border)]',
+  danger:  'bg-[var(--color-danger-soft)] text-[var(--color-danger-fg)] border-[var(--color-danger-border)]',
 }
 
 const dotColor: Record<Tone, string> = {
