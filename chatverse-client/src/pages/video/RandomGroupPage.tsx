@@ -94,7 +94,7 @@ export default function RandomGroupPage() {
           </div>
 
           {error && (
-            <div className="mb-4 px-3 py-2 rounded-md bg-[var(--color-danger-soft)] border border-[rgba(239,68,68,0.3)] text-[#fca5a5] text-xs">
+            <div className="mb-4 px-3 py-2 rounded-md bg-[var(--color-danger-soft)] border border-[var(--color-danger-border)] text-[var(--color-danger-fg)] text-xs">
               {error}
             </div>
           )}
@@ -156,7 +156,21 @@ function GroupRoomUI({
   const room = useRoomContext()
   const { localParticipant } = useLocalParticipant()
   const participants = useParticipants()
-  const tracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare])
+  // ⚠ CRITICAL: `withPlaceholder: true` MUST be set so that every connected
+  //   participant gets a tile in the grid even if they haven't published a
+  //   camera track yet (still negotiating, camera off, mic-only). Without
+  //   it, useTracks only returns tiles for participants who have ALREADY
+  //   published a Camera source — which is why callers/callees saw either
+  //   their own video, the other person's, or nothing depending on the
+  //   exact moment the publish completed. `onlySubscribed: false` makes
+  //   sure unsubscribed-but-published streams also surface.
+  const tracks = useTracks(
+    [
+      { source: Track.Source.Camera, withPlaceholder: true },
+      { source: Track.Source.ScreenShare, withPlaceholder: false },
+    ],
+    { onlySubscribed: false },
+  )
 
   const [micOn, setMicOn] = useState(true)
   const [camOn, setCamOn] = useState(true)
@@ -344,68 +358,11 @@ function GroupRoomUI({
         </IconButton>
         <button
           onClick={leave}
-          className="h-11 px-5 rounded-md text-sm font-medium bg-[var(--color-danger)] hover:bg-[#dc2626] text-white inline-flex items-center gap-1.5 transition-colors"
+          className="h-11 px-5 rounded-md text-sm font-medium bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-white inline-flex items-center gap-1.5 transition-colors"
         >
           <PhoneOff size={15} />
           Leave
         </button>
       </div>
 
-      {/* Local-video hidden ref (we use LiveKit's tile) */}
-      <video ref={localVideoRef} className="hidden" />
-    </div>
-  )
-}
-
-/* Wrapper tile that adds a small "Report" affordance on hover. */
-function ParticipantTileWithReport({
-  currentUserId,
-  onReport,
-}: {
-  currentUserId: string
-  onReport: (violatorUserId: string) => void
-}) {
-  // We render the default ParticipantTile but overlay our report button
-  // using CSS — child gets the tile context via @livekit hooks
-  // when used inside <GridLayout>.
-  return (
-    <div className="relative group">
-      <ParticipantTile />
-      <TileReportButton currentUserId={currentUserId} onReport={onReport} />
-    </div>
-  )
-}
-
-function TileReportButton({
-  currentUserId,
-  onReport,
-}: {
-  currentUserId: string
-  onReport: (violatorUserId: string) => void
-}) {
-  // The participant identity is exposed via the data-lk-participant attribute
-  // on the parent tile. Read it from the closest tile container.
-  const ref = useRef<HTMLButtonElement | null>(null)
-  const [targetId, setTargetId] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!ref.current) return
-    const tile = ref.current.closest('[data-lk-participant]') as HTMLElement | null
-    setTargetId(tile?.dataset.lkParticipant ?? null)
-  }, [])
-
-  if (!targetId || targetId === currentUserId) return null
-
-  return (
-    <button
-      ref={ref}
-      onClick={() => onReport(targetId)}
-      className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity
-        w-7 h-7 rounded-md bg-black/60 backdrop-blur text-white/80 hover:text-white inline-flex items-center justify-center"
-      aria-label="Report participant"
-      title="Report"
-    >
-      <Flag size={13} />
-    </button>
-  )
-}
+      {/* Local-video 

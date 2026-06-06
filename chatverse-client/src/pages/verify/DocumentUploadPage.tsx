@@ -68,7 +68,7 @@ export default function DocumentUploadPage() {
     return (
       <div className="h-full overflow-y-auto bg-[var(--color-bg)] text-[var(--color-fg)]">
         <div className="max-w-md mx-auto px-6 py-12 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[var(--color-success-soft)] border border-[rgba(34,197,94,0.3)] text-[#86efac] mb-5">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[var(--color-success-soft)] border border-[var(--color-success-border)] text-[var(--color-success-fg)] mb-5">
             <CheckCircle2 size={26} />
           </div>
           <h2 className="text-2xl font-semibold tracking-tight mb-2">Submitted</h2>
@@ -202,7 +202,7 @@ export default function DocumentUploadPage() {
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-[var(--color-danger-soft)] border border-[rgba(239,68,68,0.3)] text-[#fca5a5] text-xs">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-[var(--color-danger-soft)] border border-[var(--color-danger-border)] text-[var(--color-danger-fg)] text-xs">
               <AlertCircle size={14} />
               <span>{error}</span>
             </div>

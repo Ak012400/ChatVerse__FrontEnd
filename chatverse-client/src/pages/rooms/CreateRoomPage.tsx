@@ -80,7 +80,7 @@ export default function CreateRoomPage() {
       <div className="h-full overflow-y-auto bg-[var(--color-bg)] text-[var(--color-fg)]">
         <div className="max-w-md mx-auto px-6 py-10">
           <div className="text-center mb-6">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[var(--color-success-soft)] border border-[rgba(34,197,94,0.3)] text-[#86efac] mb-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-[var(--color-success-soft)] border border-[var(--color-success-border)] text-[var(--color-success-fg)] mb-4">
               <Check size={20} />
             </div>
             <h1 className="text-2xl font-semibold tracking-tight mb-1">Room created</h1>
@@ -219,7 +219,7 @@ export default function CreateRoomPage() {
             </div>
 
             {error && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-[var(--color-danger-soft)] border border-[rgba(239,68,68,0.3)] text-[#fca5a5] text-xs">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-[var(--color-danger-soft)] border border-[var(--color-danger-border)] text-[var(--color-danger-fg)] text-xs">
                 <AlertCircle size={14} />
                 <span>{error}</span>
               </div>

@@ -275,7 +275,7 @@ export default function ProfilePage() {
                       <span
                         className={`w-7 h-7 rounded-md flex items-center justify-center
                           ${done
-                            ? 'bg-[var(--color-success-soft)] text-[#86efac]'
+                            ? 'bg-[var(--color-success-soft)] text-[var(--color-success-fg)]'
                             : 'bg-[var(--color-surface-2)] text-[var(--color-fg-mute)]'
                           }`}
                       >
@@ -313,7 +313,7 @@ export default function ProfilePage() {
               </ul>
 
               {ageStatus.ageVerified ? (
-                <div className="mt-4 flex items-center gap-2 px-3 py-2.5 rounded-md bg-[var(--color-success-soft)] border border-[rgba(34,197,94,0.3)] text-[#86efac] text-xs">
+                <div className="mt-4 flex items-center gap-2 px-3 py-2.5 rounded-md bg-[var(--color-success-soft)] border border-[var(--color-success-border)] text-[var(--color-success-fg)] text-xs">
                   <ShieldCheck size={14} />
                   Age verified — all features unlocked.
                 </div>

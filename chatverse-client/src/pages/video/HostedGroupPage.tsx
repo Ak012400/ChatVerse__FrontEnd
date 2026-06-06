@@ -237,7 +237,17 @@ function HostedGroupUI({
   const room = useRoomContext()
   const { localParticipant } = useLocalParticipant()
   const participants = useParticipants()
-  const tracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare])
+  // See RandomGroupPage for the rationale — withPlaceholder ensures every
+  // connected participant gets a grid tile even before/without a camera
+  // publish. Otherwise the grid swaps participants in and out depending
+  // on whose publish handshake completes first, which feels broken.
+  const tracks = useTracks(
+    [
+      { source: Track.Source.Camera, withPlaceholder: true },
+      { source: Track.Source.ScreenShare, withPlaceholder: false },
+    ],
+    { onlySubscribed: false },
+  )
   const [micOn, setMicOn] = useState(true)
   const [camOn, setCamOn] = useState(true)
   const [copied, setCopied] = useState(false)

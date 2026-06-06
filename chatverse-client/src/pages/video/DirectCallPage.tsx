@@ -424,7 +424,16 @@ function DirectCallUI({
   const navigate = useNavigate()
   const room = useRoomContext()
   const { localParticipant } = useLocalParticipant()
-  const tracks = useTracks([Track.Source.Camera])
+  // Same placeholder dance as RandomGroupPage — without `withPlaceholder`,
+  // a participant who just joined but hasn't finished publishing their
+  // camera yet would be invisible, so 1-on-1 calls flicker between
+  // "only me", "only them", and "no one" until both publish handshakes
+  // complete. `onlySubscribed: false` ensures published-but-not-yet-
+  // subscribed tracks also appear.
+  const tracks = useTracks(
+    [{ source: Track.Source.Camera, withPlaceholder: true }],
+    { onlySubscribed: false },
+  )
   const [micOn, setMicOn] = useState(true)
   const [camOn, setCamOn] = useState(true)
   const [callSeconds, setCallSeconds] = useState(0)
