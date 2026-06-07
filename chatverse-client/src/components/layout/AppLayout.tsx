@@ -7,6 +7,7 @@ import ChatSidebar from './Sidebar/ChatSidebar'
 import VideoSidebar from './Sidebar/VideoSidebar'
 import OnlineBadge from '../ui/OnlineBadge'
 import IncomingCallModal from '../call/IncomingCallModal'
+import GameInviteListener from '../games/GameInviteListener'
 import MobileBottomNav from './MobileBottomNav'
 import { useUiStore } from '../../stores/uiStore'
 import { useChatHub } from '../../hooks/useChatHub'
@@ -102,6 +103,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <OnlineBadge className="absolute top-3 right-4 z-20" />
         {children}
       </main>
+
+      {/* Global game invite handler — listens for `chatverse:game-invite`
+          window events that useGameHub dispatches when the server pushes
+          a per-user GameRoomInvite. Renders a toast banner with Accept/
+          Dismiss. Mounted here so invites appear on any logged-in page. */}
+      <GameInviteListener />
 
       {/* Mobile bottom nav — replaces the vertical PrimarySidebar on
           phones. Hidden on sm and above. */}
