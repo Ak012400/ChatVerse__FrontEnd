@@ -280,3 +280,15 @@ export interface JoinRequestResolution {
   userId: string
   status: JoinRequestStatus
 }
+
+// ─── Host invites ──────────────────────────────────────────────
+
+export interface GameRoomInviteDto {
+  inviteId: string
+  slug: string
+  roomName: string
+  type: GameType
+  fromUsername: string
+  /** ISO 8601 UTC */
+  sentAtUtc: string
+}

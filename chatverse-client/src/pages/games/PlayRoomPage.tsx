@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft, Copy, Check, Flag, Play, UserPlus,
-  UserCheck, UserX, Crown, Loader2,
+  UserCheck, UserX, Crown, Loader2, Hand, UserPlus2,
 } from 'lucide-react'
+import InvitePlayerModal from '../../components/games/InvitePlayerModal'
 import { gamesApi } from '../../api'
 import { useGameHub } from '../../hooks/useGameHub'
 import { useGameStore } from '../../stores/gameStore'
@@ -55,7 +56,10 @@ export default function PlayRoomPage() {
     submitChessMove, resignChess, fetchChessState,
     fetchPendingRequests, approveJoinRequest, declineJoinRequest,
     startQuiz, // same hub method, name kept generic to avoid re-coding
+    requestPlayerSeat, inviteToGameRoom,
   } = useGameHub()
+
+  const [showInviteModal, setShowInviteModal] = useState(false)
 
   const snapshot = useGameStore((s) => s.snapshot)
   const chess = useGameStore((s) => s.chess)
@@ -213,6 +217,29 @@ export default function PlayRoomPage() {
             {copied ? <Check size={11} /> : <Copy size={11} />}
             <span className="hidden sm:inline">{room.slug}</span>
           </button>
+          {/* Spectators (logged-in) get a "Request to play" pill that
+              queues a JoinRequest with the host. Hidden for guests. */}
+          {isLoggedIn && viewerRole === 'Spectator' && (
+            <button
+              onClick={() => requestPlayerSeat(slug).catch(() => {})}
+              className="h-8 px-3 rounded-md text-xs bg-[var(--color-accent-soft)] hover:opacity-90 text-[var(--color-accent-fg)] inline-flex items-center gap-1.5 transition-colors"
+              title="Ask host to give you a player seat"
+            >
+              <Hand size={12} /> Request to play
+            </button>
+          )}
+          {/* Host can invite specific users by username. The
+              recipient sees a toast + Accept button (handled by the
+              global GameInviteHandler mounted at app level). */}
+          {isHost && (
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="h-8 px-3 rounded-md text-xs bg-[var(--color-surface-2)] hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-fg)] text-[var(--color-fg-dim)] inline-flex items-center gap-1.5 transition-colors"
+              title="Invite a friend"
+            >
+              <UserPlus2 size={12} /> Invite
+            </button>
+          )}
           {isLoggedIn && viewerRole === 'Player' && chess?.result === 'InProgress' && (
             <button
               onClick={handleResign}
@@ -349,6 +376,15 @@ export default function PlayRoomPage() {
           )}
         </aside>
       </div>
+
+      <InvitePlayerModal
+        open={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        onInvite={async (targetUserId) => {
+          try { await inviteToGameRoom(targetUserId, slug) }
+          catch { /* error toast comes via hub Error event */ }
+        }}
+      />
     </div>
   )
 }

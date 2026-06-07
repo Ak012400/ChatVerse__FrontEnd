@@ -48,6 +48,7 @@ import type {
   ChessMovePushed,
   JoinRequestDto,
   JoinRequestResolution,
+  GameRoomInviteDto,
 } from '../types/games'
 
 // ============================================================
@@ -277,6 +278,45 @@ export function useGameHub() {
       }
     })
 
+    // Seat-upgrade ack — spectator clicked "Request to play"
+    hub.on('SeatRequestAck', ({ accepted, reason }: { accepted: boolean; reason?: string }) => {
+      if (accepted) {
+        showToast({
+          type: 'success',
+          title: 'Request sent',
+          message: reason ?? 'Waiting for host.',
+          duration: 2500,
+        })
+      } else if (reason) {
+        showToast({ type: 'warning', title: 'Cannot request seat', message: reason, duration: 2500 })
+      }
+    })
+
+    // Incoming invite — host invited THIS user to a game
+    hub.on('GameRoomInvite', (invite: GameRoomInviteDto) => {
+      if (!invite?.inviteId) return
+      // Dispatch a window event so the global InviteModal (mounted
+      // at the AppLayout level) can render it as a toast/modal.
+      window.dispatchEvent(new CustomEvent('chatverse:game-invite', { detail: invite }))
+    })
+    hub.on('InviteSent', ({ inviteId, targetUserId }: { inviteId: string; targetUserId: string }) => {
+      void inviteId; void targetUserId
+      showToast({
+        type: 'success', title: 'Invite sent',
+        message: 'They\'ll get a notification.',
+        duration: 2000,
+      })
+    })
+    hub.on('InviteAck', ({ accepted, slug, reason }: { accepted: boolean; slug?: string; reason?: string }) => {
+      if (accepted && slug) {
+        // The component that called acceptInvite is responsible for
+        // navigating to /play/{slug}; we just toast confirmation.
+        showToast({ type: 'success', title: 'Joining…', message: '', duration: 1500 })
+      } else if (reason) {
+        showToast({ type: 'warning', title: 'Invite issue', message: reason, duration: 3000 })
+      }
+    })
+
     // Personal ack on SubmitAnswer — only the caller sees it. Lets
     // us either lock the UI in or show a "stale" toast if the deadline
     // beat the request.
@@ -458,6 +498,23 @@ export function useGameHub() {
     await connectionRef.current!.invoke('DeclineJoinRequest', slug, requestId)
   }, [ensureConnected])
 
+  // ─── Seat upgrade ───────────────────────────────────────────────
+  const requestPlayerSeat = useCallback(async (slug: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('RequestPlayerSeat', slug)
+  }, [ensureConnected])
+
+  // ─── Invites ────────────────────────────────────────────────────
+  const inviteToGameRoom = useCallback(async (targetUserId: string, slug: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('InviteToGameRoom', targetUserId, slug)
+  }, [ensureConnected])
+
+  const acceptInvite = useCallback(async (inviteId: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('AcceptInvite', inviteId)
+  }, [ensureConnected])
+
   // Auto-tear-down on unmount. We DON'T leave the active room here —
   // the user might be navigating between pages within the room route.
   // Leaving is the responsibility of the page itself.
@@ -490,5 +547,9 @@ export function useGameHub() {
     fetchPendingRequests,
     approveJoinRequest,
     declineJoinRequest,
+    // Seat upgrade + invites
+    requestPlayerSeat,
+    inviteToGameRoom,
+    acceptInvite,
   }
 }
