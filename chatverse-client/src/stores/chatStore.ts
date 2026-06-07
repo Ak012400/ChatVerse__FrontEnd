@@ -1,6 +1,12 @@
 import { create } from 'zustand'
 import type { Room, Message } from '../types'
-import type { AmbientQuestion } from '../types/games'
+import type {
+  AmbientQuestion,
+  RollingQuizQuestion,
+  RollingQuizRevealed,
+  RollingQuizLeaderboard,
+  RollingQuizScored,
+} from '../types/games'
 
 interface ChatState {
   rooms:       Room[]
@@ -16,6 +22,18 @@ interface ChatState {
    *  server doesn't care, and other users' visibility is unaffected. */
   dismissedAmbient: Record<string, Set<string>>
 
+  // ─── Rolling Quiz (#general only) ──────────────────────────────
+  /** Live question, null between rounds or before first push. */
+  rollingQuizQuestion: RollingQuizQuestion | null
+  /** Latest reveal payload (correct answer). Cleared on next push. */
+  rollingQuizReveal:   RollingQuizRevealed | null
+  /** Live per-day leaderboard. */
+  rollingQuizBoard:    RollingQuizLeaderboard | null
+  /** Last 5 scoring events ("🥇 Alice +100" notifications). */
+  rollingQuizRecent:   RollingQuizScored[]
+  /** Local: which choice the user picked + whether server accepted. */
+  rollingQuizMyAnswer: { questionId: string; choiceIndex: number; isCorrect?: boolean } | null
+
   setRooms:         (rooms: Room[]) => void
   setActiveRoom:    (slug: string | null) => void
   setMessages:      (slug: string, msgs: Message[]) => void
@@ -26,6 +44,12 @@ interface ChatState {
   setTyping:        (slug: string, username: string) => void // 👈 Naya
   setAmbientQuestion: (slug: string, q: AmbientQuestion) => void
   dismissAmbient:     (slug: string, questionId: string) => void
+
+  setRollingQuizQuestion: (q: RollingQuizQuestion) => void
+  setRollingQuizReveal:   (r: RollingQuizRevealed) => void
+  setRollingQuizBoard:    (b: RollingQuizLeaderboard) => void
+  pushRollingQuizScored:  (s: RollingQuizScored) => void
+  setRollingQuizMyAnswer: (a: { questionId: string; choiceIndex: number; isCorrect?: boolean } | null) => void
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -36,6 +60,11 @@ export const useChatStore = create<ChatState>((set) => ({
   typingUsers: {}, // 👈 Initialize
   ambientQuestion:  {},
   dismissedAmbient: {},
+  rollingQuizQuestion: null,
+  rollingQuizReveal:   null,
+  rollingQuizBoard:    null,
+  rollingQuizRecent:   [],
+  rollingQuizMyAnswer: null,
 
   setRooms: (rooms) => set({ rooms }),
   setActiveRoom: (slug) => set({ activeRoom: slug }),
@@ -69,6 +98,26 @@ export const useChatStore = create<ChatState>((set) => ({
       next.add(questionId)
       return { dismissedAmbient: { ...s.dismissedAmbient, [slug]: next } }
   }),
+
+  setRollingQuizQuestion: (q) => set({
+      // New question wipes the reveal + my-answer state so the old
+      // colours don't bleed into the next round's render.
+      rollingQuizQuestion: q,
+      rollingQuizReveal:   null,
+      rollingQuizMyAnswer: null,
+  }),
+
+  setRollingQuizReveal: (r) => set({ rollingQuizReveal: r }),
+
+  setRollingQuizBoard: (b) => set({ rollingQuizBoard: b }),
+
+  pushRollingQuizScored: (s) => set((prev) => {
+      // Keep only the 5 most recent for the "live notifications" strip.
+      const next = [s, ...prev.rollingQuizRecent].slice(0, 5)
+      return { rollingQuizRecent: next }
+  }),
+
+  setRollingQuizMyAnswer: (a) => set({ rollingQuizMyAnswer: a }),
 
   // 👈 Naya: Typing user add karo, aur 3 second baad automatically remove kar do
   setTyping: (slug, username) => {
