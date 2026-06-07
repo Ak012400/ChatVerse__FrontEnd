@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Brain, Sparkles, Laugh, Loader2 } from 'lucide-react'
+import { X, Brain, Sparkles, Laugh, Loader2, Globe, Lock } from 'lucide-react'
 import { gamesApi } from '../../api'
 import { useToastStore } from '../../stores/toastStore'
 import Button from '../ui/Button'
@@ -98,15 +98,23 @@ interface Props {
    *  name so the new game inherits the context (e.g. "Gaming Lounge
    *  quiz" instead of an empty default). */
   defaultName?: string
+  /** Source chat slug — when present, the room is tagged so it shows
+   *  up in that chat's Active Games panel for the rest of the members
+   *  (when Public). Null/undefined = standalone (from /games page). */
+  sourceChatSlug?: string
 }
 
 export default function GameLauncherModal({
-  open, onClose, onCreated, defaultName,
+  open, onClose, onCreated, defaultName, sourceChatSlug,
 }: Props) {
   const { showToast } = useToastStore()
   const [name, setName] = useState(defaultName ?? '')
   const [selected, setSelected] = useState<GamePreset>('quiz')
   const [submitting, setSubmitting] = useState(false)
+  // Visibility default = public when the modal is launched from inside
+  // a chat (so other chat members see it), otherwise private. Users
+  // can toggle either way before clicking Launch.
+  const [isPublic, setIsPublic] = useState<boolean>(!!sourceChatSlug)
 
   if (!open) return null
 
@@ -124,6 +132,8 @@ export default function GameLauncherModal({
         difficulty: preset.difficulty,
         questionCount: preset.questionCount,
         secondsPerQuestion: preset.secondsPerQuestion,
+        isPublic,
+        sourceChatSlug,
       }
       const res = await gamesApi.create(req)
       const slug = res.data.data.slug
@@ -174,6 +184,53 @@ export default function GameLauncherModal({
             maxLength={40}
             autoFocus
           />
+
+          {/* Visibility toggle — only meaningful when launched from inside
+              a chat room. For standalone /games-page creates there's no
+              chat to be public in, so we hide the toggle entirely. */}
+          {sourceChatSlug && (
+            <div>
+              <p className="text-xs text-[var(--color-fg-dim)] mb-2">Visibility</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPublic(true)}
+                  className={[
+                    'p-3 rounded-md border text-left transition-all',
+                    isPublic
+                      ? 'bg-[var(--color-accent-soft)] border-[var(--color-accent-fg)]'
+                      : 'bg-[var(--color-surface-1)] border-[var(--color-line)] hover:border-[var(--color-line-strong)]',
+                  ].join(' ')}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Globe size={14} className="text-[var(--color-accent-fg)]" />
+                    <span className="text-sm font-medium">Public</span>
+                  </div>
+                  <p className="text-[10px] text-[var(--color-fg-mute)]">
+                    Visible to everyone in this chat
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPublic(false)}
+                  className={[
+                    'p-3 rounded-md border text-left transition-all',
+                    !isPublic
+                      ? 'bg-[var(--color-warning-soft)] border-[var(--color-warning-border)]'
+                      : 'bg-[var(--color-surface-1)] border-[var(--color-line)] hover:border-[var(--color-line-strong)]',
+                  ].join(' ')}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Lock size={14} className="text-[var(--color-warning-fg)]" />
+                    <span className="text-sm font-medium">Private</span>
+                  </div>
+                  <p className="text-[10px] text-[var(--color-fg-mute)]">
+                    Share the URL to invite
+                  </p>
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <p className="text-xs text-[var(--color-fg-dim)]">Pick a mode</p>

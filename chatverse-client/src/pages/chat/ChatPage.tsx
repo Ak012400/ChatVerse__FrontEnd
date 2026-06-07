@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { Smile, Paperclip, Send, Hash, Users, ShieldAlert, Ban, Gamepad2, X } from 'lucide-react'
 import GameLauncherModal from '../../components/games/GameLauncherModal'
+import ActiveGamesPanel from '../../components/games/ActiveGamesPanel'
 import QuizRoomPage from '../games/QuizRoomPage'
 import EmojiPicker, { Theme } from 'emoji-picker-react'
 import * as nsfwjs from 'nsfwjs'
@@ -302,7 +303,9 @@ export default function ChatPage() {
 
       {/* Launcher modal — controlled from header button.
           On success the chat layout splits and the new room ID
-          becomes the embedded panel's slug. */}
+          becomes the embedded panel's slug. The sourceChatSlug
+          arg tags the resulting game so OTHER members of this chat
+          see it in their Active Games panel (when Public). */}
       <GameLauncherModal
         open={showGameLauncher}
         onClose={() => setShowGameLauncher(false)}
@@ -311,7 +314,19 @@ export default function ChatPage() {
           setEmbeddedGameSlug(s)
         }}
         defaultName={room?.displayName ? `${room.displayName} quiz` : undefined}
+        sourceChatSlug={isGameableRoom ? slug : undefined}
       />
+
+      {/* Active Games discovery panel — only rendered for gameable
+          rooms. Hidden once a game is embedded so it doesn't compete
+          with the active room for screen real estate. */}
+      {isGameableRoom && slug && !embeddedGameSlug && (
+        <ActiveGamesPanel
+          sourceChatSlug={slug}
+          onPickRoom={(s) => setEmbeddedGameSlug(s)}
+          onStartGame={() => setShowGameLauncher(true)}
+        />
+      )}
 
       {/* Split layout — chat on the left, embedded game on the right.
           When no game is active, chat fills the full width as before. */}
