@@ -1,0 +1,69 @@
+# ─────────────────────────────────────────────────────────────
+#  Auto-merge dev-frontend → main
+#
+#  Mirror of the backend's auto-merge workflow but with the
+#  frontend's branch names: dev-frontend is the working branch,
+#  main is the deployable branch Cloudflare Pages watches.
+#
+#  Same --ff-only safety rule: divergence between main and
+#  dev-frontend causes the job to fail and requires manual review.
+# ─────────────────────────────────────────────────────────────
+name: Auto-merge dev-frontend → main
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [dev-frontend]
+
+permissions:
+  contents: write
+
+jobs:
+  merge:
+    name: Fast-forward main
+    runs-on: ubuntu-latest
+    if: >
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.head_branch == 'dev-frontend' &&
+        github.event.workflow_run.event == 'push'
+      }}
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout main with full history
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch dev-frontend
+        run: git fetch origin dev-frontend:dev-frontend
+
+      - name: Fast-forward merge
+        run: |
+          set -e
+          if git merge-base --is-ancestor main dev-frontend; then
+            git merge --ff-only dev-frontend
+            echo "✅ main fast-forwarded to dev-frontend"
+          else
+            echo "::error::main and dev-frontend have diverged. Manual merge required."
+            exit 1
+          fi
+
+      - name: Push main
+        run: git push origin main
+
+      - name: Summarise
+        run: |
+          echo "## Auto-merge complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Triggering CI run: ${{ github.event.workflow_run.html_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Cloudflare Pages will redeploy in ~2-3 minutes." >> $GITHUB_STEP_SUMMARY
