@@ -7,6 +7,7 @@ import { authApi } from '../../../api/auth'
 import { adminApi } from '../../../api'
 import IconButton from '../../ui/IconButton'
 import Avatar from '../../ui/Avatar'
+import NotificationBell from '../NotificationBell'
 
 type Tab = 'chat' | 'video'
 
@@ -97,6 +98,10 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
       </nav>
 
       <div className="flex flex-col items-center gap-2 pb-1">
+        {/* Notifications inbox — sits at the top of the lower group so
+            the unread badge is one of the first things users see. The
+            bell renders its own dropdown anchored to its position. */}
+        {!user?.isGuest && <NotificationBell />}
         {!user?.isGuest && (
           <IconButton variant="ghost" active={onPricing} onClick={() => navigate('/pricing')} aria-label="Upgrade" title="Upgrade">
             <CreditCard size={18} />

@@ -312,9 +312,21 @@ export function useGameHub() {
     // Incoming invite — host invited THIS user to a game
     hub.on('GameRoomInvite', (invite: GameRoomInviteDto) => {
       if (!invite?.inviteId) return
-      // Dispatch a window event so the global InviteModal (mounted
-      // at the AppLayout level) can render it as a toast/modal.
+      // 1) Dispatch a window event so the global InviteListener
+      //    (mounted in AppLayout) can render the toast banner.
       window.dispatchEvent(new CustomEvent('chatverse:game-invite', { detail: invite }))
+      // 2) Also log it in the persistent notification center so the
+      //    user can find it later if they dismissed the toast.
+      try {
+        const { useNotificationStore } = require('../stores/notificationStore') as
+          typeof import('../stores/notificationStore')
+        useNotificationStore.getState().add({
+          type: 'game-invite',
+          title: `${invite.fromUsername} invited you`,
+          body: `${invite.type} · ${invite.roomName}`,
+          payload: { ...invite },
+        })
+      } catch { /* notification store optional — never break invites if it errors */ }
     })
     hub.on('InviteSent', ({ inviteId, targetUserId }: { inviteId: string; targetUserId: string }) => {
       void inviteId; void targetUserId
@@ -332,6 +344,31 @@ export function useGameHub() {
       } else if (reason) {
         showToast({ type: 'warning', title: 'Invite issue', message: reason, duration: 3000 })
       }
+    })
+
+    // Room was closed by the host (explicit EndRoom OR host leave).
+    // Dispatch a window event so PlayRoomPage / any open room view
+    // can react (navigate back to chat). We don't navigate from inside
+    // the hook itself — the router isn't accessible here.
+    hub.on('RoomClosed', (payload: { slug: string; reason?: string }) => {
+      if (!payload?.slug) return
+      window.dispatchEvent(new CustomEvent('cv:room-closed', { detail: payload }))
+      showToast({
+        type: 'info',
+        title: 'Room closed',
+        message: payload.reason ?? 'The host ended the room.',
+        duration: 4000,
+      })
+      try {
+        const { useNotificationStore } = require('../stores/notificationStore') as
+          typeof import('../stores/notificationStore')
+        useNotificationStore.getState().add({
+          type: 'room-closed',
+          title: 'Room closed',
+          body: payload.reason ?? 'The host ended the room.',
+          payload: { slug: payload.slug },
+        })
+      } catch { /* non-fatal */ }
     })
 
     // Personal ack on SubmitAnswer — only the caller sees it. Lets
@@ -532,6 +569,13 @@ export function useGameHub() {
     await connectionRef.current!.invoke('AcceptInvite', inviteId)
   }, [ensureConnected])
 
+  // Host explicitly ends the room — broadcasts RoomClosed to everyone
+  // and drops the registry entry server-side.
+  const endRoom = useCallback(async (slug: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('EndRoom', slug)
+  }, [ensureConnected])
+
   // Auto-tear-down on unmount. We DON'T leave the active room here —
   // the user might be navigating between pages within the room route.
   // Leaving is the responsibility of the page itself.
@@ -568,5 +612,7 @@ export function useGameHub() {
     requestPlayerSeat,
     inviteToGameRoom,
     acceptInvite,
+    // Room lifecycle
+    endRoom,
   }
 }
