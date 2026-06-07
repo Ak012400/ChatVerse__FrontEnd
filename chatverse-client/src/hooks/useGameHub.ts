@@ -39,6 +39,11 @@ import type {
   ScoreEntry,
   GameParticipant,
   GameChatMessage,
+  JokePushed,
+  JokeReactionsUpdated,
+  JokeRevealed,
+  JokeFinalStat,
+  JokeReactionType,
 } from '../types/games'
 
 // ============================================================
@@ -170,6 +175,40 @@ export function useGameHub() {
     hub.on('ChatMessage', (msg: GameChatMessage) => {
       if (!msg?.id) return
       useGameStore.getState().applyChatMessage(msg)
+    })
+
+    // ─── Jokes-mode event handlers ──────────────────────────────
+    // Same defensive pattern — bail on malformed payload, fold the
+    // rest into the store via getState() so the latest store action
+    // wins (not a stale closure-captured one).
+    hub.on('JokePushed', (j: JokePushed) => {
+      if (!j?.id) return
+      useGameStore.getState().applyJokePushed(j)
+    })
+
+    hub.on('ReactionsUpdated', (u: JokeReactionsUpdated) => {
+      if (!u?.jokeId) return
+      useGameStore.getState().applyReactionsUpdated(u)
+    })
+
+    hub.on('JokeRevealed', (r: JokeRevealed) => {
+      if (!r?.jokeId) return
+      useGameStore.getState().applyJokeRevealed(r)
+    })
+
+    hub.on('JokesFinished', (payload: {
+      finalStats: JokeFinalStat[]
+      reason?: string
+    }) => {
+      useGameStore.getState().applyJokesFinished(payload?.finalStats ?? [])
+      if (payload?.reason) {
+        showToast({
+          type: 'info',
+          title: 'Jokes finished',
+          message: payload.reason,
+          duration: 4000,
+        })
+      }
     })
 
     // Personal ack on SubmitAnswer — only the caller sees it. Lets
@@ -305,6 +344,20 @@ export function useGameHub() {
     await connectionRef.current!.invoke('SendChat', slug, trimmed)
   }, [ensureConnected])
 
+  /**
+   * Submit a joke reaction. Last-write-wins so players can change
+   * their pick until the deadline. Optimistically updates the
+   * `myReaction` store key so the UI confirms instantly without
+   * waiting for the server's ack roundtrip.
+   */
+  const submitReaction = useCallback(async (
+    slug: string, jokeId: string, reaction: JokeReactionType,
+  ) => {
+    await ensureConnected()
+    useGameStore.getState().markReacted(reaction)
+    await connectionRef.current!.invoke('ReactToJoke', slug, jokeId, reaction)
+  }, [ensureConnected])
+
   // Auto-tear-down on unmount. We DON'T leave the active room here —
   // the user might be navigating between pages within the room route.
   // Leaving is the responsibility of the page itself.
@@ -328,5 +381,6 @@ export function useGameHub() {
     startQuiz,
     submitAnswer,
     sendChat,
+    submitReaction,
   }
 }
