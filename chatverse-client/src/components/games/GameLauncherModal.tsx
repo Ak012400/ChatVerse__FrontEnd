@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Brain, Sparkles, Laugh, Loader2, Globe, Lock } from 'lucide-react'
+import { X, Brain, Sparkles, Laugh, Loader2, Globe, Lock, Crown } from 'lucide-react'
 import { gamesApi } from '../../api'
 import { useToastStore } from '../../stores/toastStore'
 import Button from '../ui/Button'
@@ -24,7 +24,7 @@ import type {
 //    custom categories can still go to /games directly.
 // ============================================================
 
-type GamePreset = 'quiz' | 'trivia' | 'jokes'
+type GamePreset = 'quiz' | 'trivia' | 'jokes' | 'chess'
 
 interface PresetConfig {
   id: GamePreset
@@ -85,15 +85,31 @@ const PRESETS: PresetConfig[] = [
     icon: <Laugh size={20} />,
     iconBg: 'bg-[var(--color-success-soft)] text-[var(--color-success-fg)]',
   },
+  {
+    id: 'chess',
+    gameType: 'Chess',
+    title: 'Chess',
+    subtitle: '2 players · no time limit · opens in a separate room',
+    // Chess ignores category/difficulty/questionCount/seconds entirely,
+    // but the shared CreateGameRoomRequest shape requires them.
+    category: 'Any',
+    difficulty: 'Any',
+    questionCount: 0,
+    secondsPerQuestion: 0,
+    maxPlayers: 2,
+    icon: <Crown size={20} />,
+    iconBg: 'bg-[var(--color-surface-2)] text-[var(--color-fg-dim)]',
+  },
 ]
 
 interface Props {
   /** Opening flag — parent owns the visibility state. */
   open: boolean
   onClose: () => void
-  /** Called with the freshly-created room slug after a successful
-   *  create. Parent decides what to do with it (embed inline, etc). */
-  onCreated: (slug: string) => void
+  /** Called with the freshly-created room slug + game type after a
+   *  successful create. Parent uses the type to decide between inline
+   *  embed (Quiz/Jokes) vs full-screen overlay route (Chess/Ludo). */
+  onCreated: (slug: string, gameType: GameType) => void
   /** Optional default room name — typically the chat room's display
    *  name so the new game inherits the context (e.g. "Gaming Lounge
    *  quiz" instead of an empty default). */
@@ -137,7 +153,10 @@ export default function GameLauncherModal({
       }
       const res = await gamesApi.create(req)
       const slug = res.data.data.slug
-      onCreated(slug)
+      // Chess opens a dedicated full-screen overlay page rather than
+      // embedding inline (board needs much more space + own chat rail).
+      // Caller distinguishes via the preset they picked.
+      onCreated(slug, preset.gameType)
       // Reset for next use
       setName(defaultName ?? '')
     } catch (err: any) {

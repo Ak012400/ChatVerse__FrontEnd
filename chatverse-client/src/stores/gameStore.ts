@@ -13,6 +13,9 @@ import type {
   JokeRevealed,
   JokeFinalStat,
   JokeReactionType,
+  ChessStateSnapshot,
+  ChessMovePushed,
+  JoinRequestDto,
 } from '../types/games'
 
 // ============================================================
@@ -86,6 +89,18 @@ interface GameStoreState {
   /** Viewer's own reaction for the current joke (last-write-wins). */
   myReaction: JokeReactionType | null
 
+  // ─── CHESS STATE ────────────────────────────────────────────────
+  /** Latest chess board snapshot — drives the board renderer.
+   *  Null for non-chess rooms. */
+  chess: ChessStateSnapshot | null
+  /** Last move pushed (for "Alice played e4" toast / log highlight). */
+  lastChessMove: ChessMovePushed | null
+  /** Local "waiting for host approval" state when this user
+   *  requested into a private room. */
+  joinRequestPending: boolean
+  /** Pending join requests visible to the host. */
+  pendingJoinRequests: JoinRequestDto[]
+
   // ───── Actions ─────────────────────────────────────────────────
 
   setActiveSlug: (slug: string | null) => void
@@ -111,6 +126,14 @@ interface GameStoreState {
   applyJokesFinished: (stats: JokeFinalStat[]) => void
   markReacted: (reaction: JokeReactionType) => void
 
+  // ─── CHESS ACTIONS ──────────────────────────────────────────────
+  applyChessSnapshot: (snap: ChessStateSnapshot) => void
+  applyChessMove:     (push: ChessMovePushed) => void
+  setJoinRequestPending: (pending: boolean) => void
+  setPendingJoinRequests: (list: JoinRequestDto[]) => void
+  applyJoinRequested:  (req: JoinRequestDto) => void
+  applyJoinResolved:   (requestId: string) => void
+
   resetRoom: () => void
 }
 
@@ -135,6 +158,10 @@ export const useGameStore = create<GameStoreState>((set) => ({
   lastJokeReveal: null,
   jokesFinalStats: [],
   myReaction: null,
+  chess: null,
+  lastChessMove: null,
+  joinRequestPending: false,
+  pendingJoinRequests: [],
 
   setActiveSlug: (slug) => set({ activeSlug: slug }),
 
@@ -234,6 +261,28 @@ export const useGameStore = create<GameStoreState>((set) => ({
 
   markReacted: (reaction) => set({ myReaction: reaction }),
 
+  // ─── CHESS ─────────────────────────────────────────────────────
+  applyChessSnapshot: (snap) => set({
+    chess: snap,
+    // Clear join-pending if we just got a board — server admitted us.
+    joinRequestPending: false,
+  }),
+  applyChessMove: (push) => set((s) => ({
+    lastChessMove: push,
+    chess: s.chess
+      ? { ...s.chess, fen: push.move.fenAfter, turn: push.turnAfter, result: push.result,
+          moveHistory: [...s.chess.moveHistory, push.move] }
+      : null,
+  })),
+  setJoinRequestPending: (pending) => set({ joinRequestPending: pending }),
+  setPendingJoinRequests: (list) => set({ pendingJoinRequests: list }),
+  applyJoinRequested: (req) => set((s) => ({
+    pendingJoinRequests: [...s.pendingJoinRequests.filter((r) => r.id !== req.id), req],
+  })),
+  applyJoinResolved: (requestId) => set((s) => ({
+    pendingJoinRequests: s.pendingJoinRequests.filter((r) => r.id !== requestId),
+  })),
+
   resetRoom: () => set({
     activeSlug: null,
     snapshot: null,
@@ -249,5 +298,9 @@ export const useGameStore = create<GameStoreState>((set) => ({
     lastJokeReveal: null,
     jokesFinalStats: [],
     myReaction: null,
+    chess: null,
+    lastChessMove: null,
+    joinRequestPending: false,
+    pendingJoinRequests: [],
   }),
 }))

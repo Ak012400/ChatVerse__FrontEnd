@@ -44,6 +44,10 @@ import type {
   JokeRevealed,
   JokeFinalStat,
   JokeReactionType,
+  ChessStateSnapshot,
+  ChessMovePushed,
+  JoinRequestDto,
+  JoinRequestResolution,
 } from '../types/games'
 
 // ============================================================
@@ -211,6 +215,68 @@ export function useGameHub() {
       }
     })
 
+    // ─── Chess event handlers ──────────────────────────────────────
+    hub.on('ChessGameStarted', (snap: ChessStateSnapshot) => {
+      if (!snap) return
+      useGameStore.getState().applyChessSnapshot(snap)
+    })
+    hub.on('ChessStateSnapshot', (snap: ChessStateSnapshot) => {
+      if (!snap) return
+      useGameStore.getState().applyChessSnapshot(snap)
+    })
+    hub.on('ChessMovePushed', (move: ChessMovePushed) => {
+      if (!move?.move) return
+      useGameStore.getState().applyChessMove(move)
+    })
+    hub.on('ChessMoveAck', ({ accepted, reason }: { accepted: boolean; reason?: string }) => {
+      if (!accepted && reason) {
+        showToast({ type: 'warning', title: 'Move rejected', message: reason, duration: 2500 })
+      }
+    })
+
+    // ─── Join request events ──────────────────────────────────────
+    hub.on('JoinRequested', (req: JoinRequestDto) => {
+      if (!req?.id) return
+      // Host's view: a new pending row appears in the requests panel.
+      useGameStore.getState().applyJoinRequested(req)
+      showToast({
+        type: 'info',
+        title: 'Join request',
+        message: `${req.username} wants to join.`,
+        duration: 4000,
+      })
+    })
+    hub.on('JoinRequestResolved', (res: JoinRequestResolution) => {
+      if (!res?.requestId) return
+      useGameStore.getState().applyJoinResolved(res.requestId)
+      // If this resolution was for THIS user, clear pending flag.
+      // (We can't compare userIds without authStore here — we just
+      // optimistically clear; the snapshot push after admission
+      // will reset everything correctly anyway.)
+      if (res.status === 'Approved' || res.status === 'Declined') {
+        const pending = useGameStore.getState().joinRequestPending
+        if (pending) {
+          useGameStore.getState().setJoinRequestPending(false)
+          if (res.status === 'Declined') {
+            showToast({
+              type: 'warning',
+              title: 'Request declined',
+              message: 'Host did not approve your join.',
+              duration: 4000,
+            })
+          }
+        }
+      }
+    })
+    hub.on('PendingRequests', (list: JoinRequestDto[]) => {
+      useGameStore.getState().setPendingJoinRequests(list ?? [])
+    })
+    hub.on('JoinRequestAck', ({ accepted, reason }: { accepted: boolean; reason?: string }) => {
+      if (!accepted && reason) {
+        showToast({ type: 'warning', title: 'Action rejected', message: reason, duration: 2500 })
+      }
+    })
+
     // Personal ack on SubmitAnswer — only the caller sees it. Lets
     // us either lock the UI in or show a "stale" toast if the deadline
     // beat the request.
@@ -358,6 +424,40 @@ export function useGameHub() {
     await connectionRef.current!.invoke('ReactToJoke', slug, jokeId, reaction)
   }, [ensureConnected])
 
+  // ─── Chess methods ───────────────────────────────────────────────
+  const submitChessMove = useCallback(async (
+    slug: string, san: string, uci: string, fenAfter: string,
+  ) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('SubmitChessMove', slug, san, uci, fenAfter)
+  }, [ensureConnected])
+
+  const resignChess = useCallback(async (slug: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('ResignChess', slug)
+  }, [ensureConnected])
+
+  const fetchChessState = useCallback(async (slug: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('GetChessState', slug)
+  }, [ensureConnected])
+
+  // ─── Join request methods ───────────────────────────────────────
+  const fetchPendingRequests = useCallback(async (slug: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('GetPendingRequests', slug)
+  }, [ensureConnected])
+
+  const approveJoinRequest = useCallback(async (slug: string, requestId: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('ApproveJoinRequest', slug, requestId)
+  }, [ensureConnected])
+
+  const declineJoinRequest = useCallback(async (slug: string, requestId: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('DeclineJoinRequest', slug, requestId)
+  }, [ensureConnected])
+
   // Auto-tear-down on unmount. We DON'T leave the active room here —
   // the user might be navigating between pages within the room route.
   // Leaving is the responsibility of the page itself.
@@ -382,5 +482,13 @@ export function useGameHub() {
     submitAnswer,
     sendChat,
     submitReaction,
+    // Chess
+    submitChessMove,
+    resignChess,
+    fetchChessState,
+    // Join requests
+    fetchPendingRequests,
+    approveJoinRequest,
+    declineJoinRequest,
   }
 }
