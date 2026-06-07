@@ -230,3 +230,53 @@ export interface RollingQuizLeaderboard {
   top: RollingQuizLeaderEntry[]
   youRow: RollingQuizLeaderEntry | null
 }
+
+// ─── Chess ─────────────────────────────────────────────────────
+
+export type ChessColor = 'White' | 'Black'
+export type ChessResult = 'InProgress' | 'WhiteWins' | 'BlackWins' | 'Draw' | 'Aborted'
+
+export interface ChessMove {
+  san: string
+  uci: string
+  fenAfter: string
+  by: ChessColor
+  atUtc: string
+}
+
+export interface ChessMovePushed {
+  move: ChessMove
+  moveNumber: number
+  turnAfter: ChessColor
+  result: ChessResult
+  resultDetail: string | null
+}
+
+export interface ChessStateSnapshot {
+  fen: string
+  turn: ChessColor
+  result: ChessResult
+  moveHistory: ChessMove[]
+  whitePlayerId: string | null
+  whitePlayerName: string | null
+  blackPlayerId: string | null
+  blackPlayerName: string | null
+}
+
+// ─── Join request flow (private rooms) ────────────────────────
+
+export type JoinRequestStatus = 'Pending' | 'Approved' | 'Declined'
+
+export interface JoinRequestDto {
+  id: string
+  userId: string
+  username: string
+  requestedAtUtc: string
+  status: JoinRequestStatus
+}
+
+export interface JoinRequestResolution {
+  requestId: string
+  userId: string
+  status: JoinRequestStatus
+}

@@ -331,9 +331,17 @@ export default function ChatPage() {
       <GameLauncherModal
         open={showGameLauncher}
         onClose={() => setShowGameLauncher(false)}
-        onCreated={(s) => {
+        onCreated={(s, gameType) => {
           setShowGameLauncher(false)
-          setEmbeddedGameSlug(s)
+          // Chess (and Ludo, when it lands) needs a dedicated
+          // full-screen page — board + chat rail + scoreboard +
+          // requests panel don't fit inline. Quiz/Jokes embed
+          // alongside chat as before.
+          if (gameType === 'Chess' || gameType === 'Ludo') {
+            window.location.assign(`/play/${s}`)
+          } else {
+            setEmbeddedGameSlug(s)
+          }
         }}
         defaultName={room?.displayName ? `${room.displayName} quiz` : undefined}
         sourceChatSlug={isGameableRoom ? slug : undefined}

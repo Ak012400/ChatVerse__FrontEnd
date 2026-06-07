@@ -35,6 +35,7 @@ import DmsPage             from './pages/dms/DmsPage'
 import CreateRoomPage      from './pages/rooms/CreateRoomPage'
 import GamingHallPage      from './pages/games/GamingHallPage'
 import QuizRoomPage         from './pages/games/QuizRoomPage'
+import PlayRoomPage         from './pages/games/PlayRoomPage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -103,6 +104,10 @@ export default function App() {
               because scoreboards/persistence need a stable user identity. */}
           <Route path="/games" element={<RegisteredRoute><GamingHallPage /></RegisteredRoute>} />
           <Route path="/games/:slug" element={<RegisteredRoute><QuizRoomPage /></RegisteredRoute>} />
+          {/* Heavy games (Chess, future Ludo) use a dedicated full-
+              screen overlay. PrivateRoute (not RegisteredRoute) so
+              guests CAN view the board + chat, just can't make moves. */}
+          <Route path="/play/:slug" element={<PrivateRoute><PlayRoomPage /></PrivateRoute>} />
 
           {/* Video — lobby + four call modes (last two need an account) */}
           <Route path="/video" element={<PrivateRoute><VideoLobbyPage /></PrivateRoute>} />
