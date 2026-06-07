@@ -1,6 +1,8 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
-import { Smile, Paperclip, Send, Hash, Users, ShieldAlert, Ban } from 'lucide-react'
+import { Smile, Paperclip, Send, Hash, Users, ShieldAlert, Ban, Gamepad2, X } from 'lucide-react'
+import GameLauncherModal from '../../components/games/GameLauncherModal'
+import QuizRoomPage from '../games/QuizRoomPage'
 import EmojiPicker, { Theme } from 'emoji-picker-react'
 import * as nsfwjs from 'nsfwjs'
 
@@ -29,6 +31,26 @@ export default function ChatPage() {
   const [isChatLoading, setIsChatLoading] = useState(false)
   const [isImageScanning, setIsImageScanning] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
+
+  // ─── Embedded game state ──────────────────────────────────────────
+  // Some themed chat rooms (Gaming Lounge, Mini Game) get an inline
+  // "Start a game" affordance. Launching opens the picker modal, and
+  // on success we stash the new room's slug here — the layout below
+  // splits horizontally so the live quiz sits alongside the chat
+  // thread (instead of yanking the user to a different page).
+  const [showGameLauncher, setShowGameLauncher] = useState(false)
+  const [embeddedGameSlug, setEmbeddedGameSlug] = useState<string | null>(null)
+  // Whitelist of chat slugs that get the game affordance. Keeping it
+  // explicit (vs an "all rooms get it" rule) means non-gaming themed
+  // rooms aren't cluttered with a button that doesn't fit their vibe.
+  // The matching is "starts with" so room name variants ("gaming-lounge",
+  // "gaming-lounge-2") all qualify.
+  const GAMEABLE_PREFIXES = ['gaming-lounge', 'mini-game', 'gaming', 'mini']
+  const isGameableRoom = useMemo(
+    () => !!slug && GAMEABLE_PREFIXES.some((p) => slug.toLowerCase().startsWith(p)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug],
+  )
 
   const emojiRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -238,6 +260,25 @@ export default function ChatPage() {
           )}
         </div>
         <div className="flex items-center gap-3">
+          {/* "Start a game" affordance — visible only on gameable rooms.
+              Once a game is embedded, the button disables to avoid
+              accidentally launching a second concurrent room. */}
+          {isGameableRoom && (
+            <button
+              onClick={() => setShowGameLauncher(true)}
+              disabled={!!embeddedGameSlug}
+              className={[
+                'hidden sm:inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium transition-colors',
+                embeddedGameSlug
+                  ? 'bg-[var(--color-surface-2)] text-[var(--color-fg-mute)] cursor-not-allowed'
+                  : 'bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white',
+              ].join(' ')}
+              title={embeddedGameSlug ? 'A game is already running in this room' : 'Start a game'}
+            >
+              <Gamepad2 size={12} />
+              {embeddedGameSlug ? 'Game running' : 'Start a game'}
+            </button>
+          )}
           {liveCount > 0 && (
             <div className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--color-fg-faint)]">
               <Users size={13} />
@@ -259,6 +300,34 @@ export default function ChatPage() {
         </div>
       </header>
 
+      {/* Launcher modal — controlled from header button.
+          On success the chat layout splits and the new room ID
+          becomes the embedded panel's slug. */}
+      <GameLauncherModal
+        open={showGameLauncher}
+        onClose={() => setShowGameLauncher(false)}
+        onCreated={(s) => {
+          setShowGameLauncher(false)
+          setEmbeddedGameSlug(s)
+        }}
+        defaultName={room?.displayName ? `${room.displayName} quiz` : undefined}
+      />
+
+      {/* Split layout — chat on the left, embedded game on the right.
+          When no game is active, chat fills the full width as before. */}
+      <div className={[
+        'flex-1 min-h-0 flex',
+        embeddedGameSlug ? 'flex-col lg:flex-row' : 'flex-col',
+      ].join(' ')}>
+        {/* CHAT COLUMN (left when split, full when not) */}
+        <div
+          className={[
+            'flex flex-col min-h-0',
+            embeddedGameSlug
+              ? 'flex-1 lg:flex-[2] lg:max-w-[40%] border-b lg:border-b-0 lg:border-r border-[var(--color-line)]'
+              : 'flex-1',
+          ].join(' ')}
+        >
       {/* Messages */}
       {isChatLoading ? (
         <Loader variant="chat-skeleton" />
@@ -446,6 +515,39 @@ export default function ChatPage() {
           </button>
         </form>
       </div>
+        {/* ── End of CHAT COLUMN ── */}
+        </div>
+
+        {/* GAME PANEL — only mounted when an embedded game is active.
+            The QuizRoomPage is reused with explicit slug + onLeave
+            props (compactMode hides its built-in chat rail since the
+            host already has chat alongside). */}
+        {embeddedGameSlug && (
+          <div className="flex-1 lg:flex-[3] min-h-0 flex flex-col bg-[var(--color-bg)]">
+            <div className="shrink-0 h-9 px-3 border-b border-[var(--color-line)] flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wide text-[var(--color-fg-mute)]">
+                Live game
+              </span>
+              <button
+                onClick={() => setEmbeddedGameSlug(null)}
+                className="text-[var(--color-fg-mute)] hover:text-[var(--color-fg-dim)] transition-colors"
+                aria-label="Close game panel"
+                title="Close game (you'll leave the room)"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <QuizRoomPage
+                slug={embeddedGameSlug}
+                onLeave={() => setEmbeddedGameSlug(null)}
+                compactMode
+              />
+            </div>
+          </div>
+        )}
+      </div>
+      {/* ── End of SPLIT LAYOUT ── */}
     </div>
   )
 }

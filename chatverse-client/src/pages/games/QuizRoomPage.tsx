@@ -33,8 +33,23 @@ import CommentaryChat from '../../components/games/CommentaryChat'
 //  lands, which is usually within 200ms.
 // ============================================================
 
-export default function QuizRoomPage() {
-  const { slug = '' } = useParams<{ slug: string }>()
+interface QuizRoomPageProps {
+  /** Optional explicit slug — when this component is embedded inside the
+   *  ChatPage as a side panel, the slug comes from chat state rather
+   *  than the URL. URL-based usage (route /games/:slug) leaves it
+   *  undefined and falls back to useParams. */
+  slug?: string
+  /** Called instead of navigating to /games when the user hangs up.
+   *  Embedded usage closes the panel; route usage navigates. */
+  onLeave?: () => void
+  /** Compact = fewer columns on the playing layout (drops the chat
+   *  rail since the embedded host already has chat alongside). */
+  compactMode?: boolean
+}
+
+export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: QuizRoomPageProps = {}) {
+  const params = useParams<{ slug: string }>()
+  const slug = slugProp ?? params.slug ?? ''
   const navigate = useNavigate()
   const { showToast } = useToastStore()
   const me = useAuthStore((s) => s.user)
@@ -152,7 +167,10 @@ export default function QuizRoomPage() {
 
   const handleHangup = async () => {
     await leaveRoom(slug)
-    navigate('/games')
+    // Embedded host overrides this — close the panel and let the user
+    // stay in the chat. Route-mode falls back to navigating to the hall.
+    if (onLeave) onLeave()
+    else navigate('/games')
   }
 
   const handleStart = async () => {
@@ -226,8 +244,12 @@ export default function QuizRoomPage() {
     return (
       <FullPageStatus icon={<Brain size={20} className="text-[var(--color-danger-fg)]" />}>
         <p className="mb-3">{joinError ?? 'Room unavailable.'}</p>
-        <Button size="sm" onClick={() => navigate('/games')} leftIcon={<ArrowLeft size={14} />}>
-          Back to Gaming Hall
+        <Button
+          size="sm"
+          onClick={() => (onLeave ? onLeave() : navigate('/games'))}
+          leftIcon={<ArrowLeft size={14} />}
+        >
+          {onLeave ? 'Close' : 'Back to Gaming Hall'}
         </Button>
       </FullPageStatus>
     )
@@ -270,6 +292,7 @@ export default function QuizRoomPage() {
             chat={chat}
             onAnswer={handleAnswer}
             onSendChat={(t) => sendChat(slug, t)}
+            compactMode={compactMode}
           />
         )}
 
@@ -283,7 +306,8 @@ export default function QuizRoomPage() {
           <EndedView
             scoreboard={scoreboard}
             maxPlayers={room.maxPlayers}
-            onBackToHall={() => navigate('/games')}
+            onBackToHall={() => (onLeave ? onLeave() : navigate('/games'))}
+            embedded={!!onLeave}
           />
         )}
       </div>
@@ -486,7 +510,7 @@ function ParticipantList({
 
 function PlayingView({
   question, reveal, viewerRole, hasAnswered, myChoiceIndex,
-  scoreboard, maxPlayers, chat, onAnswer, onSendChat,
+  scoreboard, maxPlayers, chat, onAnswer, onSendChat, compactMode,
 }: {
   question: NonNullable<ReturnType<typeof useGameStore.getState>['currentQuestion']>
   reveal: ReturnType<typeof useGameStore.getState>['lastReveal']
@@ -498,9 +522,18 @@ function PlayingView({
   chat: ReturnType<typeof useGameStore.getState>['chat']
   onAnswer: (i: number) => void
   onSendChat: (t: string) => void
+  compactMode?: boolean
 }) {
+  // Compact mode = embedded inside the ChatPage. The host already has
+  // a full chat panel alongside, so we drop our commentary rail and
+  // shrink the scoreboard to leave the question card as much room as
+  // possible.
+  const cols = compactMode
+    ? 'grid-cols-1 lg:grid-cols-[1fr_220px]'
+    : 'grid-cols-1 lg:grid-cols-[1fr_280px_300px]'
+
   return (
-    <div className="h-full grid grid-cols-1 lg:grid-cols-[1fr_280px_300px] gap-4 p-4 overflow-hidden">
+    <div className={`h-full grid ${cols} gap-4 p-4 overflow-hidden`}>
       <section className="overflow-y-auto">
         <QuestionCard
           question={question}
@@ -512,11 +545,13 @@ function PlayingView({
         />
       </section>
       <aside className="overflow-hidden h-full">
-        <Scoreboard entries={scoreboard} totalSlots={maxPlayers} />
+        <Scoreboard entries={scoreboard} totalSlots={maxPlayers} compact={compactMode} />
       </aside>
-      <aside className="overflow-hidden h-full hidden lg:block">
-        <CommentaryChat messages={chat} onSend={onSendChat} />
-      </aside>
+      {!compactMode && (
+        <aside className="overflow-hidden h-full hidden lg:block">
+          <CommentaryChat messages={chat} onSend={onSendChat} />
+        </aside>
+      )}
     </div>
   )
 }
@@ -526,11 +561,12 @@ function PlayingView({
 // ============================================================
 
 function EndedView({
-  scoreboard, maxPlayers, onBackToHall,
+  scoreboard, maxPlayers, onBackToHall, embedded,
 }: {
   scoreboard: ReturnType<typeof useGameStore.getState>['scoreboard']
   maxPlayers: number
   onBackToHall: () => void
+  embedded?: boolean
 }) {
   const winner = scoreboard[0]
   return (
@@ -556,7 +592,7 @@ function EndedView({
           onClick={onBackToHall}
           className="mt-6"
         >
-          Back to Gaming Hall
+          {embedded ? 'Close & return to chat' : 'Back to Gaming Hall'}
         </Button>
       </div>
     </div>
