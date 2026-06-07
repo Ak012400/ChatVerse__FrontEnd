@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft, Copy, Check, Flag, Play, UserPlus,
-  UserCheck, UserX, Crown, Loader2, Hand, UserPlus2,
+  UserCheck, UserX, Crown, Loader2, Hand, UserPlus2, DoorOpen,
 } from 'lucide-react'
 import InvitePlayerModal from '../../components/games/InvitePlayerModal'
 import { gamesApi } from '../../api'
@@ -56,8 +56,23 @@ export default function PlayRoomPage() {
     submitChessMove, resignChess, fetchChessState,
     fetchPendingRequests, approveJoinRequest, declineJoinRequest,
     startQuiz, // same hub method, name kept generic to avoid re-coding
-    requestPlayerSeat, inviteToGameRoom,
+    requestPlayerSeat, inviteToGameRoom, endRoom,
   } = useGameHub()
+
+  // Listen for the server's RoomClosed broadcast and bounce out. We
+  // do this from this page (not from the hook) so we have access to
+  // the router. Anyone — host or spectator — gets kicked back to chat
+  // when the host closes the room.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ slug: string; reason?: string }>).detail
+      if (!detail || detail.slug !== slug) return
+      // Use replace so the closed-room URL isn't in browser history.
+      navigate('/chat', { replace: true })
+    }
+    window.addEventListener('cv:room-closed', handler as EventListener)
+    return () => window.removeEventListener('cv:room-closed', handler as EventListener)
+  }, [slug, navigate])
 
   const [showInviteModal, setShowInviteModal] = useState(false)
   // "I have asked for a player seat" — hydrated from sessionStorage so
@@ -290,6 +305,23 @@ export default function PlayRoomPage() {
               title="Invite a friend"
             >
               <UserPlus2 size={12} /> Invite
+            </button>
+          )}
+          {/* Host's explicit "end room" — broadcasts RoomClosed so
+              every participant bounces back to chat, and tears down
+              the registry entry server-side. Confirmation dialog
+              guards against accidental clicks since this is destructive. */}
+          {isHost && (
+            <button
+              onClick={async () => {
+                if (!window.confirm('End this room? All participants will be sent back to chat.')) return
+                try { await endRoom(slug) }
+                catch { /* hub error event will toast */ }
+              }}
+              className="h-8 px-3 rounded-md text-xs bg-[var(--color-surface-2)] hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger-fg)] text-[var(--color-fg-dim)] inline-flex items-center gap-1.5 transition-colors"
+              title="Close the room for everyone"
+            >
+              <DoorOpen size={12} /> End room
             </button>
           )}
           {isLoggedIn && viewerRole === 'Player' && chess?.result === 'InProgress' && (

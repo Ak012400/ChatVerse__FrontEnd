@@ -262,18 +262,50 @@ export const useGameStore = create<GameStoreState>((set) => ({
   markReacted: (reaction) => set({ myReaction: reaction }),
 
   // ─── CHESS ─────────────────────────────────────────────────────
-  applyChessSnapshot: (snap) => set({
+  applyChessSnapshot: (snap) => set((s) => ({
     chess: snap,
     // Clear join-pending if we just got a board — server admitted us.
     joinRequestPending: false,
-  }),
-  applyChessMove: (push) => set((s) => ({
-    lastChessMove: push,
-    chess: s.chess
-      ? { ...s.chess, fen: push.move.fenAfter, turn: push.turnAfter, result: push.result,
-          moveHistory: [...s.chess.moveHistory, push.move] }
-      : null,
+    // CRITICAL: Snapshot-time room.status can lag behind the chess
+    // state when the game started/ended after the snapshot was fetched.
+    // Sync it so UI gates (e.g. the Start button) use a single source
+    // of truth. The transition is:
+    //   game has moves OR result != InProgress → snapshot.room.status='Ended'
+    //   otherwise leave whatever the snapshot said (Lobby / Playing)
+    snapshot: s.snapshot ? {
+      ...s.snapshot,
+      room: {
+        ...s.snapshot.room,
+        status: snap.result !== 'InProgress'
+          ? 'Ended' as GameStatus
+          : snap.moveHistory.length > 0
+            ? 'Playing' as GameStatus
+            : s.snapshot.room.status,
+      },
+    } : s.snapshot,
   })),
+  applyChessMove: (push) => set((s) => {
+    const isOver = push.result !== 'InProgress'
+    return {
+      lastChessMove: push,
+      chess: s.chess
+        ? { ...s.chess, fen: push.move.fenAfter, turn: push.turnAfter, result: push.result,
+            moveHistory: [...s.chess.moveHistory, push.move] }
+        : null,
+      // Sync room.status on every move — first move flips Lobby→Playing,
+      // checkmate/resignation flips Playing→Ended. Keeps the Start button
+      // honest without a separate snapshot fetch.
+      snapshot: s.snapshot ? {
+        ...s.snapshot,
+        room: {
+          ...s.snapshot.room,
+          status: isOver
+            ? 'Ended' as GameStatus
+            : 'Playing' as GameStatus,
+        },
+      } : s.snapshot,
+    }
+  }),
   setJoinRequestPending: (pending) => set({ joinRequestPending: pending }),
   setPendingJoinRequests: (list) => set({ pendingJoinRequests: list }),
   applyJoinRequested: (req) => set((s) => ({
