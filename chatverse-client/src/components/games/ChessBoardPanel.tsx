@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Chess, type Square } from 'chess.js'
 import { Chessboard } from 'react-chessboard'
+import { Crown } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useGameStore } from '../../stores/gameStore'
 import type { ChessStateSnapshot } from '../../types/games'
@@ -142,9 +143,21 @@ export default function ChessBoardPanel({ snapshot, isLoggedIn, onMove }: Props)
       </div>
 
       {!isLoggedIn && (
-        <p className="text-[11px] text-[var(--color-fg-mute)] italic">
-          Spectator mode — sign in to play.
-        </p>
+        // Guest spectator CTA — converts a watching guest into a
+        // signed-in user. Keeps it inline (not a modal) so it doesn't
+        // interrupt their watching.
+        <div className="w-full max-w-[560px] rounded-md bg-[var(--color-accent-soft)] border border-[var(--color-accent-fg)] px-3 py-2 flex items-center gap-2">
+          <Crown size={12} className="text-[var(--color-accent-fg)] shrink-0" />
+          <span className="text-[11px] flex-1">
+            You're watching as a guest. <strong>Sign up</strong> to play, request a seat, or invite friends.
+          </span>
+          <a
+            href="/register"
+            className="h-7 px-2.5 rounded-md text-[10px] font-medium bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white inline-flex items-center transition-colors"
+          >
+            Sign up
+          </a>
+        </div>
       )}
       {snapshot.result !== 'InProgress' && (
         <p className="text-xs font-medium text-[var(--color-accent-fg)]">
