@@ -60,6 +60,47 @@ export default function PlayRoomPage() {
   } = useGameHub()
 
   const [showInviteModal, setShowInviteModal] = useState(false)
+  // "I have asked for a player seat" — hydrated from sessionStorage so
+  // a refresh (or accidental tab navigation away + back) doesn't lose
+  // the badge. The flag is cleared either when our role flips to
+  // Player or when JoinRequestResolved arrives for our request.
+  const [seatPending, setSeatPending] = useState<boolean>(() => {
+    if (typeof window === 'undefined' || !slug) return false
+    try { return sessionStorage.getItem(`cv:seat-pending:${slug}`) === '1' }
+    catch { return false }
+  })
+
+  // Clear the pending flag the moment we land in a Player seat — server
+  // already honoured the upgrade so the badge would be a lie.
+  useEffect(() => {
+    if (viewerRole === 'Player' && seatPending) {
+      setSeatPending(false)
+      try { sessionStorage.removeItem(`cv:seat-pending:${slug}`) } catch { /* private mode */ }
+    }
+  }, [viewerRole, seatPending, slug])
+
+  // Reactive — the hook dispatches `cv:seat-pending-changed` when it
+  // writes the sessionStorage flag, so we update on a real signal
+  // instead of polling every 1.5s. Cross-tab updates still flow via
+  // the native `storage` event (other tabs don't fire CustomEvents
+  // on this one).
+  useEffect(() => {
+    const reactToChange = (e: Event) => {
+      const detail = (e as CustomEvent<{ slug: string; pending: boolean }>).detail
+      if (!detail || detail.slug !== slug) return
+      setSeatPending(detail.pending)
+    }
+    const reactToStorage = () => {
+      try { setSeatPending(sessionStorage.getItem(`cv:seat-pending:${slug}`) === '1') }
+      catch { /* private mode */ }
+    }
+    window.addEventListener('cv:seat-pending-changed', reactToChange as EventListener)
+    window.addEventListener('storage', reactToStorage)
+    return () => {
+      window.removeEventListener('cv:seat-pending-changed', reactToChange as EventListener)
+      window.removeEventListener('storage', reactToStorage)
+    }
+  }, [slug])
 
   const snapshot = useGameStore((s) => s.snapshot)
   const chess = useGameStore((s) => s.chess)
@@ -218,8 +259,10 @@ export default function PlayRoomPage() {
             <span className="hidden sm:inline">{room.slug}</span>
           </button>
           {/* Spectators (logged-in) get a "Request to play" pill that
-              queues a JoinRequest with the host. Hidden for guests. */}
-          {isLoggedIn && viewerRole === 'Spectator' && (
+              queues a JoinRequest with the host. Hidden for guests.
+              When a request is already pending, the pill turns into a
+              disabled "Pending…" indicator that survives page reload. */}
+          {isLoggedIn && viewerRole === 'Spectator' && !seatPending && (
             <button
               onClick={() => requestPlayerSeat(slug).catch(() => {})}
               className="h-8 px-3 rounded-md text-xs bg-[var(--color-accent-soft)] hover:opacity-90 text-[var(--color-accent-fg)] inline-flex items-center gap-1.5 transition-colors"
@@ -227,6 +270,11 @@ export default function PlayRoomPage() {
             >
               <Hand size={12} /> Request to play
             </button>
+          )}
+          {isLoggedIn && viewerRole === 'Spectator' && seatPending && (
+            <span className="h-8 px-3 rounded-md text-xs bg-[var(--color-warning-soft)] text-[var(--color-warning-fg)] inline-flex items-center gap-1.5 cursor-default" title="Waiting for host approval">
+              <Loader2 size={11} className="animate-spin" /> Request pending
+            </span>
           )}
           {/* Host can invite specific users by username. The
               recipient sees a toast + Accept button (handled by the
@@ -302,8 +350,9 @@ export default function PlayRoomPage() {
             </div>
           )}
 
-          {/* Requests panel — host only, only when there are requests */}
-          {isHost && pendingJoinRequests.length > 0 && (
+          {/* Requests panel — host sees this always so they can find it
+              even when the room is quiet. The empty state guides them. */}
+          {isHost && (
             <div className="shrink-0 rounded-md bg-[var(--color-surface-1)] border border-[var(--color-line)] overflow-hidden">
               <div className="px-3 py-1.5 border-b border-[var(--color-line)] flex items-center gap-2">
                 <UserPlus size={11} className="text-[var(--color-accent-fg)]" />
@@ -314,25 +363,31 @@ export default function PlayRoomPage() {
                   {pendingJoinRequests.length}
                 </span>
               </div>
-              <ul className="divide-y divide-[var(--color-line)]">
-                {pendingJoinRequests.map((req) => (
-                  <li key={req.id} className="flex items-center gap-2 px-3 py-2">
-                    <span className="text-xs flex-1 truncate">{req.username}</span>
-                    <button
-                      onClick={() => handleApprove(req.id)}
-                      className="h-7 px-2 rounded-md text-[10px] bg-[var(--color-success-soft)] text-[var(--color-success-fg)] hover:opacity-90 inline-flex items-center gap-1"
-                    >
-                      <UserCheck size={10} /> Approve
-                    </button>
-                    <button
-                      onClick={() => handleDecline(req.id)}
-                      className="h-7 px-2 rounded-md text-[10px] bg-[var(--color-danger-soft)] text-[var(--color-danger-fg)] hover:opacity-90 inline-flex items-center gap-1"
-                    >
-                      <UserX size={10} /> Decline
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              {pendingJoinRequests.length === 0 ? (
+                <p className="px-3 py-3 text-[11px] text-[var(--color-fg-mute)] italic">
+                  No pending requests. When spectators ask to play, you'll see them here with approve / decline buttons.
+                </p>
+              ) : (
+                <ul className="divide-y divide-[var(--color-line)]">
+                  {pendingJoinRequests.map((req) => (
+                    <li key={req.id} className="flex items-center gap-2 px-3 py-2">
+                      <span className="text-xs flex-1 truncate">{req.username}</span>
+                      <button
+                        onClick={() => handleApprove(req.id)}
+                        className="h-7 px-2 rounded-md text-[10px] bg-[var(--color-success-soft)] text-[var(--color-success-fg)] hover:opacity-90 inline-flex items-center gap-1"
+                      >
+                        <UserCheck size={10} /> Approve
+                      </button>
+                      <button
+                        onClick={() => handleDecline(req.id)}
+                        className="h-7 px-2 rounded-md text-[10px] bg-[var(--color-danger-soft)] text-[var(--color-danger-fg)] hover:opacity-90 inline-flex items-center gap-1"
+                      >
+                        <UserX size={10} /> Decline
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
