@@ -28,6 +28,13 @@ export interface CreateGameRoomRequest {
   difficulty: QuizDifficulty
   questionCount: number
   secondsPerQuestion: number
+  /** True = discoverable in the source chat's Active Games panel.
+   *  False = only joinable via shared URL. Defaults to true on the
+   *  backend if omitted. */
+  isPublic?: boolean
+  /** Slug of the chat room this game was launched from. Discovery
+   *  panel filters on this so each themed room sees only its games. */
+  sourceChatSlug?: string
 }
 
 export interface JoinGameRoomRequest {
@@ -44,6 +51,12 @@ export interface GameRoomDto {
   spectatorCount: number
   hostUsername: string
   createdAtUtc: string
+  /** True iff the room is publicly discoverable. */
+  isPublic?: boolean
+  /** True iff this is the always-on random room for its chat. */
+  isRandom?: boolean
+  /** Source chat slug (null for standalone Gaming Hall rooms). */
+  sourceChatSlug?: string | null
 }
 
 // ─── Quiz payloads ─────────────────────────────────────────────
