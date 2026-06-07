@@ -91,11 +91,15 @@ const PRESETS: PresetConfig[] = [
     title: 'Chess',
     subtitle: '2 players · no time limit · opens in a separate room',
     // Chess ignores category/difficulty/questionCount/seconds entirely,
-    // but the shared CreateGameRoomRequest shape requires them.
+    // but the shared CreateGameRoomRequest validation enforces ranges
+    // for ALL game types. Sending dummy in-range values keeps the
+    // controller happy without a backend special-case.
+    //   - questionCount must be 5-20
+    //   - secondsPerQuestion must be 10-30
     category: 'Any',
     difficulty: 'Any',
-    questionCount: 0,
-    secondsPerQuestion: 0,
+    questionCount: 10,
+    secondsPerQuestion: 15,
     maxPlayers: 2,
     icon: <Crown size={20} />,
     iconBg: 'bg-[var(--color-surface-2)] text-[var(--color-fg-dim)]',
