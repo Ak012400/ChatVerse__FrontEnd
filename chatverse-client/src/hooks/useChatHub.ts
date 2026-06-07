@@ -6,6 +6,7 @@ import { useToastStore } from '../stores/toastStore'
 import { useDmStore, type DmMessage } from '../stores/dmStore'
 import { useCallStore } from '../stores/callStore'
 import type { Message } from '../types'
+import type { AmbientQuestion } from '../types/games'
 
 const HUB_URL = (import.meta.env.VITE_API_URL ?? 'https://localhost:7217/api').replace('/api', '') + '/hubs/chat'
 
@@ -60,6 +61,18 @@ export function useChatHub() {
     hub.on('UserJoined', ({ activeCount, roomSlug }: any) => setOnlineCount(roomSlug, activeCount))
     hub.on('UserLeft', ({ activeCount, roomSlug }: any) => setOnlineCount(roomSlug, activeCount))
     hub.on('Error', (msg: string) => showToast({ type: 'error', title: 'Error', message: msg, duration: 4000 }))
+
+    // ─── Ambient question ticker ──────────────────────────────
+    // The server pushes one of these to gameable rooms (Gaming
+    // Lounge / Mini Game) every few minutes. The room slug is the
+    // SignalR group it lands in, so we resolve it from the active
+    // room — but only update if the user is actually IN that room.
+    // For other rooms it's a no-op until they navigate there.
+    hub.on('AmbientQuestion', (q: AmbientQuestion) => {
+      if (!q?.id) return
+      const activeRoom = useChatStore.getState().activeRoom
+      if (activeRoom) useChatStore.getState().setAmbientQuestion(activeRoom, q)
+    })
 
     // ─── DM events ────────────────────────────────────────────
     hub.on('ReceiveDm', (msg: DmMessage) => {

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Room, Message } from '../types'
+import type { AmbientQuestion } from '../types/games'
 
 interface ChatState {
   rooms:       Room[]
@@ -7,6 +8,13 @@ interface ChatState {
   messages:    Record<string, Message[]>
   onlineCount: Record<string, number>
   typingUsers: Record<string, string[]> // 👈 Naya: Typing track karne ke liye
+
+  /** Currently-live ambient question per room. Replaced wholesale
+   *  when the server emits a new one — only the latest is shown. */
+  ambientQuestion:  Record<string, AmbientQuestion>
+  /** Per-room set of dismissed question IDs. Local-only state — the
+   *  server doesn't care, and other users' visibility is unaffected. */
+  dismissedAmbient: Record<string, Set<string>>
 
   setRooms:         (rooms: Room[]) => void
   setActiveRoom:    (slug: string | null) => void
@@ -16,6 +24,8 @@ interface ChatState {
   removeMessage:    (slug: string, msgId: string) => void
   setOnlineCount:   (slug: string, count: number) => void
   setTyping:        (slug: string, username: string) => void // 👈 Naya
+  setAmbientQuestion: (slug: string, q: AmbientQuestion) => void
+  dismissAmbient:     (slug: string, questionId: string) => void
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -24,6 +34,8 @@ export const useChatStore = create<ChatState>((set) => ({
   messages:    {},
   onlineCount: {},
   typingUsers: {}, // 👈 Initialize
+  ambientQuestion:  {},
+  dismissedAmbient: {},
 
   setRooms: (rooms) => set({ rooms }),
   setActiveRoom: (slug) => set({ activeRoom: slug }),
@@ -47,6 +59,16 @@ export const useChatStore = create<ChatState>((set) => ({
   setOnlineCount: (slug, count) => set((s) => ({
       onlineCount: { ...s.onlineCount, [slug]: count }
   })),
+
+  setAmbientQuestion: (slug, q) => set((s) => ({
+      ambientQuestion: { ...s.ambientQuestion, [slug]: q }
+  })),
+
+  dismissAmbient: (slug, questionId) => set((s) => {
+      const next = new Set(s.dismissedAmbient[slug] ?? [])
+      next.add(questionId)
+      return { dismissedAmbient: { ...s.dismissedAmbient, [slug]: next } }
+  }),
 
   // 👈 Naya: Typing user add karo, aur 3 second baad automatically remove kar do
   setTyping: (slug, username) => {
