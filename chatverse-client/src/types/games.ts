@@ -185,3 +185,48 @@ export interface AmbientQuestion {
   /** ISO 8601 UTC */
   emittedAtUtc: string
 }
+
+// ─── Rolling Quiz (in #general) ────────────────────────────────
+
+export interface RollingQuizQuestion {
+  id: string
+  category: string
+  difficulty: string
+  question: string
+  options: string[]
+  /** ISO 8601 UTC */
+  deadlineUtc: string
+  /** UTC-day bucket (yyyyMMdd). Used to detect leaderboard rollover. */
+  sessionId: string
+}
+
+export interface RollingQuizScored {
+  userId: string
+  username: string
+  /** 1-based rank in the correct-answer ordering for THIS round. */
+  rank: number
+  pointsAwarded: number
+  runningTotal: number
+}
+
+export interface RollingQuizRevealed {
+  questionId: string
+  correctIndex: number
+  correctAnswer: string
+  correctAnswerCount: number
+  totalSubmissionCount: number
+}
+
+export interface RollingQuizLeaderEntry {
+  userId: string
+  username: string
+  score: number
+  correctAnswers: number
+  totalAttempts: number
+}
+
+export interface RollingQuizLeaderboard {
+  sessionId: string
+  top: RollingQuizLeaderEntry[]
+  youRow: RollingQuizLeaderEntry | null
+}

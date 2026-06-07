@@ -5,6 +5,7 @@ import GameLauncherModal from '../../components/games/GameLauncherModal'
 import ActiveGamesPanel from '../../components/games/ActiveGamesPanel'
 import AmbientQuestionCard from '../../components/chat/AmbientQuestionCard'
 import TechNewsPanel from '../../components/chat/TechNewsPanel'
+import RollingQuizPanel from '../../components/chat/RollingQuizPanel'
 import QuizRoomPage from '../games/QuizRoomPage'
 import EmojiPicker, { Theme } from 'emoji-picker-react'
 import * as nsfwjs from 'nsfwjs'
@@ -32,7 +33,10 @@ export default function ChatPage() {
   const ambientQuestion = useChatStore((s) => (slug ? s.ambientQuestion[slug] : undefined))
   const dismissedAmbientSet = useChatStore((s) => (slug ? s.dismissedAmbient[slug] : undefined))
   const dismissAmbient = useChatStore((s) => s.dismissAmbient)
-  const { joinRoom, leaveRoom, sendTyping, sendMessage, isConnected } = useChatHub()
+  const {
+    joinRoom, leaveRoom, sendTyping, sendMessage, isConnected,
+    submitRollingQuizAnswer, getRollingQuizState,
+  } = useChatHub()
 
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -66,6 +70,10 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [slug],
   )
+  // #general gets the always-on Rolling Quiz + live leaderboard.
+  // Match exact "general" only — variants like "general-2" would
+  // need their own SignalR group on the backend to receive pushes.
+  const isGeneralRoom = slug === 'general'
 
   const emojiRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -347,6 +355,16 @@ export default function ChatPage() {
           the room can start a thread on the headline. */}
       {isTechRoom && slug && (
         <TechNewsPanel onShareToChat={(text) => sendMessage(slug, text)} />
+      )}
+
+      {/* Rolling quiz with daily leaderboard — #general only.
+          Hydrate on mount fetches the current question + today's
+          leaderboard so new joiners see the live state immediately. */}
+      {isGeneralRoom && (
+        <RollingQuizPanel
+          onSubmit={(qId, idx) => submitRollingQuizAnswer(qId, idx)}
+          onHydrate={() => getRollingQuizState()}
+        />
       )}
 
       {/* Split layout — chat on the left, embedded game on the right.

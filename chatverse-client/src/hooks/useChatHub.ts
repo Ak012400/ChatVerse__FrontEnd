@@ -6,7 +6,13 @@ import { useToastStore } from '../stores/toastStore'
 import { useDmStore, type DmMessage } from '../stores/dmStore'
 import { useCallStore } from '../stores/callStore'
 import type { Message } from '../types'
-import type { AmbientQuestion } from '../types/games'
+import type {
+  AmbientQuestion,
+  RollingQuizQuestion,
+  RollingQuizRevealed,
+  RollingQuizLeaderboard,
+  RollingQuizScored,
+} from '../types/games'
 
 const HUB_URL = (import.meta.env.VITE_API_URL ?? 'https://localhost:7217/api').replace('/api', '') + '/hubs/chat'
 
@@ -72,6 +78,53 @@ export function useChatHub() {
       if (!q?.id) return
       const activeRoom = useChatStore.getState().activeRoom
       if (activeRoom) useChatStore.getState().setAmbientQuestion(activeRoom, q)
+    })
+
+    // ─── Rolling Quiz (#general only) ──────────────────────────
+    // The server pushes these only to the "general" SignalR group,
+    // so we don't need to filter by activeRoom here — the channel
+    // membership already handles that.
+    hub.on('RollingQuizQuestion', (q: RollingQuizQuestion) => {
+      if (!q?.id) return
+      useChatStore.getState().setRollingQuizQuestion(q)
+    })
+    hub.on('RollingQuizRevealed', (r: RollingQuizRevealed) => {
+      if (!r?.questionId) return
+      useChatStore.getState().setRollingQuizReveal(r)
+    })
+    hub.on('RollingQuizLeaderboard', (b: RollingQuizLeaderboard) => {
+      if (!b) return
+      useChatStore.getState().setRollingQuizBoard(b)
+    })
+    hub.on('RollingQuizScored', (s: RollingQuizScored) => {
+      if (!s?.userId) return
+      useChatStore.getState().pushRollingQuizScored(s)
+    })
+    hub.on('RollingQuizAck', (ack: {
+      accepted: boolean; reason?: string; isCorrect?: boolean; choiceIndex?: number
+    }) => {
+      // The submit method already set an optimistic record; here we
+      // just update the isCorrect flag for the colour reveal.
+      const current = useChatStore.getState().rollingQuizMyAnswer
+      if (!current) return
+      if (!ack.accepted) {
+        // Roll back the local optimistic update if the server rejected.
+        useChatStore.getState().setRollingQuizMyAnswer(null)
+        if (ack.reason) {
+          showToast({
+            type: 'warning',
+            title: 'Answer rejected',
+            message: ack.reason,
+            duration: 2500,
+          })
+        }
+        return
+      }
+      useChatStore.getState().setRollingQuizMyAnswer({
+        questionId: current.questionId,
+        choiceIndex: current.choiceIndex,
+        isCorrect: ack.isCorrect,
+      })
     })
 
     // ─── DM events ────────────────────────────────────────────
@@ -219,6 +272,16 @@ export function useChatHub() {
       safeInvoke('InviteToCall', targetUserId, message ?? null),
     acceptCall: (inviteId: string) => safeInvoke('AcceptCall', inviteId),
     declineCall: (inviteId: string) => safeInvoke('DeclineCall', inviteId),
+
+    // ── Rolling quiz (#general) ─────────────────────────────────
+    // Submit lock-in: store the optimistic choice locally so the UI
+    // greys out the buttons before the server ack lands. The server's
+    // RollingQuizAck event upgrades the record with isCorrect.
+    submitRollingQuizAnswer: (questionId: string, choiceIndex: number) => {
+      useChatStore.getState().setRollingQuizMyAnswer({ questionId, choiceIndex })
+      return safeInvoke('SubmitRollingQuizAnswer', questionId, choiceIndex)
+    },
+    getRollingQuizState: () => safeInvoke('GetRollingQuizState'),
 
     isConnected: () => connectionRef.current?.state === signalR.HubConnectionState.Connected,
     safeInvoke,
