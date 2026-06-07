@@ -44,7 +44,14 @@ export default function InvitePlayerModal({ open, onClose, onInvite }: Props) {
       try {
         const res = await usersApi.search(query.trim(), 10)
         if (cancelled) return
-        setResults(res.data.data ?? [])
+        // Backend shape (UsersController.Search):
+        //   { success, data: { query, count, results: [...] } }
+        // So results are nested under data.results, NOT data itself.
+        // Defensive Array.isArray() guard so a future schema shift
+        // can't crash this modal again — falls back to empty list.
+        const payload = res.data?.data as { results?: unknown } | undefined
+        const arr = Array.isArray(payload?.results) ? payload.results as User[] : []
+        setResults(arr)
       } catch {
         if (!cancelled) setResults([])
       } finally {

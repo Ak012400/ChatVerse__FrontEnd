@@ -267,6 +267,13 @@ export function useGameHub() {
             })
           }
         }
+        // Best-effort cleanup of the refresh-survival flag too. We
+        // don't know for certain this resolution is OURS without
+        // userIds; conservatively clear if the local pending was set.
+        const slug = useGameStore.getState().activeSlug
+        if (slug) {
+          try { sessionStorage.removeItem(`cv:seat-pending:${slug}`) } catch { /* private mode */ }
+        }
       }
     })
     hub.on('PendingRequests', (list: JoinRequestDto[]) => {
@@ -278,9 +285,19 @@ export function useGameHub() {
       }
     })
 
-    // Seat-upgrade ack — spectator clicked "Request to play"
+    // Seat-upgrade ack — spectator clicked "Request to play".
+    // Cross-component signal: fire a custom window event instead of
+    // letting consumers poll sessionStorage. Listeners update their
+    // local state without a setInterval tax — async + reactive.
     hub.on('SeatRequestAck', ({ accepted, reason }: { accepted: boolean; reason?: string }) => {
       if (accepted) {
+        const slug = useGameStore.getState().activeSlug
+        if (slug) {
+          try { sessionStorage.setItem(`cv:seat-pending:${slug}`, '1') } catch { /* private mode */ }
+          window.dispatchEvent(new CustomEvent('cv:seat-pending-changed', {
+            detail: { slug, pending: true },
+          }))
+        }
         showToast({
           type: 'success',
           title: 'Request sent',
