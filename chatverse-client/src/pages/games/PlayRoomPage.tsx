@@ -72,12 +72,16 @@ export default function PlayRoomPage() {
 
   // Clear the pending flag the moment we land in a Player seat — server
   // already honoured the upgrade so the badge would be a lie.
+  // NOTE: We read viewerRole off the store inside the effect rather
+  // than from a const declared further down, otherwise we'd hit a
+  // Temporal Dead Zone error during initial render.
+  const liveViewerRole = useGameStore((s) => s.snapshot?.viewerRole ?? null)
   useEffect(() => {
-    if (viewerRole === 'Player' && seatPending) {
+    if (liveViewerRole === 'Player' && seatPending) {
       setSeatPending(false)
       try { sessionStorage.removeItem(`cv:seat-pending:${slug}`) } catch { /* private mode */ }
     }
-  }, [viewerRole, seatPending, slug])
+  }, [liveViewerRole, seatPending, slug])
 
   // Reactive — the hook dispatches `cv:seat-pending-changed` when it
   // writes the sessionStorage flag, so we update on a real signal
