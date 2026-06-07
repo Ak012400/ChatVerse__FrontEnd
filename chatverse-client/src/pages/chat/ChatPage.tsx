@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom'
 import { Smile, Paperclip, Send, Hash, Users, ShieldAlert, Ban, Gamepad2, X } from 'lucide-react'
 import GameLauncherModal from '../../components/games/GameLauncherModal'
 import ActiveGamesPanel from '../../components/games/ActiveGamesPanel'
+import AmbientQuestionCard from '../../components/chat/AmbientQuestionCard'
+import TechNewsPanel from '../../components/chat/TechNewsPanel'
 import QuizRoomPage from '../games/QuizRoomPage'
 import EmojiPicker, { Theme } from 'emoji-picker-react'
 import * as nsfwjs from 'nsfwjs'
@@ -24,6 +26,12 @@ export default function ChatPage() {
   const user = useAuthStore((s) => s.user)
   const { showToast } = useToastStore()
   const { rooms, setRooms, messages, typingUsers, onlineCount, setActiveRoom } = useChatStore()
+  // Ambient question + dismissal tracking for this specific room. We
+  // read them as separate selectors so unrelated chat updates don't
+  // re-render the card.
+  const ambientQuestion = useChatStore((s) => (slug ? s.ambientQuestion[slug] : undefined))
+  const dismissedAmbientSet = useChatStore((s) => (slug ? s.dismissedAmbient[slug] : undefined))
+  const dismissAmbient = useChatStore((s) => s.dismissAmbient)
   const { joinRoom, leaveRoom, sendTyping, sendMessage, isConnected } = useChatHub()
 
   const [input, setInput] = useState('')
@@ -47,8 +55,14 @@ export default function ChatPage() {
   // The matching is "starts with" so room name variants ("gaming-lounge",
   // "gaming-lounge-2") all qualify.
   const GAMEABLE_PREFIXES = ['gaming-lounge', 'mini-game', 'gaming', 'mini']
+  const TECH_PREFIXES = ['tech-talk', 'tech']
   const isGameableRoom = useMemo(
     () => !!slug && GAMEABLE_PREFIXES.some((p) => slug.toLowerCase().startsWith(p)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug],
+  )
+  const isTechRoom = useMemo(
+    () => !!slug && TECH_PREFIXES.some((p) => slug.toLowerCase().startsWith(p)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [slug],
   )
@@ -328,6 +342,13 @@ export default function ChatPage() {
         />
       )}
 
+      {/* Tech Talk news feed — only mounted in tech-talk* slugs.
+          Click "Share" on any article seeds a quoted chat reply so
+          the room can start a thread on the headline. */}
+      {isTechRoom && slug && (
+        <TechNewsPanel onShareToChat={(text) => sendMessage(slug, text)} />
+      )}
+
       {/* Split layout — chat on the left, embedded game on the right.
           When no game is active, chat fills the full width as before. */}
       <div className={[
@@ -343,6 +364,17 @@ export default function ChatPage() {
               : 'flex-1',
           ].join(' ')}
         >
+      {/* Ambient question card — only shown for gameable rooms,
+          when a question is live AND this viewer hasn't dismissed
+          it. Dismissal is local-only so other members keep seeing it. */}
+      {isGameableRoom && ambientQuestion && !dismissedAmbientSet?.has(ambientQuestion.id) && slug && (
+        <AmbientQuestionCard
+          question={ambientQuestion}
+          onSeedReply={(text) => { sendMessage(slug, text) }}
+          onDismiss={() => dismissAmbient(slug, ambientQuestion.id)}
+        />
+      )}
+
       {/* Messages */}
       {isChatLoading ? (
         <Loader variant="chat-skeleton" />

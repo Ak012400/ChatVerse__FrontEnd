@@ -170,3 +170,18 @@ export interface JokeFinalStat {
   laughCount: number
   totalReactions: number
 }
+
+// ─── Ambient questions (chat-room ticker) ──────────────────────
+
+export type AmbientQuestionMode = 'Mcq' | 'Discussion'
+
+export interface AmbientQuestion {
+  id: string
+  mode: AmbientQuestionMode
+  text: string
+  /** Present only when mode === 'Mcq'. Discussion prompts omit. */
+  options: string[] | null
+  category: string
+  /** ISO 8601 UTC */
+  emittedAtUtc: string
+}
