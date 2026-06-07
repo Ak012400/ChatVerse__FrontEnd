@@ -78,10 +78,13 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
         <IconButton variant="ghost" active={onVideo || activeTab === 'video'} onClick={() => navTo('video')} aria-label="Video" title="Video">
           <Video size={18} />
         </IconButton>
-        {/* Gaming Hall — quiz rooms + future Chess/Ludo. Registered-only
-            at the route level; hidden for guests here so they aren't
-            led into a redirect by the icon. */}
-        {!user?.isGuest && (
+        {/* Standalone Gaming Hall icon intentionally hidden.
+            Games are now launched from inside themed chat rooms
+            (Gaming Lounge / Mini Game) via the "Start a game" header
+            button. The /games route still works for direct-link
+            invites — we just don't surface it in the navigation.
+            Re-enable this block if a top-level entry is ever wanted. */}
+        {false && !user?.isGuest && (
           <IconButton variant="ghost" active={onGames} onClick={() => navigate('/games')} aria-label="Gaming Hall" title="Gaming Hall">
             <Gamepad2 size={18} />
           </IconButton>
