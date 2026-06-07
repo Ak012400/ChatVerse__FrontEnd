@@ -14,6 +14,7 @@ import Badge from '../../components/ui/Badge'
 import QuestionCard from '../../components/games/QuestionCard'
 import Scoreboard from '../../components/games/Scoreboard'
 import CommentaryChat from '../../components/games/CommentaryChat'
+import JokesPanel from '../../components/games/JokesPanel'
 
 // ============================================================
 //  QuizRoomPage — main quiz UI.
@@ -53,7 +54,7 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
   const navigate = useNavigate()
   const { showToast } = useToastStore()
   const me = useAuthStore((s) => s.user)
-  const { hubState, joinRoom, leaveRoom, startQuiz, submitAnswer, sendChat } = useGameHub()
+  const { hubState, joinRoom, leaveRoom, startQuiz, submitAnswer, sendChat, submitReaction } = useGameHub()
 
   const snapshot = useGameStore((s) => s.snapshot)
   const currentQuestion = useGameStore((s) => s.currentQuestion)
@@ -63,6 +64,12 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
   const chat = useGameStore((s) => s.chat)
   const hasAnsweredCurrent = useGameStore((s) => s.hasAnsweredCurrent)
   const myChoiceIndex = useGameStore((s) => s.myChoiceIndex)
+  // Jokes-mode state — null/empty unless room.type === 'Jokes'
+  const currentJoke = useGameStore((s) => s.currentJoke)
+  const jokeCounts = useGameStore((s) => s.jokeCounts)
+  const lastJokeReveal = useGameStore((s) => s.lastJokeReveal)
+  const jokesFinalStats = useGameStore((s) => s.jokesFinalStats)
+  const myReaction = useGameStore((s) => s.myReaction)
 
   const [joining, setJoining] = useState(true)
   const [joinError, setJoinError] = useState<string | null>(null)
@@ -230,6 +237,13 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
     })
   }
 
+  // Jokes-mode reaction submit. Same fire-and-forget pattern as
+  // handleAnswer — AnswerAck toast covers rejections.
+  const handleReact = (reaction: 'Laugh' | 'Meh' | 'Skull' | 'EyeRoll') => {
+    if (!currentJoke) return
+    submitReaction(slug, currentJoke.id, reaction).catch(() => {})
+  }
+
   // ─── Render branches ───────────────────────────────────────────
 
   if (joining) {
@@ -280,7 +294,26 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
           />
         )}
 
-        {room.status === 'Playing' && currentQuestion && (
+        {/* Game-type dispatch for Playing state. Quiz/Trivia rooms
+            (room.type === 'Quiz') use PlayingView with question card +
+            scoreboard. Jokes rooms route to JokesPlayingView which
+            wraps JokesPanel with the same chat-rail layout. */}
+        {room.status === 'Playing' && room.type === 'Jokes' && (
+          <JokesPlayingView
+            joke={currentJoke}
+            counts={jokeCounts}
+            reveal={lastJokeReveal}
+            finalStats={jokesFinalStats}
+            viewerRole={viewerRole}
+            myReaction={myReaction}
+            chat={chat}
+            onReact={handleReact}
+            onSendChat={(t) => sendChat(slug, t)}
+            compactMode={compactMode}
+          />
+        )}
+
+        {room.status === 'Playing' && room.type !== 'Jokes' && currentQuestion && (
           <PlayingView
             question={currentQuestion}
             reveal={lastReveal}
@@ -296,13 +329,21 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
           />
         )}
 
-        {room.status === 'Playing' && !currentQuestion && (
+        {room.status === 'Playing' && room.type !== 'Jokes' && !currentQuestion && (
           <FullPageStatus icon={<Loader2 size={18} className="animate-spin" />}>
             Loading next question…
           </FullPageStatus>
         )}
 
-        {room.status === 'Ended' && (
+        {room.status === 'Ended' && room.type === 'Jokes' && (
+          <JokesEndedView
+            finalStats={jokesFinalStats}
+            onBackToHall={() => (onLeave ? onLeave() : navigate('/games'))}
+            embedded={!!onLeave}
+          />
+        )}
+
+        {room.status === 'Ended' && room.type !== 'Jokes' && (
           <EndedView
             scoreboard={scoreboard}
             maxPlayers={room.maxPlayers}
@@ -552,6 +593,93 @@ function PlayingView({
           <CommentaryChat messages={chat} onSend={onSendChat} />
         </aside>
       )}
+    </div>
+  )
+}
+
+// ============================================================
+//  JokesPlayingView — Jokes-mode wrapper around JokesPanel.
+//
+//  Same overall layout as PlayingView (game panel left, optional
+//  chat rail right) but routes the centre column through JokesPanel
+//  instead of QuestionCard + Scoreboard.
+// ============================================================
+
+function JokesPlayingView({
+  joke, counts, reveal, finalStats, viewerRole, myReaction,
+  chat, onReact, onSendChat, compactMode,
+}: {
+  joke: ReturnType<typeof useGameStore.getState>['currentJoke']
+  counts: ReturnType<typeof useGameStore.getState>['jokeCounts']
+  reveal: ReturnType<typeof useGameStore.getState>['lastJokeReveal']
+  finalStats: ReturnType<typeof useGameStore.getState>['jokesFinalStats']
+  viewerRole: 'Player' | 'Spectator' | null
+  myReaction: ReturnType<typeof useGameStore.getState>['myReaction']
+  chat: ReturnType<typeof useGameStore.getState>['chat']
+  onReact: (r: 'Laugh' | 'Meh' | 'Skull' | 'EyeRoll') => void
+  onSendChat: (t: string) => void
+  compactMode?: boolean
+}) {
+  const cols = compactMode
+    ? 'grid-cols-1'
+    : 'grid-cols-1 lg:grid-cols-[1fr_300px]'
+  return (
+    <div className={`h-full grid ${cols} gap-4 p-4 overflow-hidden`}>
+      <section className="overflow-y-auto">
+        <JokesPanel
+          joke={joke}
+          counts={counts}
+          reveal={reveal}
+          finalStats={finalStats}
+          viewerRole={viewerRole}
+          myReaction={myReaction}
+          onReact={onReact}
+        />
+      </section>
+      {!compactMode && (
+        <aside className="overflow-hidden h-full hidden lg:block">
+          <CommentaryChat messages={chat} onSend={onSendChat} />
+        </aside>
+      )}
+    </div>
+  )
+}
+
+// ============================================================
+//  JokesEndedView — wraps JokesPanel's final leaderboard with a
+//  back-to-hall / close button so the layout matches EndedView.
+// ============================================================
+
+function JokesEndedView({
+  finalStats, onBackToHall, embedded,
+}: {
+  finalStats: ReturnType<typeof useGameStore.getState>['jokesFinalStats']
+  onBackToHall: () => void
+  embedded?: boolean
+}) {
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-xl mx-auto p-4">
+        <JokesPanel
+          joke={null}
+          counts={{ Laugh: 0, Meh: 0, Skull: 0, EyeRoll: 0 }}
+          reveal={null}
+          finalStats={finalStats}
+          viewerRole={null}
+          myReaction={null}
+          onReact={() => {}}
+        />
+        <div className="mt-4">
+          <Button
+            size="lg"
+            fullWidth
+            leftIcon={<ArrowLeft size={15} />}
+            onClick={onBackToHall}
+          >
+            {embedded ? 'Close & return to chat' : 'Back to Gaming Hall'}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

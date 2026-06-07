@@ -120,3 +120,40 @@ export interface GameRoomSnapshot {
   participants: GameParticipant[]
   recentChat: GameChatMessage[]
 }
+
+// ─── Jokes mode ────────────────────────────────────────────────
+
+/** Four-emoji reaction palette — keep in sync with backend enum.
+ *  PascalCase to match the JsonStringEnumConverter wire format. */
+export type JokeReactionType = 'Laugh' | 'Meh' | 'Skull' | 'EyeRoll'
+
+export interface JokePushed {
+  id: string
+  text: string
+  jokeNumber: number
+  totalJokes: number
+  /** ISO 8601 UTC string */
+  deadlineUtc: string
+}
+
+export interface JokeReactionsUpdated {
+  jokeId: string
+  /** Counts keyed by reaction type. Backend always sends all 4 keys
+   *  so the bar chart doesn't need to defensively fill blanks. */
+  counts: Record<JokeReactionType, number>
+  totalReactions: number
+}
+
+export interface JokeRevealed {
+  jokeId: string
+  text: string
+  counts: Record<JokeReactionType, number>
+  topReaction: JokeReactionType
+}
+
+export interface JokeFinalStat {
+  jokeId: string
+  text: string
+  laughCount: number
+  totalReactions: number
+}

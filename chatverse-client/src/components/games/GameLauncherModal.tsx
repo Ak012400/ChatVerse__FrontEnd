@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { X, Brain, Sparkles, Loader2 } from 'lucide-react'
+import { X, Brain, Sparkles, Laugh, Loader2 } from 'lucide-react'
 import { gamesApi } from '../../api'
 import { useToastStore } from '../../stores/toastStore'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
 import type {
-  CreateGameRoomRequest, QuizCategory, QuizDifficulty,
+  CreateGameRoomRequest, GameType, QuizCategory, QuizDifficulty,
 } from '../../types/games'
 
 // ============================================================
@@ -24,10 +24,14 @@ import type {
 //    custom categories can still go to /games directly.
 // ============================================================
 
-type GamePreset = 'quiz' | 'trivia'
+type GamePreset = 'quiz' | 'trivia' | 'jokes'
 
 interface PresetConfig {
   id: GamePreset
+  /** Backend game type — Quiz preset and Trivia preset both send
+   *  `Quiz` to the API (Trivia is just a difficulty/timing variant).
+   *  Jokes preset sends `Jokes` which routes to JokesSession. */
+  gameType: GameType
   title: string
   subtitle: string
   category: QuizCategory
@@ -42,6 +46,7 @@ interface PresetConfig {
 const PRESETS: PresetConfig[] = [
   {
     id: 'quiz',
+    gameType: 'Quiz',
     title: 'Casual Quiz',
     subtitle: '10 questions · 15s each · any category, any difficulty',
     category: 'Any',
@@ -54,6 +59,7 @@ const PRESETS: PresetConfig[] = [
   },
   {
     id: 'trivia',
+    gameType: 'Quiz',
     title: 'Hard Trivia',
     subtitle: '10 questions · 10s each · hard difficulty — for the brave',
     category: 'Any',
@@ -63,6 +69,21 @@ const PRESETS: PresetConfig[] = [
     maxPlayers: 6,
     icon: <Sparkles size={20} />,
     iconBg: 'bg-[var(--color-warning-soft)] text-[var(--color-warning-fg)]',
+  },
+  {
+    id: 'jokes',
+    gameType: 'Jokes',
+    title: 'Jokes Roast',
+    subtitle: '10 jokes · 30s each · react with emoji, no scoring',
+    // category/difficulty unused by Jokes backend but the field is
+    // required by the shared QuizSettings shape. "Any" is harmless.
+    category: 'Any',
+    difficulty: 'Any',
+    questionCount: 10,
+    secondsPerQuestion: 30,
+    maxPlayers: 8,
+    icon: <Laugh size={20} />,
+    iconBg: 'bg-[var(--color-success-soft)] text-[var(--color-success-fg)]',
   },
 ]
 
@@ -97,7 +118,7 @@ export default function GameLauncherModal({
     try {
       const req: CreateGameRoomRequest = {
         name: trimmed,
-        type: 'Quiz', // Trivia preset shares Quiz backend — just different settings
+        type: preset.gameType, // Quiz or Jokes — routed by GameSessionRegistry
         maxPlayers: preset.maxPlayers,
         category: preset.category,
         difficulty: preset.difficulty,

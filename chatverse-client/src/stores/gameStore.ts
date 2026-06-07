@@ -8,6 +8,11 @@ import type {
   GameChatMessage,
   GameStatus,
   GameRole,
+  JokePushed,
+  JokeReactionsUpdated,
+  JokeRevealed,
+  JokeFinalStat,
+  JokeReactionType,
 } from '../types/games'
 
 // ============================================================
@@ -66,6 +71,21 @@ interface GameStoreState {
   /** The choice the viewer made, used for the "your pick" highlight. */
   myChoiceIndex: number | null
 
+  // ─── JOKES MODE STATE ─────────────────────────────────────────
+  /** Live joke pushed by the bot. Null in Quiz rooms or before
+   *  the first joke. */
+  currentJoke: JokePushed | null
+  /** Live counts per reaction for the current joke — drives the
+   *  bar chart. Defaults to zeros so the chart doesn't flicker. */
+  jokeCounts: Record<JokeReactionType, number>
+  /** Set when a joke's deadline passes — drives the "Top reaction
+   *  was 😂" reveal overlay. Cleared on next joke. */
+  lastJokeReveal: JokeRevealed | null
+  /** Final per-joke stats once the round ends. Sorted by laugh count. */
+  jokesFinalStats: JokeFinalStat[]
+  /** Viewer's own reaction for the current joke (last-write-wins). */
+  myReaction: JokeReactionType | null
+
   // ───── Actions ─────────────────────────────────────────────────
 
   setActiveSlug: (slug: string | null) => void
@@ -84,7 +104,18 @@ interface GameStoreState {
 
   markAnswered: (choiceIndex: number) => void
 
+  // ─── JOKES MODE ACTIONS ─────────────────────────────────────────
+  applyJokePushed: (j: JokePushed) => void
+  applyReactionsUpdated: (u: JokeReactionsUpdated) => void
+  applyJokeRevealed: (r: JokeRevealed) => void
+  applyJokesFinished: (stats: JokeFinalStat[]) => void
+  markReacted: (reaction: JokeReactionType) => void
+
   resetRoom: () => void
+}
+
+const EMPTY_JOKE_COUNTS: Record<JokeReactionType, number> = {
+  Laugh: 0, Meh: 0, Skull: 0, EyeRoll: 0,
 }
 
 const MAX_CHAT_IN_STORE = 200
@@ -99,6 +130,11 @@ export const useGameStore = create<GameStoreState>((set) => ({
   chat: [],
   hasAnsweredCurrent: false,
   myChoiceIndex: null,
+  currentJoke: null,
+  jokeCounts: EMPTY_JOKE_COUNTS,
+  lastJokeReveal: null,
+  jokesFinalStats: [],
+  myReaction: null,
 
   setActiveSlug: (slug) => set({ activeSlug: slug }),
 
@@ -168,6 +204,36 @@ export const useGameStore = create<GameStoreState>((set) => ({
     myChoiceIndex: choiceIndex,
   }),
 
+  // ─── JOKES MODE ────────────────────────────────────────────────
+  applyJokePushed: (j) => set({
+    currentJoke: j,
+    jokeCounts: EMPTY_JOKE_COUNTS,
+    lastJokeReveal: null,
+    myReaction: null,
+  }),
+
+  applyReactionsUpdated: (u) => set((s) => {
+    // Ignore stale updates for previous jokes — server might race a
+    // late reaction onto the next round's first event.
+    if (s.currentJoke && s.currentJoke.id !== u.jokeId) return {}
+    return { jokeCounts: { ...EMPTY_JOKE_COUNTS, ...u.counts } }
+  }),
+
+  applyJokeRevealed: (r) => set({
+    lastJokeReveal: r,
+    jokeCounts: { ...EMPTY_JOKE_COUNTS, ...r.counts },
+  }),
+
+  applyJokesFinished: (stats) => set((s) => ({
+    jokesFinalStats: stats,
+    currentJoke: null,
+    snapshot: s.snapshot
+      ? { ...s.snapshot, room: { ...s.snapshot.room, status: 'Ended' as GameStatus } }
+      : null,
+  })),
+
+  markReacted: (reaction) => set({ myReaction: reaction }),
+
   resetRoom: () => set({
     activeSlug: null,
     snapshot: null,
@@ -178,5 +244,10 @@ export const useGameStore = create<GameStoreState>((set) => ({
     chat: [],
     hasAnsweredCurrent: false,
     myChoiceIndex: null,
+    currentJoke: null,
+    jokeCounts: EMPTY_JOKE_COUNTS,
+    lastJokeReveal: null,
+    jokesFinalStats: [],
+    myReaction: null,
   }),
 }))
