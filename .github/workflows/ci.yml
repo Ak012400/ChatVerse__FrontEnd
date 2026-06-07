@@ -1,0 +1,64 @@
+# ─────────────────────────────────────────────────────────────
+#  CI — frontend build verification
+#
+#  Vite's build step already runs the TypeScript compiler (tsc)
+#  for type-checking, so a single `npm run build` covers both
+#  type errors and bundling failures.
+#
+#  Working directory: chatverse-client/ (the actual app lives one
+#  level below the repo root).
+#
+#  Runs on every push to `dev-frontend` and PRs targeting `main`
+#  or `dev-frontend`.
+# ─────────────────────────────────────────────────────────────
+name: CI
+
+on:
+  push:
+    branches: [dev-frontend]
+  pull_request:
+    branches: [main, dev-frontend]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        # Every step's command runs from chatverse-client/. Avoids
+        # repeating `cd chatverse-client &&` in every script line.
+        working-directory: chatverse-client
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          # cache-dependency-path is relative to repo root, NOT to
+          # the `defaults.run.working-directory` we set above.
+          cache-dependency-path: chatverse-client/package-lock.json
+
+      - name: Install dependencies (clean)
+        run: npm ci
+
+      - name: Build (Vite + tsc)
+        # `vite build` invokes tsc internally, so this single command
+        # surfaces type errors AND bundle errors. If you later need
+        # explicit type-check without bundle, add `npx tsc --noEmit`
+        # as a separate step.
+        run: npm run build
+
+      # Optional: lint as a non-blocking step. Currently disabled
+      # because the project hasn't been ESLint-clean from the start.
+      # - name: Lint
+      #   run: npm run lint
