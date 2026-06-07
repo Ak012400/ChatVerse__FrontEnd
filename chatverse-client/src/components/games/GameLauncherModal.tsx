@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { X, Brain, Sparkles, Laugh, Loader2, Globe, Lock, Crown } from 'lucide-react'
 import { gamesApi } from '../../api'
+import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
@@ -128,6 +129,8 @@ export default function GameLauncherModal({
   open, onClose, onCreated, defaultName, sourceChatSlug,
 }: Props) {
   const { showToast } = useToastStore()
+  const me = useAuthStore((s) => s.user)
+  const isGuest = !!me?.isGuest
   const [name, setName] = useState(defaultName ?? '')
   const [selected, setSelected] = useState<GamePreset>('quiz')
   const [submitting, setSubmitting] = useState(false)
@@ -259,16 +262,24 @@ export default function GameLauncherModal({
             <p className="text-xs text-[var(--color-fg-dim)]">Pick a mode</p>
             {PRESETS.map((p) => {
               const isActive = p.id === selected
+              // Chess hosting requires a signed-in account so the room
+              // has a real identity for the seat/invite/end flows.
+              // Guests can still JOIN a chess room someone else created
+              // — this gate only blocks hosting.
+              const blockedForGuest = isGuest && p.gameType === 'Chess'
               return (
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => setSelected(p.id)}
+                  onClick={() => !blockedForGuest && setSelected(p.id)}
+                  disabled={blockedForGuest}
+                  title={blockedForGuest ? 'Sign in to host a chess room' : undefined}
                   className={[
                     'w-full text-left p-3 rounded-md border transition-all',
                     isActive
                       ? 'bg-[var(--color-accent-soft)] border-[var(--color-accent-fg)]'
                       : 'bg-[var(--color-surface-1)] border-[var(--color-line)] hover:border-[var(--color-line-strong)]',
+                    blockedForGuest ? 'opacity-50 cursor-not-allowed hover:border-[var(--color-line)]' : '',
                   ].join(' ')}
                 >
                   <div className="flex items-center gap-3">
@@ -294,6 +305,14 @@ export default function GameLauncherModal({
               )
             })}
           </div>
+          {isGuest && (
+            <p className="text-[10px] text-[var(--color-fg-mute)] italic mt-1.5">
+              Guests can join any live chess room as a spectator + chat.
+              <a href="/register" className="ml-1 text-[var(--color-accent-fg)] hover:underline font-medium">
+                Sign up to host
+              </a>
+            </p>
+          )}
         </div>
 
         <footer className="p-5 pt-2 flex items-center gap-2">
