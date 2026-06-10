@@ -16,7 +16,20 @@ import type {
   ChessStateSnapshot,
   ChessMovePushed,
   JoinRequestDto,
+  ChessColor,
 } from '../types/games'
+
+/** Per-userId metadata describing an in-progress grace window.
+ *  Used by PlayRoomPage's disconnect banner to compute countdown
+ *  without polling — we set when ChessPlayerDisconnected fires and
+ *  clear when ChessPlayerReturned or ChessSeatTimedOut arrives. */
+export interface OfflinePlayerInfo {
+  username: string
+  seatColor: ChessColor
+  /** Server-stamped timestamp of the disconnect. */
+  atUtc: string
+  graceSeconds: number
+}
 
 // ============================================================
 //  gameStore — single source of truth for the active quiz room.
@@ -101,6 +114,11 @@ interface GameStoreState {
   /** Pending join requests visible to the host. */
   pendingJoinRequests: JoinRequestDto[]
 
+  /** Map of userId → grace metadata for any seated Player who's
+   *  currently in a disconnect grace window. Drives the countdown
+   *  banner. Empty when no-one's offline. */
+  offlinePlayers: Record<string, OfflinePlayerInfo>
+
   // ───── Actions ─────────────────────────────────────────────────
 
   setActiveSlug: (slug: string | null) => void
@@ -134,6 +152,13 @@ interface GameStoreState {
   applyJoinRequested:  (req: JoinRequestDto) => void
   applyJoinResolved:   (requestId: string) => void
 
+  // ─── DIRECTOR MODE + GRACE WINDOW ACTIONS ───────────────────────
+  /** Stamp an entry into offlinePlayers when ChessPlayerDisconnected fires. */
+  markPlayerOffline: (userId: string, info: OfflinePlayerInfo) => void
+  /** Wipe an entry when the player returns (ChessPlayerReturned) or
+   *  the grace window expires (ChessSeatTimedOut). */
+  clearPlayerOffline: (userId: string) => void
+
   resetRoom: () => void
 }
 
@@ -162,6 +187,7 @@ export const useGameStore = create<GameStoreState>((set) => ({
   lastChessMove: null,
   joinRequestPending: false,
   pendingJoinRequests: [],
+  offlinePlayers: {},
 
   setActiveSlug: (slug) => set({ activeSlug: slug }),
 
@@ -315,6 +341,17 @@ export const useGameStore = create<GameStoreState>((set) => ({
     pendingJoinRequests: s.pendingJoinRequests.filter((r) => r.id !== requestId),
   })),
 
+  // ─── DIRECTOR MODE + GRACE ─────────────────────────────────────
+  markPlayerOffline: (userId, info) => set((s) => ({
+    offlinePlayers: { ...s.offlinePlayers, [userId]: info },
+  })),
+  clearPlayerOffline: (userId) => set((s) => {
+    if (!(userId in s.offlinePlayers)) return {}
+    const next = { ...s.offlinePlayers }
+    delete next[userId]
+    return { offlinePlayers: next }
+  }),
+
   resetRoom: () => set({
     activeSlug: null,
     snapshot: null,
@@ -334,5 +371,6 @@ export const useGameStore = create<GameStoreState>((set) => ({
     lastChessMove: null,
     joinRequestPending: false,
     pendingJoinRequests: [],
+    offlinePlayers: {},
   }),
 }))

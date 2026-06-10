@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft, Copy, Check, Flag, Play, UserPlus,
   UserCheck, UserX, Crown, Loader2, Hand, UserPlus2, DoorOpen,
+  Clock, X, ChevronDown,
 } from 'lucide-react'
 import InvitePlayerModal from '../../components/games/InvitePlayerModal'
 import { gamesApi } from '../../api'
@@ -14,7 +15,7 @@ import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import ChessBoardPanel from '../../components/games/ChessBoardPanel'
 import CommentaryChat from '../../components/games/CommentaryChat'
-import type { ChessStateSnapshot } from '../../types/games'
+import type { ChessStateSnapshot, ChessColor } from '../../types/games'
 
 // ============================================================
 //  PlayRoomPage — dedicated full-screen overlay for "heavy"
@@ -57,6 +58,7 @@ export default function PlayRoomPage() {
     fetchPendingRequests, approveJoinRequest, declineJoinRequest,
     startQuiz, // same hub method, name kept generic to avoid re-coding
     requestPlayerSeat, inviteToGameRoom, endRoom,
+    assignChessSeat, unassignChessSeat, overrideGraceWait,
   } = useGameHub()
 
   // Listen for the server's RoomClosed broadcast and bounce out. We
@@ -127,6 +129,7 @@ export default function PlayRoomPage() {
   const chat = useGameStore((s) => s.chat)
   const joinRequestPending = useGameStore((s) => s.joinRequestPending)
   const pendingJoinRequests = useGameStore((s) => s.pendingJoinRequests)
+  const offlinePlayers = useGameStore((s) => s.offlinePlayers)
 
   const [joining, setJoining] = useState(true)
   const [joinError, setJoinError] = useState<string | null>(null)
@@ -342,6 +345,18 @@ export default function PlayRoomPage() {
         </div>
       </header>
 
+      {/* DISCONNECT BANNER — shows when any seated player is in their
+          60s grace window. Host gets a "skip wait" button to free the
+          seat immediately. Renders above the board so it's the first
+          thing anyone watching the room sees. */}
+      {Object.keys(offlinePlayers).length > 0 && (
+        <DisconnectBanner
+          offlinePlayers={offlinePlayers}
+          isHost={isHost}
+          onSkip={(uid) => overrideGraceWait(slug, uid).catch(() => {})}
+        />
+      )}
+
       {/* Body — board left, side rail right */}
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 p-4 overflow-hidden">
         {/* BOARD */}
@@ -368,6 +383,27 @@ export default function PlayRoomPage() {
               onSend={(t) => sendChat(slug, t)}
             />
           </div>
+
+          {/* SEATS — director-mode panel. Shows White / Black seats
+              with their current occupant. For host in Lobby: empty seats
+              get a "Sit here / Assign…" picker, filled seats get an X
+              to unassign. For everyone else: just a read-only display
+              so it's clear who's playing what colour. */}
+          {chess && room.status === 'Lobby' && (
+            <SeatsPanel
+              snapshot={chess}
+              isHost={isHost}
+              myUserId={me?.userId ?? null}
+              spectators={participants.filter(
+                (p) => p.role === 'Spectator' &&
+                  p.userId !== chess.whitePlayerId &&
+                  p.userId !== chess.blackPlayerId,
+              )}
+              pendingRequestIds={new Set(pendingJoinRequests.map((r) => r.userId))}
+              onAssign={(target, color) => assignChessSeat(slug, target, color).catch(() => {})}
+              onUnassign={(color) => unassignChessSeat(slug, color).catch(() => {})}
+            />
+          )}
 
           {/* Move history (compact) */}
           {chess && chess.moveHistory.length > 0 && (
@@ -452,18 +488,26 @@ export default function PlayRoomPage() {
             </ul>
           </div>
 
-          {/* Host start button — chess needs both seats filled */}
-          {isHost && room.status === 'Lobby' && chess && chess.whitePlayerId && chess.blackPlayerId && (
-            <Button
-              size="lg"
-              fullWidth
-              leftIcon={<Play size={15} />}
-              onClick={async () => {
-                try { await startQuiz(slug) } catch { /* via hub error event */ }
-              }}
-            >
-              Start game
-            </Button>
+          {/* Host start button — chess needs both seats filled.
+              Hint message shown when blocked so host knows what's missing. */}
+          {isHost && room.status === 'Lobby' && chess && (
+            chess.whitePlayerId && chess.blackPlayerId ? (
+              <Button
+                size="lg"
+                fullWidth
+                leftIcon={<Play size={15} />}
+                onClick={async () => {
+                  try { await startQuiz(slug) } catch { /* via hub error event */ }
+                }}
+              >
+                Start game
+              </Button>
+            ) : (
+              <div className="shrink-0 rounded-md bg-[var(--color-warning-soft)] border border-[var(--color-warning-border)] px-3 py-2 text-[11px] text-[var(--color-warning-fg)] flex items-center gap-2">
+                <Clock size={11} />
+                Assign both seats above to start the game.
+              </div>
+            )
           )}
         </aside>
       </div>
@@ -490,6 +534,241 @@ function FullPageStatus({
     <div className="h-full flex flex-col items-center justify-center text-sm text-[var(--color-fg-mute)] p-6 text-center bg-[var(--color-bg)]">
       <div className="mb-3">{icon}</div>
       {children}
+    </div>
+  )
+}
+
+// ============================================================
+//  SeatsPanel — director-mode assignment UI
+//
+//  Renders two rows: White seat + Black seat. For each seat:
+//   • If occupied → show name + (host-only) "X" to unassign
+//   • If empty AND I'm host → show:
+//       - "Sit here" button (self-assign)
+//       - Spectator picker dropdown (assign anyone in room)
+//   • If empty AND I'm NOT host → quiet "Empty" placeholder
+//
+//  Spectators with a pending seat request get a small badge in the
+//  picker so the host knows who's actively asking.
+// ============================================================
+function SeatsPanel({
+  snapshot, isHost, myUserId, spectators, pendingRequestIds,
+  onAssign, onUnassign,
+}: {
+  snapshot: ChessStateSnapshot
+  isHost: boolean
+  myUserId: string | null
+  spectators: { userId: string; username: string }[]
+  pendingRequestIds: Set<string>
+  onAssign: (targetUserId: string, color: ChessColor) => void
+  onUnassign: (color: ChessColor) => void
+}) {
+  return (
+    <div className="shrink-0 rounded-md bg-[var(--color-surface-1)] border border-[var(--color-line)] overflow-hidden">
+      <div className="px-3 py-1.5 border-b border-[var(--color-line)] flex items-center gap-2">
+        <Crown size={11} className="text-[var(--color-accent-fg)]" />
+        <span className="text-[10px] uppercase tracking-wide font-medium">
+          Seats
+        </span>
+        {isHost && (
+          <span className="ml-auto text-[9px] uppercase tracking-wide text-[var(--color-fg-mute)]">
+            Director mode
+          </span>
+        )}
+      </div>
+      <div className="p-2 space-y-1.5">
+        <SeatRow
+          color="White"
+          occupantId={snapshot.whitePlayerId}
+          occupantName={snapshot.whitePlayerName}
+          isHost={isHost}
+          myUserId={myUserId}
+          spectators={spectators}
+          pendingRequestIds={pendingRequestIds}
+          onAssign={onAssign}
+          onUnassign={onUnassign}
+        />
+        <SeatRow
+          color="Black"
+          occupantId={snapshot.blackPlayerId}
+          occupantName={snapshot.blackPlayerName}
+          isHost={isHost}
+          myUserId={myUserId}
+          spectators={spectators}
+          pendingRequestIds={pendingRequestIds}
+          onAssign={onAssign}
+          onUnassign={onUnassign}
+        />
+      </div>
+    </div>
+  )
+}
+
+function SeatRow({
+  color, occupantId, occupantName, isHost, myUserId,
+  spectators, pendingRequestIds, onAssign, onUnassign,
+}: {
+  color: ChessColor
+  occupantId: string | null
+  occupantName: string | null
+  isHost: boolean
+  myUserId: string | null
+  spectators: { userId: string; username: string }[]
+  pendingRequestIds: Set<string>
+  onAssign: (targetUserId: string, color: ChessColor) => void
+  onUnassign: (color: ChessColor) => void
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const swatchClass = color === 'White'
+    ? 'bg-white border border-[var(--color-line-strong)]'
+    : 'bg-neutral-900 border border-neutral-700'
+
+  if (occupantId) {
+    return (
+      <div className="flex items-center gap-2 px-1.5 py-1.5 rounded bg-[var(--color-bg)]">
+        <span className={`w-4 h-4 rounded-sm shrink-0 ${swatchClass}`} />
+        <span className="text-[11px] uppercase tracking-wide text-[var(--color-fg-mute)] w-12 shrink-0">
+          {color}
+        </span>
+        <span className="text-xs flex-1 truncate">{occupantName ?? occupantId}</span>
+        {isHost && (
+          <button
+            onClick={() => onUnassign(color)}
+            className="h-6 w-6 rounded text-[var(--color-fg-mute)] hover:text-[var(--color-danger-fg)] hover:bg-[var(--color-danger-soft)] inline-flex items-center justify-center transition-colors"
+            title="Empty this seat"
+            aria-label={`Empty ${color} seat`}
+          >
+            <X size={11} />
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  // Empty seat
+  if (!isHost) {
+    return (
+      <div className="flex items-center gap-2 px-1.5 py-1.5 rounded bg-[var(--color-bg)] opacity-70">
+        <span className={`w-4 h-4 rounded-sm shrink-0 ${swatchClass}`} />
+        <span className="text-[11px] uppercase tracking-wide text-[var(--color-fg-mute)] w-12 shrink-0">
+          {color}
+        </span>
+        <span className="text-[11px] italic text-[var(--color-fg-mute)]">
+          Waiting for host to assign…
+        </span>
+      </div>
+    )
+  }
+
+  // Empty seat, host view — sit-here + picker
+  const selfAlreadyOnOtherSeat = false // host can always self-assign here; backend rejects duplicates
+  return (
+    <div className="rounded bg-[var(--color-bg)]">
+      <div className="flex items-center gap-2 px-1.5 py-1.5">
+        <span className={`w-4 h-4 rounded-sm shrink-0 ${swatchClass}`} />
+        <span className="text-[11px] uppercase tracking-wide text-[var(--color-fg-mute)] w-12 shrink-0">
+          {color}
+        </span>
+        <span className="text-[11px] italic text-[var(--color-fg-mute)] flex-1">
+          Empty
+        </span>
+        {myUserId && !selfAlreadyOnOtherSeat && (
+          <button
+            onClick={() => onAssign(myUserId, color)}
+            className="h-6 px-2 rounded text-[10px] bg-[var(--color-accent-soft)] text-[var(--color-accent-fg)] hover:opacity-90 inline-flex items-center gap-1 transition-colors"
+            title={`Sit here as ${color}`}
+          >
+            Sit here
+          </button>
+        )}
+        <button
+          onClick={() => setPickerOpen((v) => !v)}
+          className="h-6 px-2 rounded text-[10px] bg-[var(--color-surface-2)] text-[var(--color-fg-dim)] hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent-fg)] inline-flex items-center gap-1 transition-colors"
+          title="Assign a spectator to this seat"
+        >
+          Assign… <ChevronDown size={9} />
+        </button>
+      </div>
+      {pickerOpen && (
+        <div className="border-t border-[var(--color-line)] max-h-32 overflow-y-auto">
+          {spectators.length === 0 ? (
+            <p className="px-3 py-2 text-[10px] italic text-[var(--color-fg-mute)]">
+              No spectators in room yet. Use the Invite button to bring someone in.
+            </p>
+          ) : (
+            spectators.map((s) => (
+              <button
+                key={s.userId}
+                onClick={() => { onAssign(s.userId, color); setPickerOpen(false) }}
+                className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-[var(--color-surface-2)] flex items-center gap-2 transition-colors"
+              >
+                <span className="flex-1 truncate">{s.username}</span>
+                {pendingRequestIds.has(s.userId) && (
+                  <Badge tone="warning" size="sm">Asked</Badge>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================
+//  DisconnectBanner — countdown banner for any seated player who
+//  is currently in their grace window.
+//
+//  Self-updating countdown (refs a 1s interval, cleaned up on
+//  unmount + on offlinePlayers list change). Host gets a "Don't
+//  wait" button per offline player to skip the timer.
+// ============================================================
+function DisconnectBanner({
+  offlinePlayers, isHost, onSkip,
+}: {
+  offlinePlayers: Record<string, { username: string; seatColor: ChessColor; atUtc: string; graceSeconds: number }>
+  isHost: boolean
+  onSkip: (userId: string) => void
+}) {
+  // Tick once per second so the countdown updates. We just bump a
+  // counter — actual seconds-left calculation reads atUtc + graceSeconds
+  // from props every render, so no extra state needed.
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const now = Date.now()
+  const entries = Object.entries(offlinePlayers)
+    .map(([userId, info]) => {
+      const at = new Date(info.atUtc).getTime()
+      const remaining = Math.max(0, Math.ceil((at + info.graceSeconds * 1000 - now) / 1000))
+      return { userId, info, remaining }
+    })
+    .filter((e) => e.remaining > 0)
+
+  if (entries.length === 0) return null
+
+  return (
+    <div className="shrink-0 bg-[var(--color-warning-soft)] border-b border-[var(--color-warning-border)] px-4 py-2 flex flex-col gap-1.5">
+      {entries.map(({ userId, info, remaining }) => (
+        <div key={userId} className="flex items-center gap-2 text-[12px] text-[var(--color-warning-fg)]">
+          <Clock size={12} className="shrink-0" />
+          <span className="flex-1">
+            <strong>{info.username}</strong> left — seat <strong>{info.seatColor}</strong> held for {remaining}s.
+          </span>
+          {isHost && (
+            <button
+              onClick={() => onSkip(userId)}
+              className="h-6 px-2 rounded text-[10px] bg-[var(--color-warning-border)] hover:bg-[var(--color-warning-fg)] hover:text-white text-[var(--color-warning-fg)] transition-colors"
+              title="Skip the wait and free this seat now"
+            >
+              Don't wait
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   )
 }

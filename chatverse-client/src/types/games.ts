@@ -263,6 +263,35 @@ export interface ChessStateSnapshot {
   blackPlayerName: string | null
 }
 
+// ─── Director-mode + reconnect-grace events ────────────────────
+
+/** Fired when a seated Player disconnects (or navigates away). Drives
+ *  the countdown banner. atUtc + graceSeconds let the client compute
+ *  remaining time without polling. */
+export interface ChessPlayerDisconnectedPayload {
+  userId: string
+  username: string
+  seatColor: ChessColor
+  graceSeconds: number
+  atUtc: string
+}
+
+/** Fired when a previously-disconnected Player returned inside the
+ *  grace window — banner dismisses, board stays put. */
+export interface ChessPlayerReturnedPayload {
+  userId: string
+  username: string
+}
+
+/** Grace window expired without a return. Seat freed; snapshot reflects
+ *  board reset to start + status back to Lobby if game was in progress. */
+export interface ChessSeatTimedOutPayload {
+  userId: string
+  username: string
+  seatColor: ChessColor
+  snapshot: ChessStateSnapshot
+}
+
 // ─── Join request flow (private rooms) ────────────────────────
 
 export type JoinRequestStatus = 'Pending' | 'Approved' | 'Declined'

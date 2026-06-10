@@ -49,6 +49,9 @@ import type {
   JoinRequestDto,
   JoinRequestResolution,
   GameRoomInviteDto,
+  ChessPlayerDisconnectedPayload,
+  ChessPlayerReturnedPayload,
+  ChessSeatTimedOutPayload,
 } from '../types/games'
 
 // ============================================================
@@ -282,6 +285,71 @@ export function useGameHub() {
     hub.on('JoinRequestAck', ({ accepted, reason }: { accepted: boolean; reason?: string }) => {
       if (!accepted && reason) {
         showToast({ type: 'warning', title: 'Action rejected', message: reason, duration: 2500 })
+      }
+    })
+
+    // ─── Director-mode + reconnect-grace events ───────────────────
+    // ChessSeatChanged is just a fresh snapshot — same handler as
+    // ChessGameStarted / ChessStateSnapshot. Keeps client logic simple.
+    hub.on('ChessSeatChanged', (snap: ChessStateSnapshot) => {
+      if (!snap) return
+      useGameStore.getState().applyChessSnapshot(snap)
+    })
+
+    // Seated player disconnected — start the countdown banner.
+    hub.on('ChessPlayerDisconnected', (payload: ChessPlayerDisconnectedPayload) => {
+      if (!payload?.userId) return
+      useGameStore.getState().markPlayerOffline(payload.userId, {
+        username: payload.username,
+        seatColor: payload.seatColor,
+        atUtc: payload.atUtc,
+        graceSeconds: payload.graceSeconds,
+      })
+      showToast({
+        type: 'warning',
+        title: `${payload.username} disconnected`,
+        message: `${payload.seatColor} seat held for ${payload.graceSeconds}s.`,
+        duration: 3000,
+      })
+    })
+
+    // Player returned inside the grace window — dismiss banner.
+    hub.on('ChessPlayerReturned', (payload: ChessPlayerReturnedPayload) => {
+      if (!payload?.userId) return
+      useGameStore.getState().clearPlayerOffline(payload.userId)
+      showToast({
+        type: 'success',
+        title: 'Welcome back',
+        message: `${payload.username} is back at the board.`,
+        duration: 2000,
+      })
+    })
+
+    // Grace expired — seat freed; snapshot reflects board reset if
+    // the timeout happened mid-game.
+    hub.on('ChessSeatTimedOut', (payload: ChessSeatTimedOutPayload) => {
+      if (!payload?.userId) return
+      useGameStore.getState().clearPlayerOffline(payload.userId)
+      if (payload.snapshot) {
+        useGameStore.getState().applyChessSnapshot(payload.snapshot)
+      }
+      showToast({
+        type: 'info',
+        title: 'Seat reset',
+        message: `${payload.username}'s ${payload.seatColor} seat is open — host can assign a new player.`,
+        duration: 4000,
+      })
+    })
+
+    // Acks for director-mode seat ops + grace override
+    hub.on('SeatAssignAck', ({ accepted, reason }: { accepted: boolean; reason?: string }) => {
+      if (!accepted && reason) {
+        showToast({ type: 'warning', title: 'Seat change rejected', message: reason, duration: 2500 })
+      }
+    })
+    hub.on('GraceOverrideAck', ({ accepted, reason }: { accepted: boolean; reason?: string }) => {
+      if (!accepted && reason) {
+        showToast({ type: 'warning', title: 'Cannot skip wait', message: reason, duration: 2500 })
       }
     })
 
@@ -576,6 +644,31 @@ export function useGameHub() {
     await connectionRef.current!.invoke('EndRoom', slug)
   }, [ensureConnected])
 
+  // ─── Director-mode seat controls (host-only) ─────────────────────
+  // color is sent as "White" / "Black" — backend Enum.TryParse handles it.
+  const assignChessSeat = useCallback(async (
+    slug: string, targetUserId: string, color: 'White' | 'Black',
+  ) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('AssignChessSeat', slug, targetUserId, color)
+  }, [ensureConnected])
+
+  const unassignChessSeat = useCallback(async (
+    slug: string, color: 'White' | 'Black',
+  ) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('UnassignChessSeat', slug, color)
+  }, [ensureConnected])
+
+  /** Host's "Don't wait, reassign now" button — skips the remaining
+   *  grace timer for a disconnected seated player. */
+  const overrideGraceWait = useCallback(async (
+    slug: string, targetUserId: string,
+  ) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('OverrideGraceWait', slug, targetUserId)
+  }, [ensureConnected])
+
   // Auto-tear-down on unmount. We DON'T leave the active room here —
   // the user might be navigating between pages within the room route.
   // Leaving is the responsibility of the page itself.
@@ -612,6 +705,10 @@ export function useGameHub() {
     requestPlayerSeat,
     inviteToGameRoom,
     acceptInvite,
+    // Director mode + grace
+    assignChessSeat,
+    unassignChessSeat,
+    overrideGraceWait,
     // Room lifecycle
     endRoom,
   }
