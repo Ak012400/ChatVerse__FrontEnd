@@ -310,7 +310,7 @@ function GroupRoomUI({
   return (
     <div className="flex flex-col h-full bg-black text-white relative">
       {/* Header */}
-      <header className="absolute top-0 inset-x-0 z-20 px-5 py-3 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent">
+      <header className="absolute top-0 inset-x-0 z-20 px-3 md:px-5 py-2 md:py-3 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent">
         <div className="flex items-center gap-2.5">
           <Users size={14} className="text-white/70" />
           <span className="text-xs font-medium tracking-tight">
@@ -318,13 +318,21 @@ function GroupRoomUI({
           </span>
           <Badge tone="success" size="sm" dot>Live</Badge>
         </div>
-        <div className="text-[10px] text-white/40 font-mono tracking-tight">{roomName}</div>
+        <div className="text-[10px] text-white/40 font-mono tracking-tight hidden sm:inline">{roomName}</div>
       </header>
 
       {/* Participant grid */}
-      <div className="flex-1 pt-14 pb-24">
+      <div className="flex-1 pt-10 pb-20 md:pt-12 md:pb-22 lg:pt-14 lg:pb-24">
         {tracks.length > 0 ? (
-          <GridLayout tracks={tracks} style={{ height: '100%' }}>
+          <GridLayout 
+            tracks={tracks} 
+            style={{ 
+              height: '100%',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))',
+              gap: '2px',
+              padding: '4px'
+            }}>
             <ParticipantTileWithReport
               currentUserId={currentUserId}
               onReport={reportPeer}
@@ -338,7 +346,7 @@ function GroupRoomUI({
       </div>
 
       {/* Controls */}
-      <div className="absolute bottom-0 inset-x-0 z-30 px-5 pb-5 pt-12 flex items-center justify-center gap-2 bg-gradient-to-t from-black/85 to-transparent">
+      <div className="absolute bottom-0 inset-x-0 z-30 px-3 md:px-5 pb-4 md:pb-5 pt-8 md:pt-12 flex items-center justify-center gap-2 bg-gradient-to-t from-black/85 to-transparent">
         <IconButton
           variant="subtle"
           size="lg"

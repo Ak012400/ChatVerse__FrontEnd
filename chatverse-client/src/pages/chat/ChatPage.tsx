@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { Smile, Paperclip, Send, Hash, Users, ShieldAlert, Ban, Gamepad2, X } from 'lucide-react'
 import GameLauncherModal from '../../components/games/GameLauncherModal'
 import ActiveGamesPanel from '../../components/games/ActiveGamesPanel'
@@ -24,6 +24,7 @@ import { useTranslation, detectLanguage, preferredLanguageCode } from '../../hoo
 
 export default function ChatPage() {
   const { slug } = useParams()
+  const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const { showToast } = useToastStore()
   const { rooms, setRooms, messages, typingUsers, onlineCount, setActiveRoom } = useChatStore()
@@ -353,7 +354,22 @@ export default function ChatPage() {
       {isGameableRoom && slug && !embeddedGameSlug && (
         <ActiveGamesPanel
           sourceChatSlug={slug}
-          onPickRoom={(s) => setEmbeddedGameSlug(s)}
+          onPickRoom={(s, type) => {
+            // Mirror the launcher's dispatch rule (see onCreated above):
+            // heavy board-based games go to a dedicated full-screen page;
+            // light embedded games stay alongside chat.
+            //
+            // Without this branch, EVERY joiner — including spectators of
+            // a chess room — got dropped into the embedded QuizRoomPage
+            // shell, which silently rendered the "Waiting to start" lobby
+            // for ALL room types. That's why creators saw the chess board
+            // but joiners saw a quiz UI: the panel never told us the type.
+            if (type === 'Chess' || type === 'Ludo') {
+              navigate(`/play/${s}`)
+            } else {
+              setEmbeddedGameSlug(s)
+            }
+          }}
           onStartGame={() => setShowGameLauncher(true)}
         />
       )}
