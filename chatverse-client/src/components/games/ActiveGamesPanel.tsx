@@ -33,10 +33,17 @@ const COLLAPSE_KEY = (sourceChatSlug: string) => `cv:games-panel:collapsed:${sou
 interface Props {
   /** Slug of the chat room hosting the panel. Filters discovery. */
   sourceChatSlug: string
-  /** Called when the user clicks Join/Watch on any card. Parent is
-   *  responsible for opening the embedded game panel — the panel
-   *  itself doesn't navigate. */
-  onPickRoom: (slug: string) => void
+  /** Called when the user clicks Join/Watch on any card.
+   *  Carries BOTH the room slug AND its game type so the parent
+   *  can pick the right destination:
+   *   • Quiz / Jokes → embed alongside chat (lightweight panel)
+   *   • Chess / Ludo → navigate to /play/:slug (full-screen overlay,
+   *                   board + commentary + seat-request UI don't fit inline)
+   *  Without the type, ALL clicks fell into the embedded QuizRoomPage
+   *  which silently misrenders chess rooms as "Waiting to start" quiz
+   *  lobbies — joiners were stuck unable to see the board or play.
+   */
+  onPickRoom: (slug: string, type: GameType) => void
   /** Called when the user clicks "Start a game" inside the panel —
    *  the parent opens the existing GameLauncherModal. Letting the
    *  parent own that modal avoids two creators for the same chat. */
@@ -95,7 +102,10 @@ export default function ActiveGamesPanel({
     try {
       const res = await gamesApi.getRandomRoom(sourceChatSlug, type)
       const slug = res.data.data.slug
-      onPickRoom(slug)
+      // Pass `type` upward — random rooms today are Quiz/Jokes (embed-safe),
+      // but if random Chess is ever added the parent will route it correctly
+      // without further changes here.
+      onPickRoom(slug, type)
       if (res.data.data.note) {
         showToast({
           type: 'info',
@@ -178,7 +188,10 @@ export default function ActiveGamesPanel({
                 Hosted by members
               </p>
               {userRooms.map((r) => (
-                <UserRoomCard key={r.slug} room={r} onJoin={() => onPickRoom(r.slug)} />
+                // r.type is critical here — without it the parent treats
+                // every joined room as an embedded quiz, breaking chess/ludo
+                // joiners (they'd see "Waiting to start" instead of the board).
+                <UserRoomCard key={r.slug} room={r} onJoin={() => onPickRoom(r.slug, r.type)} />
               ))}
             </div>
           )}
