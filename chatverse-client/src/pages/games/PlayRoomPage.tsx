@@ -280,11 +280,14 @@ export default function PlayRoomPage() {
             {copied ? <Check size={11} /> : <Copy size={11} />}
             <span className="hidden sm:inline">{room.slug}</span>
           </button>
-          {/* Spectators (logged-in) get a "Request to play" pill that
-              queues a JoinRequest with the host. Hidden for guests.
-              When a request is already pending, the pill turns into a
-              disabled "Pending…" indicator that survives page reload. */}
-          {isLoggedIn && viewerRole === 'Spectator' && !seatPending && (
+          {/* "Request to play" pill — spectators only.
+              Visibility gates (all must be true):
+                • logged-in (guests sign-up to play)
+                • viewerRole === 'Spectator' (seated Players don't request — they resign)
+                • !isHost (host owns the room, uses Director Mode seat controls
+                  to self-assign; a Request button on their own room is meaningless)
+                • !seatPending (already asked — show a Pending pill instead) */}
+          {isLoggedIn && viewerRole === 'Spectator' && !isHost && !seatPending && (
             <button
               onClick={() => requestPlayerSeat(slug).catch(() => {})}
               className="h-8 px-3 rounded-md text-xs bg-[var(--color-accent-soft)] hover:opacity-90 text-[var(--color-accent-fg)] inline-flex items-center gap-1.5 transition-colors"
@@ -293,7 +296,7 @@ export default function PlayRoomPage() {
               <Hand size={12} /> Request to play
             </button>
           )}
-          {isLoggedIn && viewerRole === 'Spectator' && seatPending && (
+          {isLoggedIn && viewerRole === 'Spectator' && !isHost && seatPending && (
             <span className="h-8 px-3 rounded-md text-xs bg-[var(--color-warning-soft)] text-[var(--color-warning-fg)] inline-flex items-center gap-1.5 cursor-default" title="Waiting for host approval">
               <Loader2 size={11} className="animate-spin" /> Request pending
             </span>
