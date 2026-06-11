@@ -493,7 +493,17 @@ export function useGameHub() {
     // onclose covers the case where the hub gives up reconnecting OR
     // where the initial start() succeeded but the socket dropped soon
     // after. Without this, hubState would lie about being 'connected'.
-    hub.onclose(() => { setHubState('disconnected') })
+    //
+    // CRITICAL (#148): also clear both refs. connectionPromiseRef stays
+    // resolved after a successful start, so without this reset every
+    // later connect() short-circuits on the stale promise, ensureConnected
+    // throws forever, and quiz answer clicks die silently until a full
+    // page refresh.
+    hub.onclose(() => {
+      setHubState('disconnected')
+      connectionRef.current = null
+      connectionPromiseRef.current = null
+    })
 
     setHubState('connecting')
     connectionPromiseRef.current = hub.start().then(() => {
@@ -562,7 +572,15 @@ export function useGameHub() {
     // locks in immediately. The server's AnswerAck will roll us back
     // (via toast) if it was rejected.
     useGameStore.getState().markAnswered(choiceIndex)
-    await connectionRef.current!.invoke('SubmitAnswer', slug, questionId, choiceIndex)
+    try {
+      await connectionRef.current!.invoke('SubmitAnswer', slug, questionId, choiceIndex)
+    } catch (err) {
+      // Invoke never reached the server → AnswerAck will never arrive.
+      // Roll the optimistic lock back so the buttons re-enable and
+      // rethrow so the page can toast (#148).
+      useGameStore.getState().rollbackAnswer()
+      throw err
+    }
   }, [ensureConnected])
 
   const sendChat = useCallback(async (slug: string, text: string) => {
@@ -582,8 +600,15 @@ export function useGameHub() {
     slug: string, jokeId: string, reaction: JokeReactionType,
   ) => {
     await ensureConnected()
+    const prevReaction = useGameStore.getState().myReaction
     useGameStore.getState().markReacted(reaction)
-    await connectionRef.current!.invoke('ReactToJoke', slug, jokeId, reaction)
+    try {
+      await connectionRef.current!.invoke('ReactToJoke', slug, jokeId, reaction)
+    } catch (err) {
+      // Same rollback contract as submitAnswer (#148).
+      useGameStore.getState().rollbackReaction(prevReaction)
+      throw err
+    }
   }, [ensureConnected])
 
   // ─── Chess methods ───────────────────────────────────────────────
