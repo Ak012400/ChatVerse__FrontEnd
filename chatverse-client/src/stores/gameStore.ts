@@ -88,6 +88,10 @@ interface GameStoreState {
   /** Quiz v2: userIds who have locked in an answer for the CURRENT
    *  question (live indicator chips). Cleared on each QuestionPushed. */
   answeredUserIds: string[]
+  /** Quiz v2 director mode: spectators with a raised hand 🙋. */
+  seatRequestUserIds: string[]
+  /** Did I (this viewer) raise a hand? Drives the request button. */
+  mySeatRequested: boolean
   /** Quiz v2: ephemeral floating cheers. Each entry auto-expires via
    *  the component's timer; capped to avoid unbounded growth. */
   cheers: { id: number; username: string; emoji: string }[]
@@ -148,6 +152,10 @@ interface GameStoreState {
   rollbackAnswer: () => void
   /** Quiz v2: fold a PlayerAnswered event into the indicator list. */
   applyPlayerAnswered: (userId: string) => void
+  /** Quiz v2 director mode: 🙋 raised / resolved. */
+  applySeatRequested: (userId: string) => void
+  applySeatResolved: (userId: string) => void
+  setMySeatRequested: (requested: boolean) => void
   /** Quiz v2: push a floating cheer (auto-capped at 8 visible). */
   pushCheer: (username: string, emoji: string) => void
   /** Quiz v2: drop an expired cheer by id. */
@@ -216,6 +224,8 @@ export const useGameStore = create<GameStoreState>((set) => ({
   hasAnsweredCurrent: false,
   myChoiceIndex: null,
   answeredUserIds: [],
+  seatRequestUserIds: [],
+  mySeatRequested: false,
   cheers: [],
   currentJoke: null,
   jokeCounts: EMPTY_JOKE_COUNTS,
@@ -243,6 +253,9 @@ export const useGameStore = create<GameStoreState>((set) => ({
     hasAnsweredCurrent: snap.currentQuestion !== null,
     myChoiceIndex: null,
     answeredUserIds: [],
+    seatRequestUserIds: snap.seatRequests ?? [],
+    mySeatRequested: (snap.seatRequests ?? [])
+      .includes(useAuthStore.getState().user?.userId ?? ''),
     lastReveal: null,
   }),
 
@@ -317,6 +330,23 @@ export const useGameStore = create<GameStoreState>((set) => ({
       ? s.answeredUserIds
       : [...s.answeredUserIds, userId],
   })),
+
+  applySeatRequested: (userId) => set((s) => ({
+    seatRequestUserIds: s.seatRequestUserIds.includes(userId)
+      ? s.seatRequestUserIds
+      : [...s.seatRequestUserIds, userId],
+  })),
+
+  applySeatResolved: (userId) => set((s) => {
+    const myId = useAuthStore.getState().user?.userId ?? null
+    return {
+      seatRequestUserIds: s.seatRequestUserIds.filter((id) => id !== userId),
+      // If MY hand was resolved (seated or demoted), the button resets.
+      mySeatRequested: userId === myId ? false : s.mySeatRequested,
+    }
+  }),
+
+  setMySeatRequested: (requested) => set({ mySeatRequested: requested }),
 
   pushCheer: (username, emoji) => set((s) => {
     const next = [...s.cheers, { id: Date.now() + Math.random(), username, emoji }]
@@ -444,6 +474,8 @@ export const useGameStore = create<GameStoreState>((set) => ({
     hasAnsweredCurrent: false,
     myChoiceIndex: null,
     answeredUserIds: [],
+    seatRequestUserIds: [],
+    mySeatRequested: false,
     cheers: [],
     currentJoke: null,
     jokeCounts: EMPTY_JOKE_COUNTS,

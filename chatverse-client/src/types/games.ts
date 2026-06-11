@@ -159,6 +159,9 @@ export interface GameRoomSnapshot {
   scoreboard: ScoreEntry[]
   participants: GameParticipant[]
   recentChat: GameChatMessage[]
+  /** Quiz v2 director mode: userIds of spectators who raised a hand
+   *  for a seat. Null/absent for non-quiz rooms + older backends. */
+  seatRequests?: string[] | null
 }
 
 // ─── Jokes mode ────────────────────────────────────────────────
