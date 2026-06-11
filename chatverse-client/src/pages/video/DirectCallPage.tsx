@@ -18,6 +18,7 @@ import {
 // "is not exported by livekit-client". `ConnectionState` and `DisconnectReason`
 // are real enums and can be imported normally.
 import { Track, ConnectionState, DisconnectReason, type RoomOptions } from 'livekit-client'
+import { oneOnOneRoomOptions } from '../../lib/livekitOptions'
 import '@livekit/components-styles'
 
 import { directCallApi, usersApi } from '../../api'
@@ -187,26 +188,11 @@ export default function DirectCallPage() {
   // built-in auto-reconnect handles transient network blips silently.
   const userInitiatedLeaveRef = (typeof window !== 'undefined' ? (window as any).__cv_call_leave_ref ??= { current: false } : { current: false })
 
-  // LiveKit room options tuned for one-on-one direct calls:
-  //  • adaptiveStream: drops resolution on poor uplinks instead of cutting
-  //  • dynacast: only encodes layers we actually need (reduces CPU)
-  //  • reconnectPolicy: aggressive — keep retrying for 30s before giving up
-  const roomOptions: RoomOptions = {
-    adaptiveStream: true,
-    dynacast: true,
-    publishDefaults: {
-      videoSimulcastLayers: [
-        { width: 640, height: 360, encoding: { maxBitrate: 600_000, maxFramerate: 24 } },
-      ],
-    },
-    reconnectPolicy: {
-      nextRetryDelayInMs: (context) => {
-        // Exponential backoff capped at 4s, stop trying after 30s total.
-        if (context.elapsedMs > 30_000) return null
-        return Math.min(500 * 2 ** context.retryCount, 4000)
-      },
-    },
-  }
+  // Shared resilience kit (see lib/livekitOptions.ts): adaptive
+  // streaming, simulcast layers, RED audio redundancy, clean capture
+  // and a persistent 60s reconnect policy — one-on-one profile spends
+  // the bandwidth budget on quality (720p capture).
+  const roomOptions: RoomOptions = oneOnOneRoomOptions
 
   // Map LiveKit's DisconnectReason enum to a friendly toast + decide whether
   // the call should truly end. Network blips don't reach this callback —

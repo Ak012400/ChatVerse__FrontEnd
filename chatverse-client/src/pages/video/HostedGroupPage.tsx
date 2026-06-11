@@ -13,7 +13,9 @@ import {
   useParticipants,
   RoomAudioRenderer,
   useRoomContext,
+  ConnectionStateToast,
 } from '@livekit/components-react'
+import { groupRoomOptions } from '../../lib/livekitOptions'
 import { Track } from 'livekit-client'
 import '@livekit/components-styles'
 
@@ -89,11 +91,13 @@ export default function HostedGroupPage() {
         video
         audio
         connect
+        options={groupRoomOptions}
         onDisconnected={() => setConn(null)}
         data-lk-theme="default"
         style={{ height: '100%', background: 'var(--color-bg)' }}
       >
         <RoomAudioRenderer />
+        <ConnectionStateToast />
         <HostedGroupUI
           roomName={conn.roomName}
           onLeave={() => {
