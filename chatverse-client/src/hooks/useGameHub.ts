@@ -190,6 +190,10 @@ export function useGameHub() {
 
     hub.on('LudoDiceRolled', (p: LudoDiceRolledPayload) => {
       if (!p?.color) return
+      // Event-driven dice animation: the AnimatedDice component listens
+      // for this window event, so it spins EXACTLY once per real roll
+      // (state snapshots alone can't distinguish "same value re-rolled").
+      window.dispatchEvent(new CustomEvent('cv:ludo-dice', { detail: p }))
       if (p.forfeited) {
         showToast({
           type: 'warning',
@@ -198,7 +202,6 @@ export function useGameHub() {
           duration: 2500,
         })
       }
-      // Dice animation reads lastRoll from the LudoState that follows.
     })
 
     hub.on('LudoTurnSkipped', (p: { color: string }) => {

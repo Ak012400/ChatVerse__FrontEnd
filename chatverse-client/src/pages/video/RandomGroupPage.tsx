@@ -14,7 +14,9 @@ import {
   useMaybeParticipantContext,
   RoomAudioRenderer,
   useRoomContext,
+  ConnectionStateToast,
 } from '@livekit/components-react'
+import { groupRoomOptions } from '../../lib/livekitOptions'
 import { Track } from 'livekit-client'
 import * as nsfwjs from 'nsfwjs'
 import '@livekit/components-styles'
@@ -123,11 +125,15 @@ export default function RandomGroupPage() {
       video
       audio
       connect
+      options={groupRoomOptions}
       onDisconnected={handleLeave}
       data-lk-theme="default"
       style={{ height: '100%', background: 'var(--color-bg)' }}
     >
       <RoomAudioRenderer />
+      {/* Built-in banner for connecting/reconnecting states — users
+          SEE the recovery instead of assuming the call died. */}
+      <ConnectionStateToast />
       <GroupRoomUI
         roomName={joinData.roomName}
         maxParticipants={joinData.maxParticipants}

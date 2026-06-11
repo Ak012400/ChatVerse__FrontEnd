@@ -240,13 +240,31 @@ export default function LudoRoomPage() {
       {/* ─── Body ─── */}
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 p-4 overflow-hidden">
         <section className="overflow-y-auto flex flex-col items-center gap-4">
-          {/* Winner banner */}
+          {/* Winner banner + confetti */}
           {status === 'Ended' && (
-            <div className="w-full max-w-[560px] text-center bg-[var(--color-surface-1)] border border-[var(--color-line)] rounded-md p-4">
-              <p className="text-lg font-semibold">
+            <div className="relative w-full max-w-[560px] overflow-hidden text-center bg-[var(--color-surface-1)] border border-[var(--color-line)] rounded-md p-4">
+              <style>{`
+                @keyframes cv-confetti-fall {
+                  0%   { transform: translateY(-20px) rotate(0deg);   opacity: 1; }
+                  100% { transform: translateY(120px) rotate(340deg); opacity: 0; }
+                }
+              `}</style>
+              {['🎉', '🎊', '⭐', '🎉', '✨', '🎊', '🏆', '⭐', '🎉', '✨', '🎊', '🎉'].map((e, i) => (
+                <span
+                  key={i}
+                  className="absolute top-0 text-xl pointer-events-none"
+                  style={{
+                    left: `${6 + i * 8}%`,
+                    animation: `cv-confetti-fall ${1.6 + (i % 4) * 0.5}s ease-in ${i * 0.18}s infinite`,
+                  }}
+                >
+                  {e}
+                </span>
+              ))}
+              <p className="text-lg font-semibold relative">
                 🏆 {winnerSeat ? `${winnerSeat.username} (${winnerSeat.color}) wins!` : 'Game over'}
               </p>
-              <Button size="sm" className="mt-3" leftIcon={<ArrowLeft size={13} />} onClick={() => navigate('/chat')}>
+              <Button size="sm" className="mt-3 relative" leftIcon={<ArrowLeft size={13} />} onClick={() => navigate('/chat')}>
                 Back to chat
               </Button>
             </div>
@@ -313,7 +331,88 @@ export default function LudoRoomPage() {
 
 // ─── Dice + turn indicator ──────────────────────────────────────
 
-const DICE_FACES = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅']
+/** Pip layouts for faces 1-6 on a 3×3 grid (positions 0-8). */
+const PIPS: Record<number, number[]> = {
+  1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8],
+}
+const PIP_XY: [number, number][] = [
+  [25, 25], [50, 25], [75, 25],
+  [25, 50], [50, 50], [75, 50],
+  [25, 75], [50, 75], [75, 75],
+]
+
+/** A real-feeling dice: listens for the `cv:ludo-dice` event (fired
+ *  once per actual server roll), tumbles through random faces with a
+ *  3D-ish spin, then settles with a bounce on the rolled value. */
+function AnimatedDice({ fallback }: { fallback: { color: string; value: number } | null }) {
+  const [face, setFace] = useState(fallback?.value ?? 6)
+  const [color, setColor] = useState<string>(fallback?.color ?? 'Red')
+  const [phase, setPhase] = useState<'idle' | 'rolling' | 'settle'>('idle')
+
+  useEffect(() => {
+    let cycle: ReturnType<typeof setInterval> | null = null
+    let stop: ReturnType<typeof setTimeout> | null = null
+    let calm: ReturnType<typeof setTimeout> | null = null
+    const handler = (e: Event) => {
+      const p = (e as CustomEvent).detail as { color: string; value: number }
+      if (!p?.value) return
+      setColor(p.color)
+      setPhase('rolling')
+      cycle = setInterval(() => setFace(1 + Math.floor(Math.random() * 6)), 75)
+      stop = setTimeout(() => {
+        if (cycle) clearInterval(cycle)
+        setFace(p.value)
+        setPhase('settle')
+        calm = setTimeout(() => setPhase('idle'), 450)
+      }, 700)
+    }
+    window.addEventListener('cv:ludo-dice', handler as EventListener)
+    return () => {
+      window.removeEventListener('cv:ludo-dice', handler as EventListener)
+      if (cycle) clearInterval(cycle)
+      if (stop) clearTimeout(stop)
+      if (calm) clearTimeout(calm)
+    }
+  }, [])
+
+  const fill = LUDO_COLORS[(color as keyof typeof LUDO_COLORS)] ?? LUDO_COLORS.Red
+  return (
+    <>
+      <style>{`
+        @keyframes cv-dice-tumble {
+          0%   { transform: rotate(0deg)    scale(1); }
+          25%  { transform: rotate(160deg)  scale(1.25) translateY(-4px); }
+          50%  { transform: rotate(310deg)  scale(1.1)  translateY(-7px); }
+          75%  { transform: rotate(480deg)  scale(1.2)  translateY(-3px); }
+          100% { transform: rotate(720deg)  scale(1); }
+        }
+        @keyframes cv-dice-settle {
+          0%   { transform: scale(1.35); }
+          40%  { transform: scale(0.92); }
+          70%  { transform: scale(1.08); }
+          100% { transform: scale(1); }
+        }
+        .cv-dice-rolling { animation: cv-dice-tumble 0.7s ease-in-out; }
+        .cv-dice-settle  { animation: cv-dice-settle 0.45s ease-out; }
+      `}</style>
+      <svg
+        viewBox="0 0 100 100"
+        className={[
+          'w-11 h-11',
+          phase === 'rolling' ? 'cv-dice-rolling' : '',
+          phase === 'settle' ? 'cv-dice-settle' : '',
+        ].join(' ')}
+      >
+        <rect x="4" y="4" width="92" height="92" rx="20" fill="white" stroke={fill.dark} strokeWidth="5" />
+        {/* subtle top-light for depth */}
+        <rect x="4" y="4" width="92" height="46" rx="20" fill="rgba(0,0,0,0.05)" />
+        {(PIPS[face] ?? PIPS[6]).map((pos) => (
+          <circle key={pos} cx={PIP_XY[pos][0]} cy={PIP_XY[pos][1]} r="9.5" fill={fill.fill} />
+        ))}
+      </svg>
+    </>
+  )
+}
 
 function DiceStrip({
   ludo, isMyTurn, remaining, onRoll,
@@ -327,37 +426,57 @@ function DiceStrip({
   const turnSeat = ludo.seats.find((s) => s.color === turnColor)
   const canRoll = isMyTurn && ludo.pendingRoll == null
   const mustMove = isMyTurn && ludo.pendingRoll != null
+  const fraction = Math.max(0, Math.min(1, remaining / (ludo.turnSeconds || 30)))
   return (
-    <div className="w-full max-w-[560px] flex items-center justify-between gap-3 bg-[var(--color-surface-1)] border border-[var(--color-line)] rounded-md px-4 py-2.5">
-      <div className="flex items-center gap-2 min-w-0">
-        {turnColor && (
-          <span
-            className="w-3 h-3 rounded-full shrink-0"
-            style={{ background: LUDO_COLORS[turnColor].fill }}
-          />
-        )}
-        <span className="text-xs truncate">
-          {isMyTurn
-            ? (mustMove ? 'Your turn — pick a glowing token' : 'Your turn — roll!')
-            : `${turnSeat?.username ?? turnColor}'s turn`}
-        </span>
-        <span className="text-[10px] text-[var(--color-fg-mute)] tabular-nums shrink-0">
-          ⏱ {remaining}s
-        </span>
-      </div>
-      <div className="flex items-center gap-3 shrink-0">
-        {ludo.lastRoll && (
-          <span
-            className="text-3xl leading-none"
-            title={`${ludo.lastRoll.color} rolled ${ludo.lastRoll.value}`}
-            style={{ color: LUDO_COLORS[ludo.lastRoll.color].fill }}
-          >
-            {DICE_FACES[ludo.lastRoll.value]}
+    <div className="w-full max-w-[560px] bg-[var(--color-surface-1)] border border-[var(--color-line)] rounded-md overflow-hidden">
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+        <div className="flex items-center gap-2 min-w-0">
+          {turnColor && (
+            <span className="relative shrink-0 w-3.5 h-3.5">
+              <span
+                className="absolute inset-0 rounded-full animate-ping opacity-40"
+                style={{ background: LUDO_COLORS[turnColor].fill }}
+              />
+              <span
+                className="absolute inset-0 rounded-full"
+                style={{ background: LUDO_COLORS[turnColor].fill }}
+              />
+            </span>
+          )}
+          <span className="text-xs truncate">
+            {isMyTurn
+              ? (mustMove ? 'Your turn — pick a glowing token' : 'Your turn — roll!')
+              : `${turnSeat?.username ?? turnColor}'s turn`}
           </span>
-        )}
-        <Button size="sm" leftIcon={<Dices size={14} />} onClick={onRoll} disabled={!canRoll}>
-          Roll
-        </Button>
+          <span className="text-[10px] text-[var(--color-fg-mute)] tabular-nums shrink-0">
+            ⏱ {remaining}s
+          </span>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <AnimatedDice
+            fallback={ludo.lastRoll ? { color: ludo.lastRoll.color, value: ludo.lastRoll.value } : null}
+          />
+          <Button
+            size="sm"
+            leftIcon={<Dices size={14} />}
+            onClick={onRoll}
+            disabled={!canRoll}
+            className={canRoll ? 'animate-pulse' : ''}
+          >
+            Roll
+          </Button>
+        </div>
+      </div>
+      {/* Turn countdown bar — drains with the 30s timer, colour-coded
+          to whoever is on the clock. */}
+      <div className="h-1 w-full bg-[var(--color-surface-2)]">
+        <div
+          className="h-full transition-[width] duration-500 ease-linear"
+          style={{
+            width: `${fraction * 100}%`,
+            background: turnColor ? LUDO_COLORS[turnColor].fill : 'var(--color-accent)',
+          }}
+        />
       </div>
     </div>
   )
