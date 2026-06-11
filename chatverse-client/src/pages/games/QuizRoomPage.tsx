@@ -48,6 +48,34 @@ interface QuizRoomPageProps {
   compactMode?: boolean
 }
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+/** Retry transient failures (network errors, 5xx, timeouts) with a
+ *  growing backoff. 4xx responses are permanent — the room is gone or
+ *  the request is invalid — so those fail immediately. Keeps the entry
+ *  sequence resilient to Render cold starts + flaky mobile networks. */
+async function withRetry<T>(
+  label: string,
+  fn: () => Promise<T>,
+  attempts = 3,
+): Promise<T> {
+  let lastErr: unknown
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn()
+    } catch (err: any) {
+      lastErr = err
+      const status = err?.response?.status
+      if (status && status >= 400 && status < 500) throw err
+      if (i < attempts - 1) {
+        console.warn(`[QuizRoomPage] ${label} attempt ${i + 1} failed — retrying…`, err)
+        await sleep(800 * (i + 1))
+      }
+    }
+  }
+  throw lastErr
+}
+
 export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: QuizRoomPageProps = {}) {
   const params = useParams<{ slug: string }>()
   const slug = slugProp ?? params.slug ?? ''
@@ -73,13 +101,25 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
 
   const [joining, setJoining] = useState(true)
   const [joinError, setJoinError] = useState<string | null>(null)
+  // Bumping this re-runs the whole entry sequence — wired to the
+  // "Retry" button on the error screen.
+  const [enterAttempt, setEnterAttempt] = useState(0)
 
-  // ─── Join sequence ─────────────────────────────────────────────
+  // ─── Entry sequence (redesigned) ───────────────────────────────
   //
-  // Three-step entry: REST join → REST snapshot → hub attach. Each
-  // step is independently catchable so the failure surfaces in the
-  // toast (and console) telling us *which* step blew up — generic
-  // "Could not enter the room" was hiding the actual cause.
+  // Order: snapshot → join → hub.
+  //   1) SNAPSHOT FIRST (read-only, cacheable) — paints the room
+  //      immediately, even before our join lands. The old order
+  //      (join first) kept users staring at "Joining…" through every
+  //      transient hiccup.
+  //   2) JOIN — idempotent; the creator was ALREADY auto-joined by
+  //      POST /game-rooms at create time, so for them this is a
+  //      no-op confirm that just returns their existing role.
+  //   3) HUB — live events; non-fatal, auto-reconnect covers us.
+  //
+  // Each REST step retries transient failures (network / 5xx / cold
+  // start) up to 3 times with backoff. 4xx fails fast — the room is
+  // genuinely gone or the request is invalid; retrying won't help.
   //
   // Critical: we deliberately do NOT auto-leave on unmount. That
   // cleanup was racing with React StrictMode's double-mount in dev
@@ -92,14 +132,26 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
     let cancelled = false
 
     const run = async () => {
-      let step: 'join' | 'snapshot' | 'hub' = 'join'
+      setJoining(true)
+      setJoinError(null)
+      let step: 'snapshot' | 'join' | 'hub' = 'snapshot'
       try {
-        // 1) REST join — idempotent server-side, so repeat calls
-        //    return the existing role rather than double-adding.
+        // 1) Snapshot — paint the room ASAP.
+        const snapRes = await withRetry('snapshot', () => gamesApi.snapshot(slug))
+        if (cancelled) return
+        const snap = snapRes.data?.data
+        if (!snap?.room) {
+          throw new Error('snapshot returned empty payload')
+        }
+        useGameStore.getState().applySnapshot(snap)
+        setJoining(false) // ← UI is interactive from here on
+
+        // 2) Join — confirms/creates our participant row.
         step = 'join'
-        const joinRes = await gamesApi.join(slug, 'Player')
+        const joinRes = await withRetry('join', () => gamesApi.join(slug, 'Player'))
         if (cancelled) return
         const assignedRole = joinRes.data.data?.assignedRole ?? 'Player'
+        useGameStore.getState().setRole(assignedRole)
         if (joinRes.data.data?.note) {
           showToast({
             type: 'info',
@@ -108,17 +160,6 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
             duration: 3000,
           })
         }
-
-        // 2) Snapshot — paint immediately so the room doesn't flash blank.
-        step = 'snapshot'
-        const snapRes = await gamesApi.snapshot(slug)
-        if (cancelled) return
-        const snap = snapRes.data?.data
-        if (!snap?.room) {
-          throw new Error('snapshot returned empty payload')
-        }
-        useGameStore.getState().applySnapshot(snap)
-        useGameStore.getState().setRole(assignedRole)
 
         // 3) Hub attach — subscribes to live events. Failure here
         //    isn't fatal: the REST snapshot covers everything we
@@ -137,9 +178,6 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
             duration: 2500,
           })
         }
-
-        if (cancelled) return
-        setJoining(false)
       } catch (err: any) {
         if (cancelled) return
         // Surface the exact failure so we can debug from the toast/console
@@ -149,7 +187,7 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
         const reason = serverMsg
           ? `${serverMsg} (HTTP ${statusCode ?? '?'})`
           : err?.message ?? 'unknown failure'
-        console.error(`[QuizRoomPage] join sequence failed at step "${step}":`, err)
+        console.error(`[QuizRoomPage] enter sequence failed at step "${step}":`, err)
         setJoinError(`${step} step failed — ${reason}`)
         setJoining(false)
       }
@@ -163,7 +201,7 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug])
+  }, [slug, enterAttempt])
 
   const room = snapshot?.room
   const viewerRole = snapshot?.viewerRole ?? null
@@ -280,13 +318,24 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
     return (
       <FullPageStatus icon={<Brain size={20} className="text-[var(--color-danger-fg)]" />}>
         <p className="mb-3">{joinError ?? 'Room unavailable.'}</p>
-        <Button
-          size="sm"
-          onClick={() => (onLeave ? onLeave() : navigate('/games'))}
-          leftIcon={<ArrowLeft size={14} />}
-        >
-          {onLeave ? 'Close' : 'Back to Gaming Hall'}
-        </Button>
+        <div className="flex items-center justify-center gap-2">
+          {/* Retry re-runs the whole entry sequence — most entry
+              failures are transient (cold start, network blip). */}
+          <Button
+            size="sm"
+            onClick={() => setEnterAttempt((a) => a + 1)}
+            leftIcon={<Loader2 size={14} />}
+          >
+            Retry
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => (onLeave ? onLeave() : navigate('/games'))}
+            leftIcon={<ArrowLeft size={14} />}
+          >
+            {onLeave ? 'Close' : 'Back to Gaming Hall'}
+          </Button>
+        </div>
       </FullPageStatus>
     )
   }
