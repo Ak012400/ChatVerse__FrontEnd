@@ -54,6 +54,8 @@ import type {
   ChessSeatTimedOutPayload,
   PlayerAnsweredPayload,
   CheerPayload,
+  LudoStateSnapshot,
+  LudoDiceRolledPayload,
 } from '../types/games'
 
 // ============================================================
@@ -177,6 +179,50 @@ export function useGameHub() {
     hub.on('QuizSeatResolved', (p: { userId: string }) => {
       if (!p?.userId) return
       useGameStore.getState().applySeatResolved(p.userId)
+    })
+
+    // ─── Ludo events ────────────────────────────────────────────
+    // Full-state broadcasts — the client never computes board state.
+    hub.on('LudoState', (snap: LudoStateSnapshot) => {
+      if (!snap) return
+      useGameStore.getState().applyLudoState(snap)
+    })
+
+    hub.on('LudoDiceRolled', (p: LudoDiceRolledPayload) => {
+      if (!p?.color) return
+      if (p.forfeited) {
+        showToast({
+          type: 'warning',
+          title: 'Three sixes!',
+          message: `${p.color} rolled a third 6 — turn forfeited.`,
+          duration: 2500,
+        })
+      }
+      // Dice animation reads lastRoll from the LudoState that follows.
+    })
+
+    hub.on('LudoTurnSkipped', (p: { color: string }) => {
+      if (!p?.color) return
+      showToast({
+        type: 'info',
+        title: 'Turn skipped',
+        message: `${p.color} ran out of time.`,
+        duration: 2000,
+      })
+    })
+
+    hub.on('LudoSeatAck', ({ accepted, reason }: { accepted: boolean; reason?: string }) => {
+      if (accepted) {
+        useGameStore.getState().setMySeatRequested(true)
+        showToast({
+          type: 'success',
+          title: 'Hand raised 🙋',
+          message: reason ?? 'The host has been notified.',
+          duration: 2500,
+        })
+      } else if (reason) {
+        showToast({ type: 'warning', title: 'Cannot request seat', message: reason, duration: 2500 })
+      }
     })
 
     hub.on('QuizSeatAck', ({ accepted, reason }: { accepted: boolean; reason?: string }) => {
@@ -658,6 +704,41 @@ export function useGameHub() {
     await connectionRef.current!.invoke('RequestQuizSeat', slug)
   }, [ensureConnected])
 
+  // ─── Ludo methods ─────────────────────────────────────────────
+  const getLudoState = useCallback(async (slug: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('GetLudoState', slug)
+  }, [ensureConnected])
+
+  const ludoRoll = useCallback(async (slug: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('LudoRoll', slug)
+  }, [ensureConnected])
+
+  const ludoMove = useCallback(async (slug: string, tokenIndex: number) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('LudoMove', slug, tokenIndex)
+  }, [ensureConnected])
+
+  const assignLudoSeat = useCallback(async (
+    slug: string, targetUserId: string, color: 'Red' | 'Green' | 'Yellow' | 'Blue',
+  ) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('AssignLudoSeat', slug, targetUserId, color)
+  }, [ensureConnected])
+
+  const unassignLudoSeat = useCallback(async (
+    slug: string, color: 'Red' | 'Green' | 'Yellow' | 'Blue',
+  ) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('UnassignLudoSeat', slug, color)
+  }, [ensureConnected])
+
+  const requestLudoSeat = useCallback(async (slug: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('RequestLudoSeat', slug)
+  }, [ensureConnected])
+
   /** Quiz v2: fire a cheer emoji at the room. Fire-and-forget — a lost
    *  cheer is not worth an error dialog. */
   const sendCheer = useCallback(async (slug: string, emoji: string) => {
@@ -820,6 +901,13 @@ export function useGameHub() {
     sendCheer,
     setQuizRole,
     requestQuizSeat,
+    // Ludo
+    getLudoState,
+    ludoRoll,
+    ludoMove,
+    assignLudoSeat,
+    unassignLudoSeat,
+    requestLudoSeat,
     submitAnswer,
     sendChat,
     submitReaction,

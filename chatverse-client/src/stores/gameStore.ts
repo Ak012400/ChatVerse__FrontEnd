@@ -18,6 +18,7 @@ import type {
   ChessMovePushed,
   JoinRequestDto,
   ChessColor,
+  LudoStateSnapshot,
 } from '../types/games'
 
 /** Per-userId metadata describing an in-progress grace window.
@@ -179,6 +180,12 @@ interface GameStoreState {
   applyJoinRequested:  (req: JoinRequestDto) => void
   applyJoinResolved:   (requestId: string) => void
 
+  // ─── LUDO ───────────────────────────────────────────────────────
+  /** Full server-authoritative board — replaced wholesale on every
+   *  "LudoState" broadcast, so drift is impossible. */
+  ludo: LudoStateSnapshot | null
+  applyLudoState: (snap: LudoStateSnapshot) => void
+
   // ─── DIRECTOR MODE + GRACE WINDOW ACTIONS ───────────────────────
   /** Stamp an entry into offlinePlayers when ChessPlayerDisconnected fires. */
   markPlayerOffline: (userId: string, info: OfflinePlayerInfo) => void
@@ -234,6 +241,7 @@ export const useGameStore = create<GameStoreState>((set) => ({
   myReaction: null,
   chess: null,
   lastChessMove: null,
+  ludo: null,
   joinRequestPending: false,
   pendingJoinRequests: [],
   offlinePlayers: {},
@@ -391,6 +399,21 @@ export const useGameStore = create<GameStoreState>((set) => ({
 
   rollbackReaction: (prev) => set({ myReaction: prev }),
 
+  // ─── LUDO ──────────────────────────────────────────────────────
+  applyLudoState: (snap) => set((s) => ({
+    ludo: snap,
+    // Keep the room-level status in lockstep with the board, same
+    // contract as chess — Start button + view dispatch read this.
+    snapshot: s.snapshot
+      ? { ...s.snapshot, room: { ...s.snapshot.room, status: snap.status } }
+      : s.snapshot,
+    // Seat lists arrive inside the ludo snapshot too — mirror them
+    // into the shared seatRequest state so 🙋 UI is uniform.
+    seatRequestUserIds: snap.seatRequests ?? [],
+    mySeatRequested: (snap.seatRequests ?? [])
+      .includes(useAuthStore.getState().user?.userId ?? ''),
+  })),
+
   // ─── CHESS ─────────────────────────────────────────────────────
   applyChessSnapshot: (snap) => set((s) => ({
     chess: snap,
@@ -484,6 +507,7 @@ export const useGameStore = create<GameStoreState>((set) => ({
     myReaction: null,
     chess: null,
     lastChessMove: null,
+    ludo: null,
     joinRequestPending: false,
     pendingJoinRequests: [],
     offlinePlayers: {},
