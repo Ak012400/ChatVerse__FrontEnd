@@ -232,16 +232,38 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
 
   const handleAnswer = (choiceIndex: number) => {
     if (!currentQuestion) return
-    submitAnswer(slug, currentQuestion.id, choiceIndex).catch(() => {
-      /* error toast comes via AnswerAck hub event */
+    // NOT fire-and-forget (#148): if the invoke never reaches the hub
+    // (HubNotReadyError, dropped socket) there will be no AnswerAck —
+    // the old silent catch made the click look completely dead. The
+    // hook already rolled back the optimistic lock; we surface why.
+    submitAnswer(slug, currentQuestion.id, choiceIndex).catch((err: any) => {
+      const friendly = err instanceof HubNotReadyError
+        ? err.message
+        : err?.message ?? 'Try again.'
+      showToast({
+        type: 'danger',
+        title: 'Answer not sent',
+        message: friendly,
+        duration: 3000,
+      })
     })
   }
 
-  // Jokes-mode reaction submit. Same fire-and-forget pattern as
-  // handleAnswer — AnswerAck toast covers rejections.
+  // Jokes-mode reaction submit. Same error-surfacing contract as
+  // handleAnswer (#148).
   const handleReact = (reaction: 'Laugh' | 'Meh' | 'Skull' | 'EyeRoll') => {
     if (!currentJoke) return
-    submitReaction(slug, currentJoke.id, reaction).catch(() => {})
+    submitReaction(slug, currentJoke.id, reaction).catch((err: any) => {
+      const friendly = err instanceof HubNotReadyError
+        ? err.message
+        : err?.message ?? 'Try again.'
+      showToast({
+        type: 'danger',
+        title: 'Reaction not sent',
+        message: friendly,
+        duration: 3000,
+      })
+    })
   }
 
   // ─── Render branches ───────────────────────────────────────────

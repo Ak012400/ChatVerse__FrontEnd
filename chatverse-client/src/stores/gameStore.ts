@@ -136,6 +136,9 @@ interface GameStoreState {
   applyChatMessage: (msg: GameChatMessage) => void
 
   markAnswered: (choiceIndex: number) => void
+  /** Roll back the optimistic markAnswered when the hub invoke failed —
+   *  re-enables the option buttons so the user can retry (#148). */
+  rollbackAnswer: () => void
 
   // ─── JOKES MODE ACTIONS ─────────────────────────────────────────
   applyJokePushed: (j: JokePushed) => void
@@ -143,6 +146,9 @@ interface GameStoreState {
   applyJokeRevealed: (r: JokeRevealed) => void
   applyJokesFinished: (stats: JokeFinalStat[]) => void
   markReacted: (reaction: JokeReactionType) => void
+  /** Roll back the optimistic markReacted to the previous value when
+   *  the hub invoke failed (#148). */
+  rollbackReaction: (prev: JokeReactionType | null) => void
 
   // ─── CHESS ACTIONS ──────────────────────────────────────────────
   applyChessSnapshot: (snap: ChessStateSnapshot) => void
@@ -257,6 +263,11 @@ export const useGameStore = create<GameStoreState>((set) => ({
     myChoiceIndex: choiceIndex,
   }),
 
+  rollbackAnswer: () => set({
+    hasAnsweredCurrent: false,
+    myChoiceIndex: null,
+  }),
+
   // ─── JOKES MODE ────────────────────────────────────────────────
   applyJokePushed: (j) => set({
     currentJoke: j,
@@ -286,6 +297,8 @@ export const useGameStore = create<GameStoreState>((set) => ({
   })),
 
   markReacted: (reaction) => set({ myReaction: reaction }),
+
+  rollbackReaction: (prev) => set({ myReaction: prev }),
 
   // ─── CHESS ─────────────────────────────────────────────────────
   applyChessSnapshot: (snap) => set((s) => ({
