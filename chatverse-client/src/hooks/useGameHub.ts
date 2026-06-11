@@ -617,6 +617,15 @@ export function useGameHub() {
     await connectionRef.current!.invoke('RematchQuiz', slug)
   }, [ensureConnected])
 
+  /** Quiz v2 director mode: host seats a spectator as Player or moves
+   *  a Player back to the audience. Server is host-gated. */
+  const setQuizRole = useCallback(async (
+    slug: string, targetUserId: string, role: 'Player' | 'Spectator',
+  ) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('SetQuizRole', slug, targetUserId, role)
+  }, [ensureConnected])
+
   /** Quiz v2: fire a cheer emoji at the room. Fire-and-forget — a lost
    *  cheer is not worth an error dialog. */
   const sendCheer = useCallback(async (slug: string, emoji: string) => {
@@ -777,6 +786,7 @@ export function useGameHub() {
     startQuiz,
     rematchQuiz,
     sendCheer,
+    setQuizRole,
     submitAnswer,
     sendChat,
     submitReaction,

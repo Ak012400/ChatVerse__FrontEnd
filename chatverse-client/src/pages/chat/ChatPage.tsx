@@ -334,14 +334,16 @@ export default function ChatPage() {
         onClose={() => setShowGameLauncher(false)}
         onCreated={(s, gameType) => {
           setShowGameLauncher(false)
-          // Chess (and Ludo, when it lands) needs a dedicated
-          // full-screen page — board + chat rail + scoreboard +
-          // requests panel don't fit inline. Quiz/Jokes embed
-          // alongside chat as before.
+          // Quiz v2: EVERY game now opens as a dedicated full page —
+          // the embedded side panel was too cramped for the new quiz
+          // UI (answer chips, cheers, podium). Chess/Ludo keep their
+          // overlay; Quiz/Jokes go to the existing /games/:slug route.
+          // Embed plumbing below stays intact in case we want a
+          // mini-view again later.
           if (gameType === 'Chess' || gameType === 'Ludo') {
             window.location.assign(`/play/${s}`)
           } else {
-            setEmbeddedGameSlug(s)
+            navigate(`/games/${s}`)
           }
         }}
         defaultName={room?.displayName ? `${room.displayName} quiz` : undefined}
@@ -367,7 +369,8 @@ export default function ChatPage() {
             if (type === 'Chess' || type === 'Ludo') {
               navigate(`/play/${s}`)
             } else {
-              setEmbeddedGameSlug(s)
+              // Quiz v2: full page instead of the cramped embed.
+              navigate(`/games/${s}`)
             }
           }}
           onStartGame={() => setShowGameLauncher(true)}
