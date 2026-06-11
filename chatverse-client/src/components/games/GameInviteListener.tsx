@@ -43,9 +43,12 @@ export default function GameInviteListener() {
   const handleAccept = async () => {
     try {
       await acceptInvite(invite.inviteId)
-      // Navigate now — the server-side AcceptInvite will mark us as
-      // approved, so the join flow on PlayRoomPage will succeed.
-      navigate(`/play/${invite.slug}`)
+      // Route by game type (fixes the old "every invite lands on the
+      // chess page" latent bug): Chess → /play, Ludo → /ludo,
+      // Quiz/Jokes → /games full page.
+      if (invite.type === 'Chess') navigate(`/play/${invite.slug}`)
+      else if (invite.type === 'Ludo') navigate(`/ludo/${invite.slug}`)
+      else navigate(`/games/${invite.slug}`)
     } finally {
       setInvite(null)
     }

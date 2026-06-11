@@ -36,6 +36,7 @@ import CreateRoomPage      from './pages/rooms/CreateRoomPage'
 import GamingHallPage      from './pages/games/GamingHallPage'
 import QuizRoomPage         from './pages/games/QuizRoomPage'
 import PlayRoomPage         from './pages/games/PlayRoomPage'
+import LudoRoomPage         from './pages/games/LudoRoomPage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -108,6 +109,8 @@ export default function App() {
               screen overlay. PrivateRoute (not RegisteredRoute) so
               guests CAN view the board + chat, just can't make moves. */}
           <Route path="/play/:slug" element={<PrivateRoute><PlayRoomPage /></PrivateRoute>} />
+          {/* Ludo — same guest-can-watch policy as chess. */}
+          <Route path="/ludo/:slug" element={<PrivateRoute><LudoRoomPage /></PrivateRoute>} />
 
           {/* Video — lobby + four call modes (last two need an account) */}
           <Route path="/video" element={<PrivateRoute><VideoLobbyPage /></PrivateRoute>} />

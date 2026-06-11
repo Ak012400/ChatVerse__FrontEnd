@@ -127,6 +127,43 @@ export interface CheerPayload {
   emoji: string
 }
 
+// ─── Ludo (Sprint B) ────────────────────────────────────────────
+
+export type LudoColor = 'Red' | 'Green' | 'Yellow' | 'Blue'
+
+export interface LudoSeatDto {
+  color: LudoColor
+  userId: string
+  username: string
+}
+
+export interface LudoRollDto {
+  color: LudoColor
+  value: number
+}
+
+/** Complete server-authoritative board state. Token positions are
+ *  "steps walked": -1 base, 0..50 main track, 51..55 home column,
+ *  56 finished. */
+export interface LudoStateSnapshot {
+  status: GameStatus
+  seats: LudoSeatDto[]
+  tokens: Record<string, number[]>
+  currentTurn: LudoColor | null
+  pendingRoll: number | null
+  lastRoll: LudoRollDto | null
+  turnDeadlineUtc: string | null
+  seatRequests: string[]
+  winnerUserId: string | null
+  turnSeconds: number
+}
+
+export interface LudoDiceRolledPayload {
+  color: LudoColor
+  value: number
+  forfeited: boolean
+}
+
 export interface GameParticipant {
   userId: string
   username: string

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Brain, Sparkles, Laugh, Loader2, Globe, Lock, Crown } from 'lucide-react'
+import { X, Brain, Sparkles, Laugh, Loader2, Globe, Lock, Crown, Dices } from 'lucide-react'
 import { gamesApi } from '../../api'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
@@ -25,7 +25,7 @@ import type {
 //    custom categories can still go to /games directly.
 // ============================================================
 
-type GamePreset = 'quiz' | 'trivia' | 'jokes' | 'chess'
+type GamePreset = 'quiz' | 'trivia' | 'jokes' | 'chess' | 'ludo'
 
 interface PresetConfig {
   id: GamePreset
@@ -104,6 +104,21 @@ const PRESETS: PresetConfig[] = [
     maxPlayers: 2,
     icon: <Crown size={20} />,
     iconBg: 'bg-[var(--color-surface-2)] text-[var(--color-fg-dim)]',
+  },
+  {
+    id: 'ludo',
+    gameType: 'Ludo',
+    title: 'Ludo',
+    subtitle: '2-4 players · host assigns seats · 30s turns',
+    // Same dummy-value trick as Chess — Ludo ignores quiz settings
+    // but the shared request validation enforces ranges for all types.
+    category: 'Any',
+    difficulty: 'Any',
+    questionCount: 10,
+    secondsPerQuestion: 15,
+    maxPlayers: 4,
+    icon: <Dices size={20} />,
+    iconBg: 'bg-[var(--color-warning-soft)] text-[var(--color-warning-fg)]',
   },
 ]
 
@@ -268,9 +283,10 @@ export default function GameLauncherModal({
               const isActive = p.id === selected
               // Chess hosting requires a signed-in account so the room
               // has a real identity for the seat/invite/end flows.
-              // Guests can still JOIN a chess room someone else created
-              // — this gate only blocks hosting.
-              const blockedForGuest = isGuest && p.gameType === 'Chess'
+              // Guests can still JOIN a chess/ludo room someone else
+              // created — this gate only blocks hosting.
+              const blockedForGuest = isGuest &&
+                (p.gameType === 'Chess' || p.gameType === 'Ludo')
               return (
                 <button
                   key={p.id}

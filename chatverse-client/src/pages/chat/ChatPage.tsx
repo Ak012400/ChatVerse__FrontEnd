@@ -340,8 +340,10 @@ export default function ChatPage() {
           // overlay; Quiz/Jokes go to the existing /games/:slug route.
           // Embed plumbing below stays intact in case we want a
           // mini-view again later.
-          if (gameType === 'Chess' || gameType === 'Ludo') {
+          if (gameType === 'Chess') {
             window.location.assign(`/play/${s}`)
+          } else if (gameType === 'Ludo') {
+            navigate(`/ludo/${s}`)
           } else {
             navigate(`/games/${s}`)
           }
@@ -366,8 +368,10 @@ export default function ChatPage() {
             // shell, which silently rendered the "Waiting to start" lobby
             // for ALL room types. That's why creators saw the chess board
             // but joiners saw a quiz UI: the panel never told us the type.
-            if (type === 'Chess' || type === 'Ludo') {
+            if (type === 'Chess') {
               navigate(`/play/${s}`)
+            } else if (type === 'Ludo') {
+              navigate(`/ludo/${s}`)
             } else {
               // Quiz v2: full page instead of the cramped embed.
               navigate(`/games/${s}`)
