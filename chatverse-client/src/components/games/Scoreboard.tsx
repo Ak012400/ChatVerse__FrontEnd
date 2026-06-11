@@ -62,6 +62,15 @@ export default function Scoreboard({ entries, totalSlots, compact }: Props) {
                 <p className="text-sm font-medium truncate">
                   {e.username}
                   {isMe && <span className="ml-1 text-[10px] text-[var(--color-fg-mute)]">(you)</span>}
+                  {/* Quiz v2 hot-streak badge — 3+ consecutive correct */}
+                  {(e.streak ?? 0) >= 3 && (
+                    <span
+                      className="ml-1 text-[11px]"
+                      title={`${e.streak} in a row — hot streak! (+1 bonus per correct)`}
+                    >
+                      🔥{e.streak}
+                    </span>
+                  )}
                 </p>
                 {!compact && (
                   <p className="text-[10px] text-[var(--color-fg-faint)]">

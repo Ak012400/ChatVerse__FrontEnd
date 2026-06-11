@@ -157,6 +157,10 @@ export default function GameLauncherModal({
         secondsPerQuestion: preset.secondsPerQuestion,
         isPublic,
         sourceChatSlug,
+        // Quiz v2: new quiz/trivia rooms use buzzer scoring — first
+        // correct answer gets the point. Jokes/Chess ignore the field;
+        // old rooms keep Speed mode (backend default).
+        scoringMode: preset.gameType === 'Quiz' ? 'FirstCorrect' : undefined,
       }
       const res = await gamesApi.create(req)
       const slug = res.data.data.slug

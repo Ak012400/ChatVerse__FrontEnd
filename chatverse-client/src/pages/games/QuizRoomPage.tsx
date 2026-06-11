@@ -82,7 +82,10 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
   const navigate = useNavigate()
   const { showToast } = useToastStore()
   const me = useAuthStore((s) => s.user)
-  const { hubState, joinRoom, leaveRoom, startQuiz, submitAnswer, sendChat, submitReaction } = useGameHub()
+  const {
+    hubState, joinRoom, leaveRoom, startQuiz, submitAnswer, sendChat,
+    submitReaction, rematchQuiz, sendCheer,
+  } = useGameHub()
 
   const snapshot = useGameStore((s) => s.snapshot)
   const currentQuestion = useGameStore((s) => s.currentQuestion)
@@ -92,6 +95,10 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
   const chat = useGameStore((s) => s.chat)
   const hasAnsweredCurrent = useGameStore((s) => s.hasAnsweredCurrent)
   const myChoiceIndex = useGameStore((s) => s.myChoiceIndex)
+  // Quiz v2 live-feedback state
+  const answeredUserIds = useGameStore((s) => s.answeredUserIds)
+  const cheers = useGameStore((s) => s.cheers)
+  const expireCheer = useGameStore((s) => s.expireCheer)
   // Jokes-mode state — null/empty unless room.type === 'Jokes'
   const currentJoke = useGameStore((s) => s.currentJoke)
   const jokeCounts = useGameStore((s) => s.jokeCounts)
@@ -202,6 +209,21 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, enterAttempt])
+
+  // ─── Self-heal: re-attach on every hub connect ─────────────────
+  // Root cause of "host stuck in Lobby while the quiz is on Q7": his
+  // initial JoinRoom (group attach) failed, the connection later came
+  // back, but nothing re-attached him to the SignalR group — so no
+  // event ever reached him again. JoinRoom is idempotent server-side
+  // (group add + fresh RoomSnapshot), so calling it on EVERY transition
+  // to 'connected' both re-attaches and resyncs the whole room state.
+  useEffect(() => {
+    if (hubState !== 'connected' || !slug || joining) return
+    joinRoom(slug).catch((err) => {
+      console.warn('[QuizRoomPage] re-attach after connect failed:', err)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hubState])
 
   const room = snapshot?.room
   const viewerRole = snapshot?.viewerRole ?? null
@@ -397,6 +419,11 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
             onAnswer={handleAnswer}
             onSendChat={(t) => sendChat(slug, t)}
             compactMode={compactMode}
+            participants={participants}
+            answeredUserIds={answeredUserIds}
+            cheers={cheers}
+            onCheer={(emoji) => sendCheer(slug, emoji).catch(() => { /* fire-and-forget */ })}
+            onExpireCheer={expireCheer}
           />
         )}
 
@@ -420,6 +447,15 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
             maxPlayers={room.maxPlayers}
             onBackToHall={() => (onLeave ? onLeave() : navigate('/games'))}
             embedded={!!onLeave}
+            isHost={isHost}
+            onRematch={() => rematchQuiz(slug).catch((err: any) => {
+              showToast({
+                type: 'danger',
+                title: 'Rematch failed',
+                message: err?.message ?? 'Try again.',
+                duration: 3000,
+              })
+            })}
           />
         )}
       </div>
@@ -623,6 +659,7 @@ function ParticipantList({
 function PlayingView({
   question, reveal, viewerRole, hasAnswered, myChoiceIndex,
   scoreboard, maxPlayers, chat, onAnswer, onSendChat, compactMode,
+  participants, answeredUserIds, cheers, onCheer, onExpireCheer,
 }: {
   question: NonNullable<ReturnType<typeof useGameStore.getState>['currentQuestion']>
   reveal: ReturnType<typeof useGameStore.getState>['lastReveal']
@@ -635,6 +672,11 @@ function PlayingView({
   onAnswer: (i: number) => void
   onSendChat: (t: string) => void
   compactMode?: boolean
+  participants: ReturnType<typeof useGameStore.getState>['participants']
+  answeredUserIds: string[]
+  cheers: ReturnType<typeof useGameStore.getState>['cheers']
+  onCheer: (emoji: string) => void
+  onExpireCheer: (id: number) => void
 }) {
   // Compact mode = embedded inside the ChatPage. The host already has
   // a full chat panel alongside, so we drop our commentary rail and
@@ -646,7 +688,12 @@ function PlayingView({
 
   return (
     <div className={`h-full grid ${cols} gap-4 p-4 overflow-hidden`}>
-      <section className="overflow-y-auto">
+      {/* relative wrapper so the cheer overlay floats over the card */}
+      <section className="overflow-y-auto relative">
+        <AnsweredChips
+          participants={participants}
+          answeredUserIds={answeredUserIds}
+        />
         <QuestionCard
           question={question}
           viewerRole={viewerRole}
@@ -655,6 +702,10 @@ function PlayingView({
           reveal={reveal}
           onAnswer={onAnswer}
         />
+        {/* Anyone can hype — spectators especially. Players see it too
+            (cheering your rival's wrong answer is half the fun). */}
+        <CheerBar onCheer={onCheer} />
+        <CheerOverlay cheers={cheers} onExpire={onExpireCheer} />
       </section>
       <aside className="overflow-hidden h-full">
         <Scoreboard entries={scoreboard} totalSlots={maxPlayers} compact={compactMode} />
@@ -760,14 +811,20 @@ function JokesEndedView({
 // ============================================================
 
 function EndedView({
-  scoreboard, maxPlayers, onBackToHall, embedded,
+  scoreboard, maxPlayers, onBackToHall, embedded, isHost, onRematch,
 }: {
   scoreboard: ReturnType<typeof useGameStore.getState>['scoreboard']
   maxPlayers: number
   onBackToHall: () => void
   embedded?: boolean
+  isHost?: boolean
+  onRematch?: () => void
 }) {
   const winner = scoreboard[0]
+  // Podium order: 2nd | 1st | 3rd — the classic Olympic layout.
+  const podium = [scoreboard[1], scoreboard[0], scoreboard[2]]
+  const podiumHeights = ['h-16', 'h-24', 'h-12']
+  const podiumMedals = ['🥈', '🥇', '🥉']
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-md mx-auto px-6 py-10 text-center">
@@ -781,19 +838,159 @@ function EndedView({
         ) : (
           <p className="text-sm text-[var(--color-fg-mute)] mb-6">No scores recorded.</p>
         )}
+
+        {/* Quiz v2 podium — rises in with a scoped keyframe */}
+        {scoreboard.length > 0 && (
+          <>
+            <style>{`
+              @keyframes cv-podium-rise {
+                from { transform: translateY(24px); opacity: 0; }
+                to   { transform: translateY(0);    opacity: 1; }
+              }
+            `}</style>
+            <div className="flex items-end justify-center gap-2 mb-6">
+              {podium.map((e, i) => e ? (
+                <div
+                  key={e.userId}
+                  className="flex flex-col items-center w-24"
+                  style={{ animation: `cv-podium-rise 0.5s ease ${i * 0.15}s backwards` }}
+                >
+                  <span className="text-2xl mb-1">{podiumMedals[i]}</span>
+                  <span className="text-xs font-medium truncate w-full">{e.username}</span>
+                  <span className="text-[10px] text-[var(--color-fg-mute)] mb-1">{e.score} pts</span>
+                  <div
+                    className={`w-full ${podiumHeights[i]} rounded-t-md bg-[var(--color-accent-soft)] border border-b-0 border-[var(--color-accent-fg)]`}
+                  />
+                </div>
+              ) : <div key={`empty-${i}`} className="w-24" />)}
+            </div>
+          </>
+        )}
+
         <div className="max-w-xs mx-auto">
           <Scoreboard entries={scoreboard} totalSlots={maxPlayers} />
         </div>
+
+        {/* Host-only rematch — same room, same settings, fresh scores */}
+        {isHost && onRematch && (
+          <Button
+            size="lg"
+            fullWidth
+            leftIcon={<Play size={15} />}
+            onClick={onRematch}
+            className="mt-6"
+          >
+            Rematch — same crew, new questions
+          </Button>
+        )}
         <Button
           size="lg"
           fullWidth
           leftIcon={<ArrowLeft size={15} />}
           onClick={onBackToHall}
-          className="mt-6"
+          className={isHost ? 'mt-2' : 'mt-6'}
         >
           {embedded ? 'Close & return to chat' : 'Back to Gaming Hall'}
         </Button>
       </div>
+    </div>
+  )
+}
+
+// ============================================================
+//  Quiz v2 — live feedback components
+// ============================================================
+
+/** Chips showing who has locked in an answer for the current question
+ *  (no choice revealed — just "done" state). */
+function AnsweredChips({
+  participants, answeredUserIds,
+}: {
+  participants: ReturnType<typeof useGameStore.getState>['participants']
+  answeredUserIds: string[]
+}) {
+  const players = participants.filter((p) => p.role === 'Player')
+  if (players.length === 0) return null
+  return (
+    <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+      <span className="text-[10px] uppercase tracking-wide text-[var(--color-fg-mute)] mr-1">
+        Answered {answeredUserIds.length}/{players.length}
+      </span>
+      {players.map((p) => {
+        const done = answeredUserIds.includes(p.userId)
+        return (
+          <span
+            key={p.userId}
+            className={[
+              'px-2 py-0.5 rounded-full text-[10px] border transition-colors',
+              done
+                ? 'bg-[var(--color-success-soft)] border-[var(--color-success-border)] text-[var(--color-success-fg)]'
+                : 'bg-[var(--color-surface-2)] border-[var(--color-line)] text-[var(--color-fg-mute)]',
+            ].join(' ')}
+          >
+            {done ? '✓ ' : ''}{p.username}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Emoji hype row — broadcast to the whole room via SendCheer. */
+function CheerBar({ onCheer }: { onCheer: (emoji: string) => void }) {
+  return (
+    <div className="flex items-center justify-center gap-3 mt-3">
+      {['🔥', '👏', '😂', '💀', '🎉'].map((e) => (
+        <button
+          key={e}
+          onClick={() => onCheer(e)}
+          className="text-lg hover:scale-125 active:scale-95 transition-transform"
+          title="Send a cheer"
+        >
+          {e}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/** Floating cheers — rise + fade, auto-expire from the store. */
+function CheerOverlay({
+  cheers, onExpire,
+}: {
+  cheers: ReturnType<typeof useGameStore.getState>['cheers']
+  onExpire: (id: number) => void
+}) {
+  useEffect(() => {
+    if (cheers.length === 0) return
+    const timers = cheers.map((c) => setTimeout(() => onExpire(c.id), 2400))
+    return () => { timers.forEach(clearTimeout) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cheers])
+
+  if (cheers.length === 0) return null
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <style>{`
+        @keyframes cv-cheer-float {
+          0%   { opacity: 0; transform: translateY(16px) scale(0.8); }
+          15%  { opacity: 1; }
+          100% { opacity: 0; transform: translateY(-140px) scale(1.35); }
+        }
+      `}</style>
+      {cheers.map((c, i) => (
+        <div
+          key={c.id}
+          className="absolute bottom-8 text-2xl text-center"
+          style={{
+            left: `${12 + ((i * 17) % 70)}%`,
+            animation: 'cv-cheer-float 2.4s ease-out forwards',
+          }}
+        >
+          {c.emoji}
+          <span className="block text-[9px] text-[var(--color-fg-mute)]">{c.username}</span>
+        </div>
+      ))}
     </div>
   )
 }

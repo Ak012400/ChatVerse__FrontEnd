@@ -52,6 +52,8 @@ import type {
   ChessPlayerDisconnectedPayload,
   ChessPlayerReturnedPayload,
   ChessSeatTimedOutPayload,
+  PlayerAnsweredPayload,
+  CheerPayload,
 } from '../types/games'
 
 // ============================================================
@@ -153,6 +155,33 @@ export function useGameHub() {
 
     hub.on('ScoreUpdated', (scoreboard: ScoreEntry[]) => {
       useGameStore.getState().applyScoreUpdated(scoreboard ?? [])
+    })
+
+    // ─── Quiz v2 events ─────────────────────────────────────────
+    hub.on('PlayerAnswered', (p: PlayerAnsweredPayload) => {
+      if (!p?.userId) return
+      useGameStore.getState().applyPlayerAnswered(p.userId)
+    })
+
+    hub.on('CheerPushed', (c: CheerPayload) => {
+      if (!c?.emoji) return
+      useGameStore.getState().pushCheer(c.username ?? 'someone', c.emoji)
+    })
+
+    // Host triggered a rematch — the room is back in Lobby with fresh
+    // scores. JoinRoom is idempotent and hands us a clean RoomSnapshot,
+    // which resyncs every client's UI in one shot.
+    hub.on('QuizReset', async () => {
+      const slug = useGameStore.getState().activeSlug
+      if (slug && hub.state === signalR.HubConnectionState.Connected) {
+        try { await hub.invoke('JoinRoom', slug) } catch { /* reconnect covers it */ }
+      }
+      showToast({
+        type: 'info',
+        title: 'Rematch!',
+        message: 'Host reset the quiz — back to the lobby.',
+        duration: 2500,
+      })
     })
 
     hub.on('GameEnded', (payload: {
@@ -470,6 +499,15 @@ export function useGameHub() {
         message: message ?? 'Something went wrong.',
         duration: 3000,
       })
+      // Self-heal: a server-side rejection usually means our local view
+      // drifted from reality (e.g. host clicked "Start" on a quiz that
+      // is already on Q7 because his group attach silently failed).
+      // Re-invoking JoinRoom is idempotent — re-attaches to the group
+      // and pushes a fresh RoomSnapshot that snaps the UI back in sync.
+      const slug = useGameStore.getState().activeSlug
+      if (slug && hub.state === signalR.HubConnectionState.Connected) {
+        hub.invoke('JoinRoom', slug).catch(() => { /* best effort */ })
+      }
     })
 
     hub.onreconnecting(() => {
@@ -570,6 +608,20 @@ export function useGameHub() {
   const startQuiz = useCallback(async (slug: string) => {
     await ensureConnected()
     await connectionRef.current!.invoke('StartQuiz', slug)
+  }, [ensureConnected])
+
+  /** Quiz v2: host resets an Ended quiz back to Lobby (same settings,
+   *  same participants, fresh scores). Server is host-gated. */
+  const rematchQuiz = useCallback(async (slug: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('RematchQuiz', slug)
+  }, [ensureConnected])
+
+  /** Quiz v2: fire a cheer emoji at the room. Fire-and-forget — a lost
+   *  cheer is not worth an error dialog. */
+  const sendCheer = useCallback(async (slug: string, emoji: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('SendCheer', slug, emoji)
   }, [ensureConnected])
 
   const submitAnswer = useCallback(async (
@@ -723,6 +775,8 @@ export function useGameHub() {
     joinRoom,
     leaveRoom,
     startQuiz,
+    rematchQuiz,
+    sendCheer,
     submitAnswer,
     sendChat,
     submitReaction,
