@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useAuthStore } from './authStore'
 import type {
   GameRoomSnapshot,
   QuizQuestionPublic,
@@ -174,6 +175,24 @@ const EMPTY_JOKE_COUNTS: Record<JokeReactionType, number> = {
 
 const MAX_CHAT_IN_STORE = 200
 
+/** Derive the viewer's room-level role from a chess snapshot's seat
+ *  assignments. Director Mode communicates seating via chess snapshots
+ *  (ChessSeatChanged), so the room-level viewerRole must follow:
+ *    • I hold a seat            → Player
+ *    • I held one, now I don't  → Spectator (host unassigned / timeout)
+ *    • Otherwise                → unchanged */
+function resolveViewerRoleFromSeats(
+  snap: ChessStateSnapshot,
+  prevRole: GameRole | null,
+): GameRole | null {
+  const myId = useAuthStore.getState().user?.userId ?? null
+  if (!myId) return prevRole
+  const seated = snap.whitePlayerId === myId || snap.blackPlayerId === myId
+  if (seated) return 'Player'
+  if (prevRole === 'Player') return 'Spectator'
+  return prevRole
+}
+
 export const useGameStore = create<GameStoreState>((set) => ({
   activeSlug: null,
   snapshot: null,
@@ -311,8 +330,15 @@ export const useGameStore = create<GameStoreState>((set) => ({
     // of truth. The transition is:
     //   game has moves OR result != InProgress → snapshot.room.status='Ended'
     //   otherwise leave whatever the snapshot said (Lobby / Playing)
+    //
+    // ALSO sync viewerRole from the seat assignments. Director Mode
+    // assigns seats via ChessSeatChanged (a chess snapshot, NOT a room
+    // snapshot), so without this the requester's room-level role stayed
+    // 'Spectator' forever — their "Request pending" pill kept spinning
+    // and the Resign button never appeared even though they were seated.
     snapshot: s.snapshot ? {
       ...s.snapshot,
+      viewerRole: resolveViewerRoleFromSeats(snap, s.snapshot.viewerRole),
       room: {
         ...s.snapshot.room,
         status: snap.result !== 'InProgress'

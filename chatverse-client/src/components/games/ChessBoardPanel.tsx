@@ -79,7 +79,73 @@ export default function ChessBoardPanel({ snapshot, isLoggedIn, onMove }: Props)
     })
   }, [lastMove])
 
-  const handlePieceDrop = (sourceSquare: Square, targetSquare: Square): boolean => {
+  // ─── Check highlight ───────────────────────────────────────────
+  // The side TO MOVE is the one in check — find their king's square
+  // and paint it red, the way every online chess site signals check.
+  // Recomputed per FEN; cheap (single board scan).
+  const { checkSquares, inCheck } = useMemo(() => {
+    try {
+      const c = new Chess(snapshot.fen)
+      if (!c.inCheck()) return { checkSquares: {}, inCheck: false }
+      const sideToMove = c.turn()
+      for (const row of c.board()) {
+        for (const sq of row) {
+          if (sq && sq.type === 'k' && sq.color === sideToMove) {
+            return {
+              inCheck: true,
+              checkSquares: {
+                [sq.square]: {
+                  background:
+                    'radial-gradient(circle, rgba(239,68,68,0.8) 22%, rgba(239,68,68,0.35) 55%, transparent 72%)',
+                  boxShadow: 'inset 0 0 14px rgba(239,68,68,0.55)',
+                } as React.CSSProperties,
+              },
+            }
+          }
+        }
+      }
+    } catch { /* bad FEN — no highlight */ }
+    return { checkSquares: {}, inCheck: false }
+  }, [snapshot.fen])
+
+  // ─── Legal-move dots (click-to-move + drag preview) ────────────
+  // Selecting one of my pieces (click or drag-start) shows a dot on
+  // every legal destination; capture squares get a ring instead.
+  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null)
+
+  const legalTargetStyles = useMemo(() => {
+    if (!selectedSquare || !isMyTurn) return {}
+    const styles: Record<string, React.CSSProperties> = {
+      [selectedSquare]: { background: 'rgba(99,102,241,0.35)' },
+    }
+    try {
+      const moves = chessRef.current.moves({ square: selectedSquare, verbose: true })
+      for (const m of moves) {
+        styles[m.to] = m.captured
+          // Capture target — ring around the occupied square.
+          ? { background: 'radial-gradient(circle, transparent 56%, rgba(239,68,68,0.55) 62%, rgba(239,68,68,0.55) 72%, transparent 78%)' }
+          // Quiet move target — centre dot.
+          : { background: 'radial-gradient(circle, rgba(99,102,241,0.5) 20%, transparent 26%)' }
+      }
+    } catch { /* ignore — stale square */ }
+    return styles
+  }, [selectedSquare, isMyTurn, snapshot.fen]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Illegal-move shake feedback ───────────────────────────────
+  const [shaking, setShaking] = useState(false)
+  const shakeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const triggerShake = () => {
+    setShaking(true)
+    if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current)
+    shakeTimerRef.current = setTimeout(() => setShaking(false), 380)
+  }
+  useEffect(() => () => {
+    if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current)
+  }, [])
+
+  /** Shared move gate for drag-drop AND click-to-move. Returns true
+   *  if the move was legal and dispatched to the hub. */
+  const tryMove = (sourceSquare: Square, targetSquare: Square): boolean => {
     if (!isMyTurn) return false
     try {
       // chess.js's move() returns null for illegal moves; we use
@@ -90,14 +156,57 @@ export default function ChessBoardPanel({ snapshot, isLoggedIn, onMove }: Props)
         to: targetSquare,
         promotion: 'q',
       })
-      if (!result) return false
+      if (!result) { triggerShake(); return false }
       const fenAfter = chessRef.current.fen()
       const uci = `${result.from}${result.to}${result.promotion ?? ''}`
+      setSelectedSquare(null)
       onMove(result.san, uci, fenAfter)
       return true
     } catch {
+      triggerShake()
       return false
     }
+  }
+
+  const handlePieceDrop = (sourceSquare: Square, targetSquare: Square): boolean =>
+    tryMove(sourceSquare, targetSquare)
+
+  // Drag-start shows the same dots as a click-select.
+  const handlePieceDragBegin = (_piece: string, sourceSquare: Square) => {
+    if (isMyTurn) setSelectedSquare(sourceSquare)
+  }
+
+  /** Click-to-move: first click selects own piece (dots appear),
+   *  second click on a dotted square moves; clicking another own
+   *  piece re-selects; anything else deselects. */
+  const handleSquareClick = (square: Square) => {
+    if (!isMyTurn) return
+    const myShortColor = myColor === 'white' ? 'w' : 'b'
+    const piece = chessRef.current.get(square)
+
+    if (selectedSquare && square !== selectedSquare) {
+      // Re-select if clicking another of my pieces…
+      if (piece && piece.color === myShortColor) {
+        setSelectedSquare(square)
+        return
+      }
+      // …otherwise attempt the move (tryMove shakes on illegal).
+      tryMove(selectedSquare, square)
+      return
+    }
+    if (piece && piece.color === myShortColor) {
+      setSelectedSquare(square === selectedSquare ? null : square)
+    } else {
+      setSelectedSquare(null)
+    }
+  }
+
+  // Merged square decorations — later spreads win on conflicts, so
+  // selection/dots paint over last-move tint, and check stays visible.
+  const mergedSquareStyles = {
+    ...lastMoveSquares,
+    ...checkSquares,
+    ...legalTargetStyles,
   }
 
   return (
@@ -110,21 +219,44 @@ export default function ChessBoardPanel({ snapshot, isLoggedIn, onMove }: Props)
             ({myColor === 'white' ? 'Black' : 'White'})
           </span>
         </span>
-        {snapshot.turn === (myColor === 'white' ? 'Black' : 'White')
-          && snapshot.result === 'InProgress' && (
-          <span className="text-[10px] uppercase tracking-wide text-[var(--color-warning-fg)]">
-            Their turn
-          </span>
-        )}
+        <span className="inline-flex items-center gap-2">
+          {inCheck && snapshot.result === 'InProgress' && (
+            <span className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-danger-fg)] animate-pulse">
+              Check!
+            </span>
+          )}
+          {snapshot.turn === (myColor === 'white' ? 'Black' : 'White')
+            && snapshot.result === 'InProgress' && (
+            <span className="text-[10px] uppercase tracking-wide text-[var(--color-warning-fg)]">
+              Their turn
+            </span>
+          )}
+        </span>
       </div>
 
-      <div className="w-full max-w-[560px]">
+      {/* Scoped keyframes for the illegal-move shake — kept inline so
+          the component stays self-contained (no Tailwind config edit). */}
+      <style>{`
+        @keyframes cv-board-shake {
+          0%, 100% { transform: translateX(0); }
+          20% { transform: translateX(-6px); }
+          40% { transform: translateX(6px); }
+          60% { transform: translateX(-4px); }
+          80% { transform: translateX(4px); }
+        }
+        .cv-board-shake { animation: cv-board-shake 0.35s ease; }
+      `}</style>
+
+      <div className={`w-full max-w-[560px] ${shaking ? 'cv-board-shake' : ''}`}>
         <Chessboard
           position={snapshot.fen}
           onPieceDrop={handlePieceDrop}
+          onPieceDragBegin={handlePieceDragBegin}
+          onSquareClick={handleSquareClick}
           boardOrientation={myColor}
-          customSquareStyles={lastMoveSquares}
+          customSquareStyles={mergedSquareStyles}
           arePiecesDraggable={isMyTurn}
+          animationDuration={250}
         />
       </div>
 
@@ -137,7 +269,7 @@ export default function ChessBoardPanel({ snapshot, isLoggedIn, onMove }: Props)
         </span>
         {isMyTurn && (
           <span className="text-[10px] uppercase tracking-wide text-[var(--color-success-fg)]">
-            Your turn
+            {inCheck ? 'Your turn — get out of check!' : 'Your turn'}
           </span>
         )}
       </div>

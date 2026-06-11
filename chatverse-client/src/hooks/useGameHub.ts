@@ -276,6 +276,14 @@ export function useGameHub() {
         const slug = useGameStore.getState().activeSlug
         if (slug) {
           try { sessionStorage.removeItem(`cv:seat-pending:${slug}`) } catch { /* private mode */ }
+          // CRITICAL: removeItem does NOT fire a 'storage' event in the
+          // same tab, so PlayRoomPage's seatPending state never updated —
+          // the "Request pending" pill kept spinning forever after the
+          // host approved. Dispatch the same custom event SeatRequestAck
+          // uses so the pill clears reactively.
+          window.dispatchEvent(new CustomEvent('cv:seat-pending-changed', {
+            detail: { slug, pending: false },
+          }))
         }
       }
     })

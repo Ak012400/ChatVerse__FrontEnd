@@ -50,7 +50,13 @@ export default function PlayRoomPage() {
   const navigate = useNavigate()
   const { showToast } = useToastStore()
   const me = useAuthStore((s) => s.user)
-  const isLoggedIn = !!me && !me.isGuest
+  // STRICT equality on isGuest === false (not just falsy): a stale
+  // persisted authStore user from an older schema can lack the isGuest
+  // field entirely (undefined), and `!undefined` wrongly counted those
+  // as registered — guests were seeing the "Request to play" button.
+  // Registered flows (Login / OTP / Google) always set isGuest: false
+  // explicitly, so strict comparison is safe.
+  const isLoggedIn = !!me && me.isGuest === false
 
   const {
     hubState, joinRoom, leaveRoom, sendChat,
