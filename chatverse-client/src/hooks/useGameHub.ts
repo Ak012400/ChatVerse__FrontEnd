@@ -284,6 +284,7 @@ export function useGameHub() {
           window.dispatchEvent(new CustomEvent('cv:seat-pending-changed', {
             detail: { slug, pending: false },
           }))
+        }
       }
     })
     hub.on('PendingRequests', (list: JoinRequestDto[]) => {
