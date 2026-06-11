@@ -168,6 +168,31 @@ export function useGameHub() {
       useGameStore.getState().pushCheer(c.username ?? 'someone', c.emoji)
     })
 
+    // Quiz director mode: raised hands + resolutions + my own ack.
+    hub.on('QuizSeatRequested', (p: { userId: string; username: string }) => {
+      if (!p?.userId) return
+      useGameStore.getState().applySeatRequested(p.userId)
+    })
+
+    hub.on('QuizSeatResolved', (p: { userId: string }) => {
+      if (!p?.userId) return
+      useGameStore.getState().applySeatResolved(p.userId)
+    })
+
+    hub.on('QuizSeatAck', ({ accepted, reason }: { accepted: boolean; reason?: string }) => {
+      if (accepted) {
+        useGameStore.getState().setMySeatRequested(true)
+        showToast({
+          type: 'success',
+          title: 'Hand raised 🙋',
+          message: reason ?? 'The host has been notified.',
+          duration: 2500,
+        })
+      } else if (reason) {
+        showToast({ type: 'warning', title: 'Cannot request seat', message: reason, duration: 2500 })
+      }
+    })
+
     // Host triggered a rematch — the room is back in Lobby with fresh
     // scores. JoinRoom is idempotent and hands us a clean RoomSnapshot,
     // which resyncs every client's UI in one shot.
@@ -626,6 +651,13 @@ export function useGameHub() {
     await connectionRef.current!.invoke('SetQuizRole', slug, targetUserId, role)
   }, [ensureConnected])
 
+  /** Quiz v2 director mode: spectator raises a hand for a seat.
+   *  Ack arrives via the QuizSeatAck event. */
+  const requestQuizSeat = useCallback(async (slug: string) => {
+    await ensureConnected()
+    await connectionRef.current!.invoke('RequestQuizSeat', slug)
+  }, [ensureConnected])
+
   /** Quiz v2: fire a cheer emoji at the room. Fire-and-forget — a lost
    *  cheer is not worth an error dialog. */
   const sendCheer = useCallback(async (slug: string, emoji: string) => {
@@ -787,6 +819,7 @@ export function useGameHub() {
     rematchQuiz,
     sendCheer,
     setQuizRole,
+    requestQuizSeat,
     submitAnswer,
     sendChat,
     submitReaction,

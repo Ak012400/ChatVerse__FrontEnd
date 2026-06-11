@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft, Play, Users, Eye, Crown, Brain, Loader2,
-  PhoneOff, Trophy, Copy, Check,
+  PhoneOff, Trophy, Copy, Check, X, Hand,
 } from 'lucide-react'
 import { gamesApi } from '../../api'
 import { useGameHub, HubNotReadyError } from '../../hooks/useGameHub'
@@ -85,6 +85,7 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
   const {
     hubState, joinRoom, leaveRoom, startQuiz, submitAnswer, sendChat,
     submitReaction, rematchQuiz, sendCheer, setQuizRole,
+    requestQuizSeat, endRoom,
   } = useGameHub()
 
   const snapshot = useGameStore((s) => s.snapshot)
@@ -99,6 +100,22 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
   const answeredUserIds = useGameStore((s) => s.answeredUserIds)
   const cheers = useGameStore((s) => s.cheers)
   const expireCheer = useGameStore((s) => s.expireCheer)
+  const seatRequestUserIds = useGameStore((s) => s.seatRequestUserIds)
+  const mySeatRequested = useGameStore((s) => s.mySeatRequested)
+
+  // Host ended the room (or idle-close fired) — bounce everyone out.
+  // The hub's RoomClosed handler dispatches this window event.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { slug?: string } | undefined
+      if (!detail?.slug || detail.slug !== slug) return
+      if (onLeave) onLeave()
+      else navigate('/games')
+    }
+    window.addEventListener('cv:room-closed', handler as EventListener)
+    return () => window.removeEventListener('cv:room-closed', handler as EventListener)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug])
   // Jokes-mode state — null/empty unless room.type === 'Jokes'
   const currentJoke = useGameStore((s) => s.currentJoke)
   const jokeCounts = useGameStore((s) => s.jokeCounts)
@@ -371,6 +388,13 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
         viewerRole={viewerRole}
         hubState={hubState}
         onHangup={handleHangup}
+        isHost={isHost}
+        onEndRoom={() => {
+          // Confirm — closing kicks EVERYONE out, any time, any state.
+          if (window.confirm('Close this room for everyone?')) {
+            endRoom(slug).catch(() => { /* Error event toasts the reason */ })
+          }
+        }}
       />
 
       <div className="flex-1 overflow-hidden">
@@ -386,6 +410,12 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
             onSendChat={(t) => sendChat(slug, t)}
             onSetRole={(uid, role) => setQuizRole(slug, uid, role).catch(() => {
               /* server Error event toasts the reason */
+            })}
+            seatRequestUserIds={seatRequestUserIds}
+            canRequestSeat={!isHost && viewerRole === 'Spectator'}
+            mySeatRequested={mySeatRequested}
+            onRequestSeat={() => requestQuizSeat(slug).catch(() => {
+              /* QuizSeatAck / Error event toasts the reason */
             })}
           />
         )}
@@ -431,6 +461,12 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
             onSetRole={(uid, role) => setQuizRole(slug, uid, role).catch(() => {
               /* server Error event toasts the reason */
             })}
+            seatRequestUserIds={seatRequestUserIds}
+            canRequestSeat={!isHost && viewerRole === 'Spectator'}
+            mySeatRequested={mySeatRequested}
+            onRequestSeat={() => requestQuizSeat(slug).catch(() => {
+              /* QuizSeatAck / Error event toasts the reason */
+            })}
           />
         )}
 
@@ -475,7 +511,7 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
 // ============================================================
 
 function RoomHeader({
-  roomName, roomSlug, status, viewerRole, hubState, onHangup,
+  roomName, roomSlug, status, viewerRole, hubState, onHangup, isHost, onEndRoom,
 }: {
   roomName: string
   roomSlug: string
@@ -483,6 +519,9 @@ function RoomHeader({
   viewerRole: 'Player' | 'Spectator' | null
   hubState: 'disconnected' | 'connecting' | 'connected' | 'failed'
   onHangup: () => void
+  /** Host-only: close the room for EVERYONE, any time, any state. */
+  isHost?: boolean
+  onEndRoom?: () => void
 }) {
   const [copied, setCopied] = useState(false)
   const copyLink = async () => {
@@ -522,6 +561,18 @@ function RoomHeader({
           {copied ? <Check size={11} /> : <Copy size={11} />}
           <span className="hidden sm:inline">{roomSlug}</span>
         </button>
+        {/* Host's nuclear option — always visible to the owner so the
+            room is closeable from Lobby, mid-game, or Ended. */}
+        {isHost && onEndRoom && (
+          <button
+            onClick={onEndRoom}
+            className="h-8 px-3 rounded-md text-xs bg-[var(--color-surface-2)] hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger-fg)] text-[var(--color-fg-dim)] inline-flex items-center gap-1.5 transition-colors"
+            title="Close this room for everyone"
+          >
+            <X size={12} />
+            End room
+          </button>
+        )}
         <button
           onClick={onHangup}
           className="h-8 px-3 rounded-md text-xs bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-white inline-flex items-center gap-1.5 transition-colors"
@@ -540,6 +591,7 @@ function RoomHeader({
 
 function LobbyView({
   participants, maxPlayers, isHost, hostUsername, hubState, onStart, chat, onSendChat, onSetRole,
+  seatRequestUserIds, canRequestSeat, mySeatRequested, onRequestSeat,
 }: {
   participants: ReturnType<typeof useGameStore.getState>['participants']
   maxPlayers: number
@@ -551,6 +603,10 @@ function LobbyView({
   onSendChat: (t: string) => void
   /** Director mode: host seats/unseats. Undefined for non-hosts. */
   onSetRole?: (userId: string, role: 'Player' | 'Spectator') => void
+  seatRequestUserIds?: string[]
+  canRequestSeat?: boolean
+  mySeatRequested?: boolean
+  onRequestSeat?: () => void
 }) {
   const players = participants.filter((p) => p.role === 'Player')
   const spectators = participants.filter((p) => p.role === 'Spectator')
@@ -598,10 +654,27 @@ function LobbyView({
           )}
         </div>
 
-        {/* Director-mode hint — spectators know what they're waiting on */}
-        {!isHost && (
+        {/* Director-mode: spectator raises a hand instead of begging
+            in chat. Host sees the 🙋 badge + can one-click seat them. */}
+        {canRequestSeat && onRequestSeat && (
+          <div className="mt-4">
+            {mySeatRequested ? (
+              <span className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md text-xs bg-[var(--color-warning-soft)] text-[var(--color-warning-fg)] cursor-default">
+                <Hand size={13} /> Hand raised — waiting for {hostUsername}
+              </span>
+            ) : (
+              <button
+                onClick={onRequestSeat}
+                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md text-xs bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white transition-colors"
+              >
+                <Hand size={13} /> Request a seat
+              </button>
+            )}
+          </div>
+        )}
+        {!isHost && !canRequestSeat && (
           <p className="mt-3 text-[11px] text-center text-[var(--color-fg-mute)]">
-            {hostUsername} picks who plays — ask in chat for a seat!
+            {hostUsername} picks who plays.
           </p>
         )}
 
@@ -626,24 +699,32 @@ function LobbyView({
           <ParticipantList
             title="Spectators"
             icon={<Eye size={13} />}
-            entries={spectators}
-            action={isHost && onSetRole
-              ? (p) => (
-                <button
-                  onClick={() => seatsFree && onSetRole(p.userId, 'Player')}
-                  disabled={!seatsFree}
-                  className={[
-                    'ml-auto text-[10px] px-1.5 py-0.5 rounded transition-colors',
-                    seatsFree
-                      ? 'bg-[var(--color-accent-soft)] hover:opacity-80 text-[var(--color-accent-fg)]'
-                      : 'bg-[var(--color-surface-2)] text-[var(--color-fg-faint)] cursor-not-allowed',
-                  ].join(' ')}
-                  title={seatsFree ? 'Seat as player' : 'All seats full'}
-                >
-                  + Seat
-                </button>
-              )
-              : undefined}
+            entries={[...spectators].sort((a, b) =>
+              // Raised hands float to the top of the host's list.
+              Number((seatRequestUserIds ?? []).includes(b.userId)) -
+              Number((seatRequestUserIds ?? []).includes(a.userId)))}
+            action={(p) => (
+              <>
+                {(seatRequestUserIds ?? []).includes(p.userId) && (
+                  <span title="Asked for a seat" className="text-[11px]">🙋</span>
+                )}
+                {isHost && onSetRole && (
+                  <button
+                    onClick={() => seatsFree && onSetRole(p.userId, 'Player')}
+                    disabled={!seatsFree}
+                    className={[
+                      'ml-auto text-[10px] px-1.5 py-0.5 rounded transition-colors',
+                      seatsFree
+                        ? 'bg-[var(--color-accent-soft)] hover:opacity-80 text-[var(--color-accent-fg)]'
+                        : 'bg-[var(--color-surface-2)] text-[var(--color-fg-faint)] cursor-not-allowed',
+                    ].join(' ')}
+                    title={seatsFree ? 'Seat as player' : 'All seats full'}
+                  >
+                    + Seat
+                  </button>
+                )}
+              </>
+            )}
           />
         </div>
       </section>
@@ -709,6 +790,7 @@ function PlayingView({
   scoreboard, maxPlayers, chat, onAnswer, onSendChat, compactMode,
   participants, answeredUserIds, cheers, onCheer, onExpireCheer,
   isHost, onSetRole,
+  seatRequestUserIds, canRequestSeat, mySeatRequested, onRequestSeat,
 }: {
   question: NonNullable<ReturnType<typeof useGameStore.getState>['currentQuestion']>
   reveal: ReturnType<typeof useGameStore.getState>['lastReveal']
@@ -728,6 +810,10 @@ function PlayingView({
   onExpireCheer: (id: number) => void
   isHost?: boolean
   onSetRole?: (userId: string, role: 'Player' | 'Spectator') => void
+  seatRequestUserIds?: string[]
+  canRequestSeat?: boolean
+  mySeatRequested?: boolean
+  onRequestSeat?: () => void
 }) {
   // Compact mode = embedded inside the ChatPage. The host already has
   // a full chat panel alongside, so we drop our commentary rail and
@@ -756,6 +842,24 @@ function PlayingView({
         {/* Anyone can hype — spectators especially. Players see it too
             (cheering your rival's wrong answer is half the fun). */}
         <CheerBar onCheer={onCheer} />
+        {/* Mid-game hand-raise — host can seat them from the side panel
+            without leaving the question. */}
+        {canRequestSeat && onRequestSeat && (
+          <div className="flex justify-center mt-2">
+            {mySeatRequested ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--color-warning-fg)]">
+                <Hand size={11} /> Hand raised — host will seat you
+              </span>
+            ) : (
+              <button
+                onClick={onRequestSeat}
+                className="inline-flex items-center gap-1.5 text-[11px] text-[var(--color-accent-fg)] hover:underline"
+              >
+                <Hand size={11} /> Want to play? Request a seat
+              </button>
+            )}
+          </div>
+        )}
         <CheerOverlay cheers={cheers} onExpire={onExpireCheer} />
       </section>
       <aside className="overflow-hidden h-full flex flex-col gap-3">
@@ -770,6 +874,7 @@ function PlayingView({
             participants={participants}
             maxPlayers={maxPlayers}
             onSetRole={onSetRole}
+            seatRequestUserIds={seatRequestUserIds ?? []}
           />
         )}
       </aside>
@@ -1002,14 +1107,20 @@ function AnsweredChips({
 /** Director mode mid-game panel — compact spectator list with
  *  "+ Seat" buttons (and seated players with "Unseat"). Host only. */
 function HostAudiencePanel({
-  participants, maxPlayers, onSetRole,
+  participants, maxPlayers, onSetRole, seatRequestUserIds = [],
 }: {
   participants: ReturnType<typeof useGameStore.getState>['participants']
   maxPlayers: number
   onSetRole: (userId: string, role: 'Player' | 'Spectator') => void
+  seatRequestUserIds?: string[]
 }) {
   const players = participants.filter((p) => p.role === 'Player')
-  const spectators = participants.filter((p) => p.role === 'Spectator')
+  // Raised hands first — those are the people actually waiting.
+  const spectators = participants
+    .filter((p) => p.role === 'Spectator')
+    .sort((a, b) =>
+      Number(seatRequestUserIds.includes(b.userId)) -
+      Number(seatRequestUserIds.includes(a.userId)))
   const seatsFree = players.length < maxPlayers
   if (spectators.length === 0 && players.length === 0) return null
   return (
@@ -1020,7 +1131,12 @@ function HostAudiencePanel({
       <ul className="space-y-1">
         {spectators.map((p) => (
           <li key={p.userId} className="flex items-center gap-2 text-xs">
-            <span className="truncate flex-1">{p.username}</span>
+            <span className="truncate flex-1">
+              {p.username}
+              {seatRequestUserIds.includes(p.userId) && (
+                <span title="Asked for a seat" className="ml-1">🙋</span>
+              )}
+            </span>
             <button
               onClick={() => seatsFree && onSetRole(p.userId, 'Player')}
               disabled={!seatsFree}
