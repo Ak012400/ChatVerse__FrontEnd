@@ -85,6 +85,12 @@ interface GameStoreState {
    *  current question? Lets us grey out the option buttons without
    *  waiting for an event echo. Cleared when a new question starts. */
   hasAnsweredCurrent: boolean
+  /** Quiz v2: userIds who have locked in an answer for the CURRENT
+   *  question (live indicator chips). Cleared on each QuestionPushed. */
+  answeredUserIds: string[]
+  /** Quiz v2: ephemeral floating cheers. Each entry auto-expires via
+   *  the component's timer; capped to avoid unbounded growth. */
+  cheers: { id: number; username: string; emoji: string }[]
   /** The choice the viewer made, used for the "your pick" highlight. */
   myChoiceIndex: number | null
 
@@ -140,6 +146,12 @@ interface GameStoreState {
   /** Roll back the optimistic markAnswered when the hub invoke failed —
    *  re-enables the option buttons so the user can retry (#148). */
   rollbackAnswer: () => void
+  /** Quiz v2: fold a PlayerAnswered event into the indicator list. */
+  applyPlayerAnswered: (userId: string) => void
+  /** Quiz v2: push a floating cheer (auto-capped at 8 visible). */
+  pushCheer: (username: string, emoji: string) => void
+  /** Quiz v2: drop an expired cheer by id. */
+  expireCheer: (id: number) => void
 
   // ─── JOKES MODE ACTIONS ─────────────────────────────────────────
   applyJokePushed: (j: JokePushed) => void
@@ -203,6 +215,8 @@ export const useGameStore = create<GameStoreState>((set) => ({
   chat: [],
   hasAnsweredCurrent: false,
   myChoiceIndex: null,
+  answeredUserIds: [],
+  cheers: [],
   currentJoke: null,
   jokeCounts: EMPTY_JOKE_COUNTS,
   lastJokeReveal: null,
@@ -228,6 +242,7 @@ export const useGameStore = create<GameStoreState>((set) => ({
     // QuizSession.SubmitMoveAsync). Treat as answered to grey out buttons.
     hasAnsweredCurrent: snap.currentQuestion !== null,
     myChoiceIndex: null,
+    answeredUserIds: [],
     lastReveal: null,
   }),
 
@@ -240,6 +255,7 @@ export const useGameStore = create<GameStoreState>((set) => ({
     lastReveal: null,
     hasAnsweredCurrent: false,
     myChoiceIndex: null,
+    answeredUserIds: [],
   }),
 
   applyQuestionRevealed: (reveal, scoreboard) => set({
@@ -286,6 +302,23 @@ export const useGameStore = create<GameStoreState>((set) => ({
     hasAnsweredCurrent: false,
     myChoiceIndex: null,
   }),
+
+  applyPlayerAnswered: (userId) => set((s) => ({
+    answeredUserIds: s.answeredUserIds.includes(userId)
+      ? s.answeredUserIds
+      : [...s.answeredUserIds, userId],
+  })),
+
+  pushCheer: (username, emoji) => set((s) => {
+    const next = [...s.cheers, { id: Date.now() + Math.random(), username, emoji }]
+    // Cap visible cheers — a hype-spam burst shouldn't grow unbounded.
+    if (next.length > 8) next.splice(0, next.length - 8)
+    return { cheers: next }
+  }),
+
+  expireCheer: (id) => set((s) => ({
+    cheers: s.cheers.filter((c) => c.id !== id),
+  })),
 
   // ─── JOKES MODE ────────────────────────────────────────────────
   applyJokePushed: (j) => set({
@@ -401,6 +434,8 @@ export const useGameStore = create<GameStoreState>((set) => ({
     chat: [],
     hasAnsweredCurrent: false,
     myChoiceIndex: null,
+    answeredUserIds: [],
+    cheers: [],
     currentJoke: null,
     jokeCounts: EMPTY_JOKE_COUNTS,
     lastJokeReveal: null,

@@ -13,6 +13,11 @@ export type GameStatus = 'Lobby' | 'Playing' | 'Ended'
 
 export type QuizDifficulty = 'Any' | 'Easy' | 'Medium' | 'Hard'
 
+/** Quiz v2 scoring rules. Speed = v1 (100 + speed bonus per correct).
+ *  FirstCorrect = buzzer mode — only the first correct answer scores,
+ *  flat +1. */
+export type ScoringMode = 'Speed' | 'FirstCorrect'
+
 export type QuizCategory =
   | 'Any' | 'General' | 'Books' | 'Film' | 'Music'
   | 'Sports' | 'Geography' | 'History' | 'Politics'
@@ -35,6 +40,8 @@ export interface CreateGameRoomRequest {
   /** Slug of the chat room this game was launched from. Discovery
    *  panel filters on this so each themed room sees only its games. */
   sourceChatSlug?: string
+  /** Quiz v2 scoring rules. Backend defaults to 'Speed' if omitted. */
+  scoringMode?: ScoringMode
 }
 
 export interface JoinGameRoomRequest {
@@ -98,6 +105,26 @@ export interface ScoreEntry {
   correctAnswers: number
   answeredCount: number
   averageResponseMs: number
+  /** Quiz v2: consecutive-correct run; 3+ shows the 🔥 badge.
+   *  Optional — older backend payloads omit it. */
+  streak?: number
+}
+
+// ─── Quiz v2 live events ────────────────────────────────────────
+
+/** Someone locked in an answer (count only — no choice leak). */
+export interface PlayerAnsweredPayload {
+  userId: string
+  username: string
+  answeredCount: number
+  totalPlayers: number
+}
+
+/** Spectator cheer — ephemeral, floats over the player panel. */
+export interface CheerPayload {
+  userId: string
+  username: string
+  emoji: string
 }
 
 export interface GameParticipant {
