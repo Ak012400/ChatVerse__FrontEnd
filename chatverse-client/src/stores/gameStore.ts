@@ -277,9 +277,18 @@ export const useGameStore = create<GameStoreState>((set) => ({
   applyParticipantJoined: (p) => set((s) => {
     // Dedup by userId — a refresh might fire Joined for someone already
     // in the list. Replace rather than push so the existing IsOnline
-    // toggle updates.
+    // toggle updates. ParticipantJoined ALSO doubles as the director-
+    // mode role-change event (host seated/unseated someone), so when
+    // it's about ME, sync my room-level viewerRole too — that's what
+    // gates the answer buttons.
     const without = s.participants.filter((x) => x.userId !== p.userId)
-    return { participants: [...without, p] }
+    const myId = useAuthStore.getState().user?.userId ?? null
+    return {
+      participants: [...without, p],
+      snapshot: s.snapshot && p.userId === myId
+        ? { ...s.snapshot, viewerRole: p.role }
+        : s.snapshot,
+    }
   }),
 
   applyParticipantLeft: (userId) => set((s) => ({

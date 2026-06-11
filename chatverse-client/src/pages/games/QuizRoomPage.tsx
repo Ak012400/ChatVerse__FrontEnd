@@ -84,7 +84,7 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
   const me = useAuthStore((s) => s.user)
   const {
     hubState, joinRoom, leaveRoom, startQuiz, submitAnswer, sendChat,
-    submitReaction, rematchQuiz, sendCheer,
+    submitReaction, rematchQuiz, sendCheer, setQuizRole,
   } = useGameHub()
 
   const snapshot = useGameStore((s) => s.snapshot)
@@ -384,6 +384,9 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
             onStart={handleStart}
             chat={chat}
             onSendChat={(t) => sendChat(slug, t)}
+            onSetRole={(uid, role) => setQuizRole(slug, uid, role).catch(() => {
+              /* server Error event toasts the reason */
+            })}
           />
         )}
 
@@ -424,6 +427,10 @@ export default function QuizRoomPage({ slug: slugProp, onLeave, compactMode }: Q
             cheers={cheers}
             onCheer={(emoji) => sendCheer(slug, emoji).catch(() => { /* fire-and-forget */ })}
             onExpireCheer={expireCheer}
+            isHost={isHost}
+            onSetRole={(uid, role) => setQuizRole(slug, uid, role).catch(() => {
+              /* server Error event toasts the reason */
+            })}
           />
         )}
 
@@ -532,7 +539,7 @@ function RoomHeader({
 // ============================================================
 
 function LobbyView({
-  participants, maxPlayers, isHost, hostUsername, hubState, onStart, chat, onSendChat,
+  participants, maxPlayers, isHost, hostUsername, hubState, onStart, chat, onSendChat, onSetRole,
 }: {
   participants: ReturnType<typeof useGameStore.getState>['participants']
   maxPlayers: number
@@ -542,9 +549,12 @@ function LobbyView({
   onStart: () => void
   chat: ReturnType<typeof useGameStore.getState>['chat']
   onSendChat: (t: string) => void
+  /** Director mode: host seats/unseats. Undefined for non-hosts. */
+  onSetRole?: (userId: string, role: 'Player' | 'Spectator') => void
 }) {
   const players = participants.filter((p) => p.role === 'Player')
   const spectators = participants.filter((p) => p.role === 'Spectator')
+  const seatsFree = players.length < maxPlayers
 
   // Start button gates on TWO conditions:
   //   1. Hub must be live (else invoke would 404 with the cryptic
@@ -588,17 +598,52 @@ function LobbyView({
           )}
         </div>
 
+        {/* Director-mode hint — spectators know what they're waiting on */}
+        {!isHost && (
+          <p className="mt-3 text-[11px] text-center text-[var(--color-fg-mute)]">
+            {hostUsername} picks who plays — ask in chat for a seat!
+          </p>
+        )}
+
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <ParticipantList
             title="Players"
             icon={<Users size={13} />}
             entries={players}
             totalSlots={maxPlayers}
+            action={isHost && onSetRole
+              ? (p) => (
+                <button
+                  onClick={() => onSetRole(p.userId, 'Spectator')}
+                  className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger-fg)] text-[var(--color-fg-mute)] transition-colors"
+                  title="Move to spectators"
+                >
+                  Unseat
+                </button>
+              )
+              : undefined}
           />
           <ParticipantList
             title="Spectators"
             icon={<Eye size={13} />}
             entries={spectators}
+            action={isHost && onSetRole
+              ? (p) => (
+                <button
+                  onClick={() => seatsFree && onSetRole(p.userId, 'Player')}
+                  disabled={!seatsFree}
+                  className={[
+                    'ml-auto text-[10px] px-1.5 py-0.5 rounded transition-colors',
+                    seatsFree
+                      ? 'bg-[var(--color-accent-soft)] hover:opacity-80 text-[var(--color-accent-fg)]'
+                      : 'bg-[var(--color-surface-2)] text-[var(--color-fg-faint)] cursor-not-allowed',
+                  ].join(' ')}
+                  title={seatsFree ? 'Seat as player' : 'All seats full'}
+                >
+                  + Seat
+                </button>
+              )
+              : undefined}
           />
         </div>
       </section>
@@ -611,12 +656,14 @@ function LobbyView({
 }
 
 function ParticipantList({
-  title, icon, entries, totalSlots,
+  title, icon, entries, totalSlots, action,
 }: {
   title: string
   icon: React.ReactNode
   entries: ReturnType<typeof useGameStore.getState>['participants']
   totalSlots?: number
+  /** Director mode: optional per-row action button (host only). */
+  action?: (p: ReturnType<typeof useGameStore.getState>['participants'][number]) => React.ReactNode
 }) {
   const empties = Math.max(0, (totalSlots ?? entries.length) - entries.length)
   return (
@@ -634,6 +681,7 @@ function ParticipantList({
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-success)]" />
             <span>{p.username}</span>
             {p.isHost && <Crown size={10} className="text-[var(--color-warning-fg)]" />}
+            {action?.(p)}
           </li>
         ))}
         {empties > 0 && Array.from({ length: empties }).map((_, i) => (
@@ -660,6 +708,7 @@ function PlayingView({
   question, reveal, viewerRole, hasAnswered, myChoiceIndex,
   scoreboard, maxPlayers, chat, onAnswer, onSendChat, compactMode,
   participants, answeredUserIds, cheers, onCheer, onExpireCheer,
+  isHost, onSetRole,
 }: {
   question: NonNullable<ReturnType<typeof useGameStore.getState>['currentQuestion']>
   reveal: ReturnType<typeof useGameStore.getState>['lastReveal']
@@ -677,6 +726,8 @@ function PlayingView({
   cheers: ReturnType<typeof useGameStore.getState>['cheers']
   onCheer: (emoji: string) => void
   onExpireCheer: (id: number) => void
+  isHost?: boolean
+  onSetRole?: (userId: string, role: 'Player' | 'Spectator') => void
 }) {
   // Compact mode = embedded inside the ChatPage. The host already has
   // a full chat panel alongside, so we drop our commentary rail and
@@ -707,8 +758,20 @@ function PlayingView({
         <CheerBar onCheer={onCheer} />
         <CheerOverlay cheers={cheers} onExpire={onExpireCheer} />
       </section>
-      <aside className="overflow-hidden h-full">
-        <Scoreboard entries={scoreboard} totalSlots={maxPlayers} compact={compactMode} />
+      <aside className="overflow-hidden h-full flex flex-col gap-3">
+        <div className="flex-1 min-h-0">
+          <Scoreboard entries={scoreboard} totalSlots={maxPlayers} compact={compactMode} />
+        </div>
+        {/* Director mode mid-game: host can seat a late spectator
+            without waiting for the lobby — they start at 0 and can
+            answer from the next question. */}
+        {isHost && onSetRole && (
+          <HostAudiencePanel
+            participants={participants}
+            maxPlayers={maxPlayers}
+            onSetRole={onSetRole}
+          />
+        )}
       </aside>
       {!compactMode && (
         <aside className="overflow-hidden h-full hidden lg:block">
@@ -932,6 +995,58 @@ function AnsweredChips({
           </span>
         )
       })}
+    </div>
+  )
+}
+
+/** Director mode mid-game panel — compact spectator list with
+ *  "+ Seat" buttons (and seated players with "Unseat"). Host only. */
+function HostAudiencePanel({
+  participants, maxPlayers, onSetRole,
+}: {
+  participants: ReturnType<typeof useGameStore.getState>['participants']
+  maxPlayers: number
+  onSetRole: (userId: string, role: 'Player' | 'Spectator') => void
+}) {
+  const players = participants.filter((p) => p.role === 'Player')
+  const spectators = participants.filter((p) => p.role === 'Spectator')
+  const seatsFree = players.length < maxPlayers
+  if (spectators.length === 0 && players.length === 0) return null
+  return (
+    <div className="shrink-0 bg-[var(--color-surface-1)] border border-[var(--color-line)] rounded-md p-3 max-h-44 overflow-y-auto">
+      <p className="text-[10px] uppercase tracking-wide text-[var(--color-fg-mute)] mb-2">
+        Seats ({players.length}/{maxPlayers})
+      </p>
+      <ul className="space-y-1">
+        {spectators.map((p) => (
+          <li key={p.userId} className="flex items-center gap-2 text-xs">
+            <span className="truncate flex-1">{p.username}</span>
+            <button
+              onClick={() => seatsFree && onSetRole(p.userId, 'Player')}
+              disabled={!seatsFree}
+              className={[
+                'text-[10px] px-1.5 py-0.5 rounded transition-colors',
+                seatsFree
+                  ? 'bg-[var(--color-accent-soft)] hover:opacity-80 text-[var(--color-accent-fg)]'
+                  : 'bg-[var(--color-surface-2)] text-[var(--color-fg-faint)] cursor-not-allowed',
+              ].join(' ')}
+            >
+              + Seat
+            </button>
+          </li>
+        ))}
+        {players.map((p) => (
+          <li key={p.userId} className="flex items-center gap-2 text-xs opacity-75">
+            <span className="truncate flex-1">{p.username} <span className="text-[var(--color-fg-mute)]">(playing)</span></span>
+            <button
+              onClick={() => onSetRole(p.userId, 'Spectator')}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--color-surface-2)] hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger-fg)] text-[var(--color-fg-mute)] transition-colors"
+            >
+              Unseat
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
