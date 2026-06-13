@@ -22,6 +22,9 @@ import IconButton from '../../components/ui/IconButton'
 import TranslateButton from '../../components/chat/TranslateButton'
 import { SpotifyEmbed } from '../../components/chat/SpotifyEmbed'
 import { SpotifyJukeboxPanel } from '../../components/chat/SpotifyJukeboxPanel'
+import { MessageActions } from '../../components/chat/MessageActions'
+import { MessageReactions } from '../../components/chat/MessageReactions'
+import { ChatConnectingLoader } from '../../components/chat/ChatConnectingLoader'
 import { extractSpotifyEmbed } from '../../lib/spotifyExtract'
 import { useTranslation, detectLanguage, preferredLanguageCode } from '../../hooks/useTranslation'
 
@@ -39,7 +42,7 @@ export default function ChatPage() {
   const dismissAmbient = useChatStore((s) => s.dismissAmbient)
   const {
     joinRoom, leaveRoom, sendTyping, sendMessage, isConnected,
-    submitRollingQuizAnswer, getRollingQuizState,
+    submitRollingQuizAnswer, getRollingQuizState, reactToMessage,
   } = useChatHub()
 
   const [input, setInput] = useState('')
@@ -488,7 +491,31 @@ export default function ChatPage() {
                       </p>
                     )}
 
-                    <MessageBubble msg={msg} isMine={isMine} />
+                    {/* Relative wrapper so the hover-react toolbar can
+                        sit on top of the bubble without affecting flow. */}
+                    <div className="relative">
+                      <MessageBubble msg={msg} isMine={isMine} />
+                      {/* Hover toolbar — quick reactions + full emoji
+                          picker. Hidden on flagged/blocked messages so
+                          we don't invite engagement with moderated content. */}
+                      {slug && msg.modStatus !== 'blocked' && msg.modStatus !== 'flagged' && (
+                        <MessageActions
+                          alignRight={isMine}
+                          onReact={(emoji) => reactToMessage(slug, msg.id, emoji)}
+                        />
+                      )}
+                    </div>
+
+                    {/* Persistent reaction chips — server pushes the
+                        authoritative map after each toggle, so every
+                        client renders the same counts. */}
+                    {slug && (
+                      <MessageReactions
+                        reactions={msg.reactions}
+                        alignRight={isMine}
+                        onToggle={(emoji) => reactToMessage(slug, msg.id, emoji)}
+                      />
+                    )}
 
                     {/* Translate trigger — only for plain text messages
                         whose language differs from the reader's. Skip
@@ -559,73 +586,81 @@ export default function ChatPage() {
           </div>
         )}
 
-        <form onSubmit={handleSend} className="flex items-center gap-1.5 sm:gap-2">
-          <IconButton
-            type="button"
-            variant="subtle"
-            size="sm"
-            aria-label="Pick emoji"
-            onClick={() => setShowEmoji((s) => !s)}
-            active={showEmoji}
-            className="sm:w-9 sm:h-9 shrink-0"
-          >
-            <Smile size={15} />
-          </IconButton>
+        {/* Composer — when SignalR is still mid-handshake we swap the
+            input row for a clear "Connecting…" loader instead of leaving
+            everything visibly disabled. Render disconnected pill bar
+            has the same height (h-9) so there's no jank when the real
+            input fades in. */}
+        {!isConnected() ? (
+          <ChatConnectingLoader />
+        ) : (
+          <form onSubmit={handleSend} className="flex items-center gap-1.5 sm:gap-2">
+            <IconButton
+              type="button"
+              variant="subtle"
+              size="sm"
+              aria-label="Pick emoji"
+              onClick={() => setShowEmoji((s) => !s)}
+              active={showEmoji}
+              className="sm:w-9 sm:h-9 shrink-0"
+            >
+              <Smile size={15} />
+            </IconButton>
 
-          <IconButton
-            type="button"
-            variant="subtle"
-            size="sm"
-            aria-label="Attach image"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isImageScanning || !isConnected()}
-            className="sm:w-9 sm:h-9 shrink-0"
-          >
-            {isImageScanning ? (
-              <span
-                className="w-3.5 h-3.5 rounded-full border-[1.5px] border-current border-t-transparent"
-                style={{ animation: 'spin 0.7s linear infinite' }}
-              />
-            ) : (
-              <Paperclip size={16} />
-            )}
-          </IconButton>
-          <input
-            type="file"
-            accept="image/*"
-            ref={fileInputRef}
-            className="hidden"
-            onChange={handleImageUpload}
-          />
+            <IconButton
+              type="button"
+              variant="subtle"
+              size="sm"
+              aria-label="Attach image"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isImageScanning}
+              className="sm:w-9 sm:h-9 shrink-0"
+            >
+              {isImageScanning ? (
+                <span
+                  className="w-3.5 h-3.5 rounded-full border-[1.5px] border-current border-t-transparent"
+                  style={{ animation: 'spin 0.7s linear infinite' }}
+                />
+              ) : (
+                <Paperclip size={16} />
+              )}
+            </IconButton>
+            <input
+              type="file"
+              accept="image/*"
+              ref={fileInputRef}
+              className="hidden"
+              onChange={handleImageUpload}
+            />
 
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value)
-              if (slug) sendTyping(slug)
-            }}
-            placeholder={`Message #${slug}`}
-            disabled={!isConnected()}
-            className="flex-1 h-9 px-3 rounded-md bg-[var(--color-surface-1)] border border-[var(--color-line)]
-              text-sm text-[var(--color-fg)] placeholder:text-[var(--color-fg-mute)]
-              focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)]
-              transition-colors"
-          />
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value)
+                if (slug) sendTyping(slug)
+              }}
+              placeholder={`Message #${slug}`}
+              className="flex-1 h-9 px-3 rounded-md bg-[var(--color-surface-1)] border border-[var(--color-line)]
+                text-sm text-[var(--color-fg)] placeholder:text-[var(--color-fg-mute)]
+                focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)]
+                transition-colors"
+            />
 
-          <button
-            type="submit"
-            disabled={!input.trim() || isSending || !isConnected()}
-            className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3.5 rounded-md bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)]
-              text-white text-sm font-medium
-              transition-[background-color,transform] duration-150 active:scale-[0.92]
-              disabled:opacity-40 disabled:cursor-not-allowed
-              inline-flex items-center justify-center gap-1.5 focus-ring shrink-0"
-            aria-label="Send"
-          >
-            <Send size={14} />
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={!input.trim() || isSending}
+              className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3.5 rounded-md bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)]
+                text-white text-sm font-medium
+                transition-[background-color,transform] duration-150 active:scale-[0.92]
+                disabled:opacity-40 disabled:cursor-not-allowed
+                inline-flex items-center justify-center gap-1.5 focus-ring shrink-0"
+              aria-label="Send"
+            >
+              <Send size={14} />
+            </button>
+          </form>
+        )}
       </div>
         {/* ── End of CHAT COLUMN ── */}
         </div>
@@ -665,7 +700,10 @@ export default function ChatPage() {
         {isMusicRoom && !embeddedGameSlug && slug && (
           <SpotifyJukeboxPanel
             slug={slug}
+            isConnected={isConnected()}
             onAddTrack={() => inputRef.current?.focus()}
+            onShareUrl={(url) => sendMessage(slug, url)}
+            onReact={(messageId, emoji) => reactToMessage(slug, messageId, emoji)}
           />
         )}
       </div>

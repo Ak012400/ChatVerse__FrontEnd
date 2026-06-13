@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import * as signalR from '@microsoft/signalr'
 import { useChatStore } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
@@ -21,15 +21,31 @@ let globalLastWarnedScore: number | null = null
 export function useChatHub() {
   const connectionRef = useRef<signalR.HubConnection | null>(null)
   const connectionPromiseRef = useRef<Promise<void> | null>(null)
+  // React state mirror of the underlying SignalR connection. The ref
+  // alone isn't enough because React doesn't re-render on ref mutation
+  // — without this, consumers calling `isConnected()` get a stale
+  // `false` forever and the "Connecting…" loader never goes away even
+  // though the websocket is open (101 Switching Protocols).
+  const [connState, setConnState] = useState<signalR.HubConnectionState>(
+    signalR.HubConnectionState.Disconnected,
+  )
 
   const token = useAuthStore((s) => s.token)
-  const { addMessage, updateMsgStatus, removeMessage, setMessages, setOnlineCount, setTyping } = useChatStore()
+  const {
+    addMessage, updateMsgStatus, updateMsgReactions, removeMessage,
+    setMessages, setOnlineCount, setTyping,
+  } = useChatStore()
   const { showToast } = useToastStore()
 
   const connect = useCallback(async () => {
     if (!token) return
     if (connectionRef.current?.state === signalR.HubConnectionState.Connected) return
     if (connectionPromiseRef.current) return connectionPromiseRef.current
+
+    // Reflect "we're trying to connect" in state so the UI loader knows
+    // a handshake is in flight. Set BEFORE the build/start so the first
+    // paint after this effect already shows the Connecting loader.
+    setConnState(signalR.HubConnectionState.Connecting)
 
     const hub = new signalR.HubConnectionBuilder()
       .withUrl(`${HUB_URL}?access_token=${token}`, {
@@ -38,6 +54,20 @@ export function useChatHub() {
       })
       .withAutomaticReconnect()
       .build()
+
+    // ── Lifecycle bridges from SignalR → React state.
+    //    Without these, the ref-only mutation in `.then()` below would
+    //    never trigger a re-render and consumers calling isConnected()
+    //    would see `false` forever.
+    hub.onreconnecting(() => {
+      setConnState(signalR.HubConnectionState.Reconnecting)
+    })
+    hub.onreconnected(() => {
+      setConnState(signalR.HubConnectionState.Connected)
+    })
+    hub.onclose(() => {
+      setConnState(signalR.HubConnectionState.Disconnected)
+    })
 
     hub.on('ReceiveMessage', (msg: Message) => { if (msg.modStatus !== 'blocked') addMessage(msg.roomId, msg) })
     hub.on('RoomHistory', ({ roomSlug, messages }: { roomSlug: string; messages: Message[] }) => {
@@ -52,6 +82,22 @@ export function useChatHub() {
     hub.on('MessageFlagged', ({ messageId }: { messageId: string }) => {
       const rooms = useChatStore.getState().messages
       for (const slug in rooms) updateMsgStatus(slug, messageId, 'flagged')
+    })
+    // Reactions — the server broadcasts the full authoritative reactions
+    // map after each toggle. We scan all loaded rooms and update wherever
+    // we find the message id (it lives in exactly one slug, but we don't
+    // know which without a room hint in the payload).
+    hub.on('MessageReaction', (payload: {
+      messageId: string
+      reactions?: Record<string, string[]>
+    }) => {
+      if (!payload?.messageId || !payload.reactions) return
+      const rooms = useChatStore.getState().messages
+      for (const slug in rooms) {
+        if (rooms[slug].some((m) => m.id === payload.messageId)) {
+          updateMsgReactions(slug, payload.messageId, payload.reactions)
+        }
+      }
     })
     hub.on('TrustWarning', ({ score }: { score: number }) => {
       const auth = useAuthStore.getState()
@@ -208,8 +254,16 @@ export function useChatHub() {
     })
 
     const startPromise = hub.start()
-      .then(() => { connectionRef.current = hub })
-      .catch(() => { connectionRef.current = null })
+      .then(() => {
+        connectionRef.current = hub
+        // Critical: flip React state so consumers re-render and the
+        // Connecting loader unmounts in favour of the real input.
+        setConnState(signalR.HubConnectionState.Connected)
+      })
+      .catch(() => {
+        connectionRef.current = null
+        setConnState(signalR.HubConnectionState.Disconnected)
+      })
       .finally(() => { connectionPromiseRef.current = null })
 
     connectionPromiseRef.current = startPromise
@@ -224,6 +278,7 @@ export function useChatHub() {
       await connectionRef.current.stop()
       connectionRef.current = null
     }
+    setConnState(signalR.HubConnectionState.Disconnected)
   }, [])
 
   useEffect(() => {
@@ -283,7 +338,12 @@ export function useChatHub() {
     },
     getRollingQuizState: () => safeInvoke('GetRollingQuizState'),
 
-    isConnected: () => connectionRef.current?.state === signalR.HubConnectionState.Connected,
+    // Read from React state — calling consumers re-render when this
+    // flips. The ref check (`connectionRef.current?.state`) was the
+    // root of the "Connecting… 95%" stuck-forever bug because mutating
+    // a ref doesn't tell React anything changed.
+    isConnected: () => connState === signalR.HubConnectionState.Connected,
+    connectionState: connState,
     safeInvoke,
   }
 }
