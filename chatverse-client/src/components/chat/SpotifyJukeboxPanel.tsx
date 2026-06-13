@@ -1,8 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Music, Users, Disc3, ExternalLink, Plus } from 'lucide-react'
 import { roomsApi } from '../../api'
 import { useChatStore } from '../../stores/chatStore'
 import type { Message, SpotifyEmbedRef } from '../../types'
+
+// Cache the last successful seed fetch per slug so navigating away and
+// back doesn't refetch — and a known 404 is remembered so we stop
+// hitting an endpoint that doesn't exist yet on this backend deployment.
+type SeedCache = { tracks: JukeboxTrack[]; status: 'ok' | 'missing' | 'error' }
+const SEED_CACHE = new Map<string, SeedCache>()
+// Stable reference so the Zustand selector doesn't re-trigger renders
+// on every unrelated store update (a fresh `[]` literal would).
+const EMPTY_MESSAGES: Message[] = []
 
 /**
  * Music Lounge side panel — turns a normal chat room into a casual
@@ -39,30 +48,57 @@ export function SpotifyJukeboxPanel({
   slug: string
   onAddTrack?: () => void
 }) {
-  const [seedTracks, setSeedTracks] = useState<JukeboxTrack[]>([])
-  const [loading, setLoading] = useState(true)
+  const cached = SEED_CACHE.get(slug)
+  const [seedTracks, setSeedTracks] = useState<JukeboxTrack[]>(cached?.tracks ?? [])
+  const [seedStatus, setSeedStatus] = useState<SeedCache['status'] | 'pending'>(
+    cached?.status ?? 'pending',
+  )
+  const lastFetchedSlug = useRef<string | null>(cached ? slug : null)
 
   // ── 1. One-shot REST load — gives us the warm queue on first paint.
   //    After this we never re-fetch; live updates flow through the chat
   //    store via the SignalR ReceiveMessage handler in useChatHub.
+  //
+  //    StrictMode double-invokes effects in dev; lastFetchedSlug gates
+  //    the redundant call. We also remember a 404 in SEED_CACHE so we
+  //    stop hammering an endpoint that this backend deployment hasn't
+  //    shipped yet (cold-load history is just unavailable in that case
+  //    — live SignalR messages still populate the panel normally).
   useEffect(() => {
+    if (lastFetchedSlug.current === slug && SEED_CACHE.has(slug)) return
+    lastFetchedSlug.current = slug
+
     let cancelled = false
-    setLoading(true)
     roomsApi
       .getSpotifyTracks(slug, 20)
       .then((res) => {
         if (cancelled) return
         const list: JukeboxTrack[] = res.data?.data?.tracks ?? []
+        SEED_CACHE.set(slug, { tracks: list, status: 'ok' })
         setSeedTracks(list)
+        setSeedStatus('ok')
       })
-      .catch(() => { /* offline / 404 — panel just shows empty */ })
-      .finally(() => { if (!cancelled) setLoading(false) })
+      .catch((err) => {
+        if (cancelled) return
+        const status: SeedCache['status'] =
+          err?.response?.status === 404 ? 'missing' : 'error'
+        SEED_CACHE.set(slug, { tracks: [], status })
+        setSeedStatus(status)
+        if (status === 'missing') {
+          // eslint-disable-next-line no-console
+          console.info(
+            '[SpotifyJukeboxPanel] /spotify-tracks endpoint not deployed on this backend yet — falling back to live-only mode.',
+          )
+        }
+      })
     return () => { cancelled = true }
   }, [slug])
 
   // ── 2. Derive live additions from the chat store. Anything in the
   //    store that's a Spotify-bearing room message is a candidate.
-  const liveMessages = useChatStore((s) => s.messages[slug] ?? [])
+  //    Stable empty-array fallback prevents the selector from churning
+  //    a new reference on every unrelated chatStore update.
+  const liveMessages = useChatStore((s) => s.messages[slug] ?? EMPTY_MESSAGES)
 
   const tracks = useMemo<JukeboxTrack[]>(() => {
     const fromLive: JukeboxTrack[] = liveMessages
@@ -132,7 +168,7 @@ export function SpotifyJukeboxPanel({
           {nowPlaying ? 'Now Playing' : 'Nothing here yet'}
         </p>
 
-        {loading && !nowPlaying ? (
+        {seedStatus === 'pending' && !nowPlaying ? (
           <div className="h-20 rounded-xl bg-[var(--color-surface-2)] animate-pulse" />
         ) : nowPlaying ? (
           <>

@@ -22,6 +22,7 @@ import IconButton from '../../components/ui/IconButton'
 import TranslateButton from '../../components/chat/TranslateButton'
 import { SpotifyEmbed } from '../../components/chat/SpotifyEmbed'
 import { SpotifyJukeboxPanel } from '../../components/chat/SpotifyJukeboxPanel'
+import { extractSpotifyEmbed } from '../../lib/spotifyExtract'
 import { useTranslation, detectLanguage, preferredLanguageCode } from '../../hooks/useTranslation'
 
 export default function ChatPage() {
@@ -77,11 +78,15 @@ export default function ChatPage() {
   // Match exact "general" only — variants like "general-2" would
   // need their own SignalR group on the backend to receive pushes.
   const isGeneralRoom = slug === 'general'
-  // Music Lounge — rooms whose category is "music" (created via
-  // RoomsController POST with category: "music") OR whose slug starts
-  // with "music-" so a public slug-based convention works too.
+  // Music Lounge — any room whose slug starts with "music" (covers
+  // "music", "music-lounge", "music-90s", etc.) OR is explicitly named
+  // "vibes"/"jukebox" for forward compat. Slug-based on purpose: matches
+  // the same pattern as isTechRoom / isGeneralRoom so room creators
+  // don't need a new category field on the backend.
+  const MUSIC_SLUGS = ['music', 'vibes', 'jukebox']
   const isMusicRoom = useMemo(
-    () => !!slug && (slug.toLowerCase().startsWith('music-') || slug === 'music-lounge'),
+    () => !!slug && MUSIC_SLUGS.some((p) => slug.toLowerCase().startsWith(p)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [slug],
   )
 
@@ -730,6 +735,11 @@ function MessageBubble({
     )
   }
 
+  // Backend-enriched `spotify` wins; if it's missing (e.g. the backend
+  // deployment didn't ship SpotifyLinkExtractor yet), re-derive from
+  // the message content client-side so the embed still renders.
+  const spotify = msg.spotify ?? extractSpotifyEmbed(msg.content)
+
   return (
     <div className="flex flex-col gap-1.5 items-stretch">
       <div
@@ -742,7 +752,7 @@ function MessageBubble({
       >
         {msg.content}
       </div>
-      {msg.spotify && <SpotifyEmbed embed={msg.spotify} />}
+      {spotify && <SpotifyEmbed embed={spotify} />}
     </div>
   )
 }
