@@ -39,6 +39,9 @@ interface ChatState {
   setMessages:      (slug: string, msgs: Message[]) => void
   addMessage:       (slug: string, msg: Message) => void
   updateMsgStatus:  (slug: string, msgId: string, status: Message['modStatus']) => void
+  /** Replace the reactions map on a single message — used when the
+   *  server broadcasts the authoritative post-toggle state. */
+  updateMsgReactions: (slug: string, msgId: string, reactions: Record<string, string[]>) => void
   removeMessage:    (slug: string, msgId: string) => void
   setOnlineCount:   (slug: string, count: number) => void
   setTyping:        (slug: string, username: string) => void // 👈 Naya
@@ -78,6 +81,13 @@ export const useChatStore = create<ChatState>((set) => ({
       messages: {
         ...s.messages,
         [slug]: (s.messages[slug] ?? []).map((m) => m.id === msgId ? { ...m, modStatus: status } : m),
+      }
+  })),
+
+  updateMsgReactions: (slug, msgId, reactions) => set((s) => ({
+      messages: {
+        ...s.messages,
+        [slug]: (s.messages[slug] ?? []).map((m) => m.id === msgId ? { ...m, reactions } : m),
       }
   })),
 

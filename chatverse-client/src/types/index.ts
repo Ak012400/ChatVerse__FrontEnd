@@ -29,10 +29,13 @@ export interface Room {
  * client never has to do its own URL parsing or HEAD requests.
  */
 export interface SpotifyEmbedRef {
-  kind:      'track' | 'album' | 'playlist' | 'episode' | 'show' | 'artist'
-  spotifyId: string
-  embedUrl:  string
-  webUrl:    string
+  kind:          'track' | 'album' | 'playlist' | 'episode' | 'show' | 'artist'
+  spotifyId:     string
+  embedUrl:      string
+  webUrl:        string
+  /** Server-fetched via Spotify oEmbed. Null when enrichment failed. */
+  title?:        string | null
+  thumbnailUrl?: string | null
 }
 
 export interface Message {

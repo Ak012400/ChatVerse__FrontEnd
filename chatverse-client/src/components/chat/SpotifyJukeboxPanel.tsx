@@ -2,7 +2,32 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Music, Users, Disc3, ExternalLink, Plus } from 'lucide-react'
 import { roomsApi } from '../../api'
 import { useChatStore } from '../../stores/chatStore'
+import { useAuthStore } from '../../stores/authStore'
 import type { Message, SpotifyEmbedRef } from '../../types'
+
+/**
+ * Curated Spotify playlists for the one-tap share buttons. Each preset
+ * sends a normal chat message containing the URL — the backend's
+ * SpotifyLinkExtractor + oEmbed enricher handle the rest, so the
+ * preset row reuses the same path a manual paste does.
+ *
+ * The IDs are public, owner = Spotify, and unlikely to change. If one
+ * ever 404s the share still goes through as a plain message; the panel
+ * just won't get a new "Now Playing".
+ */
+const PRESETS: { emoji: string; label: string; url: string }[] = [
+  { emoji: '🎧', label: 'Lo-Fi',     url: 'https://open.spotify.com/playlist/0vvXsWCC9xrXsKd4FyS8kM' },
+  { emoji: '🇮🇳', label: 'Bollywood', url: 'https://open.spotify.com/playlist/37i9dQZF1DX0XUfTFmNBRM' },
+  { emoji: '💪', label: 'Workout',   url: 'https://open.spotify.com/playlist/37i9dQZF1DX76Wlfdnj7AP' },
+  { emoji: '😴', label: 'Sleep',     url: 'https://open.spotify.com/playlist/37i9dQZF1DWZd79rJ6a7lp' },
+]
+
+/** Reactions surfaced on the Now Playing card. Tied to ChatHub.ReactToMessage. */
+const TRACK_REACTIONS: { emoji: string; label: string }[] = [
+  { emoji: '❤️', label: 'love' },
+  { emoji: '🔥', label: 'fire' },
+  { emoji: '✨', label: 'vibe' },
+]
 
 // Cache the last successful seed fetch per slug so navigating away and
 // back doesn't refetch — and a known 404 is remembered so we stop
@@ -38,16 +63,24 @@ interface JukeboxTrack {
   senderAvatar: string | null
   caption:      string
   spotify:      SpotifyEmbedRef
+  reactions:    Record<string, string[]>
   createdAt:    string
 }
 
 export function SpotifyJukeboxPanel({
   slug,
   onAddTrack,
+  onShareUrl,
+  onReact,
 }: {
   slug: string
   onAddTrack?: () => void
+  /** Send a Spotify URL to the room via the chat hub (preset buttons). */
+  onShareUrl?: (url: string) => void
+  /** Toggle a reaction on a specific message via the chat hub. */
+  onReact?: (messageId: string, emoji: string) => void
 }) {
+  const myUserId = useAuthStore((s) => s.user?.userId)
   const cached = SEED_CACHE.get(slug)
   const [seedTracks, setSeedTracks] = useState<JukeboxTrack[]>(cached?.tracks ?? [])
   const [seedStatus, setSeedStatus] = useState<SeedCache['status'] | 'pending'>(
@@ -111,11 +144,14 @@ export function SpotifyJukeboxPanel({
         senderAvatar: m.senderAvatar,
         caption:      m.content,
         spotify:      m.spotify!,
+        reactions:    m.reactions ?? {},
         createdAt:    m.createdAt,
       }))
 
     // De-dupe (REST seed + live might overlap on first load) and put
-    // newest first so "Now Playing" is always index 0.
+    // newest first so "Now Playing" is always index 0. Live entries
+    // win over seed entries because they carry the latest reactions
+    // state pushed by ChatHub.
     const seen = new Set<string>()
     const merged: JukeboxTrack[] = []
     for (const t of [...fromLive, ...seedTracks]) {
@@ -162,6 +198,30 @@ export function SpotifyJukeboxPanel({
         )}
       </div>
 
+      {/* Preset share row — one-tap drop of curated playlists. The
+          server's SpotifyLinkExtractor + oEmbed picks it up just like a
+          manual paste, so the user instantly populates the Now Playing
+          card without needing to know any Spotify URL by heart. */}
+      {onShareUrl && (
+        <div className="px-3 py-2 border-b border-[var(--color-line)] flex gap-1.5 overflow-x-auto">
+          {PRESETS.map((p) => (
+            <button
+              key={p.label}
+              onClick={() => onShareUrl(p.url)}
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full
+                         bg-[var(--color-surface-2)] hover:bg-[#1DB954]/15
+                         border border-transparent hover:border-[#1DB954]/30
+                         text-[11px] font-medium text-[var(--color-fg)] transition-colors"
+              title={`Share ${p.label} playlist`}
+              aria-label={`Share ${p.label} playlist`}
+            >
+              <span aria-hidden>{p.emoji}</span>
+              {p.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Now Playing */}
       <div className="px-4 py-3 border-b border-[var(--color-line)]">
         <p className="text-[10px] uppercase tracking-wider text-[#1DB954] font-semibold mb-2">
@@ -172,6 +232,29 @@ export function SpotifyJukeboxPanel({
           <div className="h-20 rounded-xl bg-[var(--color-surface-2)] animate-pulse" />
         ) : nowPlaying ? (
           <>
+            {/* Title + cover when oEmbed enrichment is available — turns
+                the generic green block into a real-feeling "song card". */}
+            {(nowPlaying.spotify.title || nowPlaying.spotify.thumbnailUrl) && (
+              <div className="flex items-center gap-2.5 mb-2">
+                {nowPlaying.spotify.thumbnailUrl && (
+                  <img
+                    src={nowPlaying.spotify.thumbnailUrl}
+                    alt=""
+                    className="w-11 h-11 rounded-md object-cover shrink-0"
+                    loading="lazy"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold text-[var(--color-fg)] truncate leading-tight">
+                    {nowPlaying.spotify.title ?? `Spotify ${nowPlaying.spotify.kind}`}
+                  </p>
+                  <p className="text-[10px] uppercase tracking-wide text-[#1DB954] font-semibold">
+                    {nowPlaying.spotify.kind}
+                  </p>
+                </div>
+              </div>
+            )}
+
             <iframe
               key={nowPlaying.messageId}
               title={`Now playing — ${nowPlaying.spotify.kind}`}
@@ -182,6 +265,39 @@ export function SpotifyJukeboxPanel({
               allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
               style={{ border: 0, borderRadius: 12 }}
             />
+
+            {/* Reactions row — clickable emojis bound to the message's
+                reactions map. Counts come straight from the server, so
+                every user sees the same numbers. */}
+            {onReact && (
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                {TRACK_REACTIONS.map((r) => {
+                  const userIds = nowPlaying.reactions[r.emoji] ?? []
+                  const mine = !!myUserId && userIds.includes(myUserId)
+                  return (
+                    <button
+                      key={r.emoji}
+                      onClick={() => onReact(nowPlaying.messageId, r.emoji)}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-full text-[11px]
+                        border transition-colors
+                        ${mine
+                          ? 'bg-[#1DB954]/20 border-[#1DB954]/50 text-[var(--color-fg)]'
+                          : 'bg-[var(--color-surface-2)] border-transparent hover:bg-[#1DB954]/10 hover:border-[#1DB954]/30 text-[var(--color-fg-mute)]'}
+                      `}
+                      title={r.label}
+                      aria-label={`React with ${r.label}`}
+                      aria-pressed={mine}
+                    >
+                      <span aria-hidden>{r.emoji}</span>
+                      {userIds.length > 0 && (
+                        <span className="font-semibold">{userIds.length}</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
             <p className="text-[11px] text-[var(--color-fg-mute)] mt-2 flex items-center gap-1">
               <Music size={10} /> Shared by{' '}
               <span className="text-[var(--color-fg)] font-medium">{nowPlaying.senderName}</span>
@@ -190,7 +306,7 @@ export function SpotifyJukeboxPanel({
         ) : (
           <div className="px-3 py-4 rounded-xl border border-dashed border-[var(--color-line)]
                           text-center text-xs text-[var(--color-fg-mute)]">
-            Paste a Spotify link in chat to start the vibe.
+            Paste a Spotify link in chat — or tap a preset above — to start the vibe.
           </div>
         )}
       </div>
@@ -240,6 +356,11 @@ function QueueRow({ track }: { track: JukeboxTrack }) {
     )
   }
 
+  // Prefer real title when oEmbed enriched the row; fall back to the
+  // sender's name so the row still reads as something other than blank.
+  const titleText = track.spotify.title ?? track.senderName
+  const subText = track.spotify.title ? track.senderName : track.spotify.kind
+
   return (
     <li>
       <button
@@ -252,15 +373,24 @@ function QueueRow({ track }: { track: JukeboxTrack }) {
         title="Tap to play"
         aria-label={`Play ${track.spotify.kind}`}
       >
-        <span className="w-7 h-7 rounded-md bg-[#1DB954]/85 flex items-center justify-center shrink-0">
-          <Music size={12} className="text-white" />
-        </span>
-        <span className="flex-1 min-w-0">
-          <span className="block text-[10px] text-[#1DB954] uppercase tracking-wide font-semibold leading-tight">
-            {track.spotify.kind}
+        {track.spotify.thumbnailUrl ? (
+          <img
+            src={track.spotify.thumbnailUrl}
+            alt=""
+            className="w-7 h-7 rounded-md object-cover shrink-0"
+            loading="lazy"
+          />
+        ) : (
+          <span className="w-7 h-7 rounded-md bg-[#1DB954]/85 flex items-center justify-center shrink-0">
+            <Music size={12} className="text-white" />
           </span>
-          <span className="block text-[11px] text-[var(--color-fg-mute)] truncate leading-tight">
-            {track.senderName}
+        )}
+        <span className="flex-1 min-w-0">
+          <span className="block text-[11px] text-[var(--color-fg)] font-semibold truncate leading-tight">
+            {titleText}
+          </span>
+          <span className="block text-[10px] text-[var(--color-fg-mute)] truncate leading-tight">
+            {subText}
           </span>
         </span>
         <a

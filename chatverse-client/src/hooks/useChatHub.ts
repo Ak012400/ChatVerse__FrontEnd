@@ -23,7 +23,10 @@ export function useChatHub() {
   const connectionPromiseRef = useRef<Promise<void> | null>(null)
 
   const token = useAuthStore((s) => s.token)
-  const { addMessage, updateMsgStatus, removeMessage, setMessages, setOnlineCount, setTyping } = useChatStore()
+  const {
+    addMessage, updateMsgStatus, updateMsgReactions, removeMessage,
+    setMessages, setOnlineCount, setTyping,
+  } = useChatStore()
   const { showToast } = useToastStore()
 
   const connect = useCallback(async () => {
@@ -52,6 +55,22 @@ export function useChatHub() {
     hub.on('MessageFlagged', ({ messageId }: { messageId: string }) => {
       const rooms = useChatStore.getState().messages
       for (const slug in rooms) updateMsgStatus(slug, messageId, 'flagged')
+    })
+    // Reactions — the server broadcasts the full authoritative reactions
+    // map after each toggle. We scan all loaded rooms and update wherever
+    // we find the message id (it lives in exactly one slug, but we don't
+    // know which without a room hint in the payload).
+    hub.on('MessageReaction', (payload: {
+      messageId: string
+      reactions?: Record<string, string[]>
+    }) => {
+      if (!payload?.messageId || !payload.reactions) return
+      const rooms = useChatStore.getState().messages
+      for (const slug in rooms) {
+        if (rooms[slug].some((m) => m.id === payload.messageId)) {
+          updateMsgReactions(slug, payload.messageId, payload.reactions)
+        }
+      }
     })
     hub.on('TrustWarning', ({ score }: { score: number }) => {
       const auth = useAuthStore.getState()

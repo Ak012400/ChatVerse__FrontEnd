@@ -22,6 +22,8 @@ import IconButton from '../../components/ui/IconButton'
 import TranslateButton from '../../components/chat/TranslateButton'
 import { SpotifyEmbed } from '../../components/chat/SpotifyEmbed'
 import { SpotifyJukeboxPanel } from '../../components/chat/SpotifyJukeboxPanel'
+import { MessageActions } from '../../components/chat/MessageActions'
+import { MessageReactions } from '../../components/chat/MessageReactions'
 import { extractSpotifyEmbed } from '../../lib/spotifyExtract'
 import { useTranslation, detectLanguage, preferredLanguageCode } from '../../hooks/useTranslation'
 
@@ -39,7 +41,7 @@ export default function ChatPage() {
   const dismissAmbient = useChatStore((s) => s.dismissAmbient)
   const {
     joinRoom, leaveRoom, sendTyping, sendMessage, isConnected,
-    submitRollingQuizAnswer, getRollingQuizState,
+    submitRollingQuizAnswer, getRollingQuizState, reactToMessage,
   } = useChatHub()
 
   const [input, setInput] = useState('')
@@ -488,7 +490,31 @@ export default function ChatPage() {
                       </p>
                     )}
 
-                    <MessageBubble msg={msg} isMine={isMine} />
+                    {/* Relative wrapper so the hover-react toolbar can
+                        sit on top of the bubble without affecting flow. */}
+                    <div className="relative">
+                      <MessageBubble msg={msg} isMine={isMine} />
+                      {/* Hover toolbar — quick reactions + full emoji
+                          picker. Hidden on flagged/blocked messages so
+                          we don't invite engagement with moderated content. */}
+                      {slug && msg.modStatus !== 'blocked' && msg.modStatus !== 'flagged' && (
+                        <MessageActions
+                          alignRight={isMine}
+                          onReact={(emoji) => reactToMessage(slug, msg.id, emoji)}
+                        />
+                      )}
+                    </div>
+
+                    {/* Persistent reaction chips — server pushes the
+                        authoritative map after each toggle, so every
+                        client renders the same counts. */}
+                    {slug && (
+                      <MessageReactions
+                        reactions={msg.reactions}
+                        alignRight={isMine}
+                        onToggle={(emoji) => reactToMessage(slug, msg.id, emoji)}
+                      />
+                    )}
 
                     {/* Translate trigger — only for plain text messages
                         whose language differs from the reader's. Skip
@@ -666,6 +692,8 @@ export default function ChatPage() {
           <SpotifyJukeboxPanel
             slug={slug}
             onAddTrack={() => inputRef.current?.focus()}
+            onShareUrl={(url) => sendMessage(slug, url)}
+            onReact={(messageId, emoji) => reactToMessage(slug, messageId, emoji)}
           />
         )}
       </div>
