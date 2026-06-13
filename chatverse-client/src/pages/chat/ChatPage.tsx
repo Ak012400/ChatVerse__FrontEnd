@@ -21,6 +21,7 @@ import Avatar from '../../components/ui/Avatar'
 import IconButton from '../../components/ui/IconButton'
 import TranslateButton from '../../components/chat/TranslateButton'
 import { SpotifyEmbed } from '../../components/chat/SpotifyEmbed'
+import { SpotifyJukeboxPanel } from '../../components/chat/SpotifyJukeboxPanel'
 import { useTranslation, detectLanguage, preferredLanguageCode } from '../../hooks/useTranslation'
 
 export default function ChatPage() {
@@ -76,6 +77,13 @@ export default function ChatPage() {
   // Match exact "general" only — variants like "general-2" would
   // need their own SignalR group on the backend to receive pushes.
   const isGeneralRoom = slug === 'general'
+  // Music Lounge — rooms whose category is "music" (created via
+  // RoomsController POST with category: "music") OR whose slug starts
+  // with "music-" so a public slug-based convention works too.
+  const isMusicRoom = useMemo(
+    () => !!slug && (slug.toLowerCase().startsWith('music-') || slug === 'music-lounge'),
+    [slug],
+  )
 
   const emojiRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -399,11 +407,11 @@ export default function ChatPage() {
         />
       )}
 
-      {/* Split layout — chat on the left, embedded game on the right.
-          When no game is active, chat fills the full width as before. */}
+      {/* Split layout — chat on the left, embedded game OR music
+          jukebox on the right. When neither, chat fills the full width. */}
       <div className={[
         'flex-1 min-h-0 flex',
-        embeddedGameSlug ? 'flex-col lg:flex-row' : 'flex-col',
+        (embeddedGameSlug || isMusicRoom) ? 'flex-col lg:flex-row' : 'flex-col',
       ].join(' ')}>
         {/* CHAT COLUMN (left when split, full when not) */}
         <div
@@ -411,6 +419,8 @@ export default function ChatPage() {
             'flex flex-col min-h-0',
             embeddedGameSlug
               ? 'flex-1 lg:flex-[2] lg:max-w-[40%] border-b lg:border-b-0 lg:border-r border-[var(--color-line)]'
+              : isMusicRoom
+              ? 'flex-1 lg:flex-[3] border-b lg:border-b-0 lg:border-r border-[var(--color-line)]'
               : 'flex-1',
           ].join(' ')}
         >
@@ -642,6 +652,16 @@ export default function ChatPage() {
               />
             </div>
           </div>
+        )}
+
+        {/* MUSIC LOUNGE — only in `music-*` rooms. Renders Now Playing
+            + Up Next queue. Mutually exclusive with the embedded game
+            panel; a single room shouldn't try to host both layouts. */}
+        {isMusicRoom && !embeddedGameSlug && slug && (
+          <SpotifyJukeboxPanel
+            slug={slug}
+            onAddTrack={() => inputRef.current?.focus()}
+          />
         )}
       </div>
       {/* ── End of SPLIT LAYOUT ── */}
