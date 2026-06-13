@@ -100,17 +100,49 @@ interface JukeboxTrack {
 
 export function SpotifyJukeboxPanel({
   slug,
+  isConnected = true,
   onAddTrack,
   onShareUrl,
   onReact,
 }: {
   slug: string
+  /** Lets the panel queue preset clicks when the hub is still mid-handshake. */
+  isConnected?: boolean
   onAddTrack?: () => void
   /** Send a Spotify URL to the room via the chat hub (preset buttons). */
   onShareUrl?: (url: string) => void
   /** Toggle a reaction on a specific message via the chat hub. */
   onReact?: (messageId: string, emoji: string) => void
 }) {
+  // ── Pending preset share queue ──────────────────────────────
+  //  If the user taps a preset while the hub is still connecting,
+  //  buffer the URL here and flush as soon as `isConnected` flips true.
+  //  Each pending URL also drives a small spinner inside its tile so
+  //  the user gets immediate feedback ("yes, your click was heard").
+  const [pending, setPending] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!isConnected || pending.size === 0 || !onShareUrl) return
+    // Snapshot so we don't lose values added between callback fires.
+    const toSend = Array.from(pending)
+    setPending(new Set())
+    for (const url of toSend) onShareUrl(url)
+  }, [isConnected, pending, onShareUrl])
+
+  const handlePresetClick = (url: string) => {
+    if (!onShareUrl) return
+    if (isConnected) {
+      onShareUrl(url)
+      return
+    }
+    // Queue it. Set short-circuits duplicate clicks on the same preset.
+    setPending((prev) => {
+      if (prev.has(url)) return prev
+      const next = new Set(prev)
+      next.add(url)
+      return next
+    })
+  }
   const myUserId = useAuthStore((s) => s.user?.userId)
   const cached = SEED_CACHE.get(slug)
   const [seedTracks, setSeedTracks] = useState<JukeboxTrack[]>(cached?.tracks ?? [])
@@ -289,24 +321,50 @@ export function SpotifyJukeboxPanel({
       {/* Preset share row — one-tap drop of curated playlists. The
           server's SpotifyLinkExtractor + oEmbed picks it up just like a
           manual paste, so the user instantly populates the Now Playing
-          card without needing to know any Spotify URL by heart. */}
+          card without needing to know any Spotify URL by heart.
+
+          While the hub is still mid-handshake, clicks are queued: each
+          queued tile shows a spinner instead of its emoji, and the
+          actual share fires the moment the connection lands. */}
       {onShareUrl && (
         <div className="px-3 py-2 border-b border-[var(--color-line)] flex gap-1.5 overflow-x-auto">
-          {PRESETS.map((p) => (
-            <button
-              key={p.label}
-              onClick={() => onShareUrl(p.url)}
-              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full
-                         bg-[var(--color-surface-2)] hover:bg-[#1DB954]/15
-                         border border-transparent hover:border-[#1DB954]/30
-                         text-[11px] font-medium text-[var(--color-fg)] transition-colors"
-              title={`Share ${p.label} playlist`}
-              aria-label={`Share ${p.label} playlist`}
-            >
-              <span aria-hidden>{p.emoji}</span>
-              {p.label}
-            </button>
-          ))}
+          {PRESETS.map((p) => {
+            const isQueued = pending.has(p.url)
+            const disabled = isQueued
+            return (
+              <button
+                key={p.label}
+                onClick={() => handlePresetClick(p.url)}
+                disabled={disabled}
+                className={[
+                  'shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full',
+                  'text-[11px] font-medium transition-colors',
+                  'border',
+                  isQueued
+                    ? 'bg-[#1DB954]/15 border-[#1DB954]/40 text-[var(--color-fg)] cursor-wait'
+                    : 'bg-[var(--color-surface-2)] hover:bg-[#1DB954]/15 border-transparent hover:border-[#1DB954]/30 text-[var(--color-fg)]',
+                ].join(' ')}
+                title={
+                  isQueued
+                    ? 'Waiting for chat to connect — will share automatically'
+                    : `Share ${p.label} playlist`
+                }
+                aria-label={`Share ${p.label} playlist`}
+                aria-busy={isQueued}
+              >
+                {isQueued ? (
+                  <span
+                    className="w-3 h-3 rounded-full border-[1.5px] border-[#1DB954] border-t-transparent"
+                    style={{ animation: 'spin 0.7s linear infinite' }}
+                    aria-hidden
+                  />
+                ) : (
+                  <span aria-hidden>{p.emoji}</span>
+                )}
+                {p.label}
+              </button>
+            )
+          })}
         </div>
       )}
 
