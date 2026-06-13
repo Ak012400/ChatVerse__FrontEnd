@@ -12,6 +12,7 @@ import Loader from '../../components/ui/Loader'
 import Input from '../../components/ui/Input'
 import Badge from '../../components/ui/Badge'
 import { SpotifyEmbed } from '../../components/chat/SpotifyEmbed'
+import { extractSpotifyEmbed } from '../../lib/spotifyExtract'
 
 // 👇 FIX: Declare a constant stable reference for empty arrays to prevent infinite re-renders
 const EMPTY_ARRAY: any[] = []
@@ -233,19 +234,27 @@ export default function DmsPage() {
                     className={`flex gap-2 ${mine ? 'flex-row-reverse' : ''}`}
                   >
                     {!mine && <Avatar name={m.senderName} size="xs" />}
-                    <div className="max-w-[70%] flex flex-col gap-1.5">
-                      <div
-                        className={`px-3 py-1.5 text-sm rounded-2xl leading-relaxed
-                          ${
-                            mine
-                              ? 'bg-[var(--color-accent)] text-white rounded-tr-md'
-                              : 'bg-[var(--color-surface-2)] text-[var(--color-fg)] rounded-tl-md'
-                          }`}
-                      >
-                        {m.content}
-                      </div>
-                      {m.spotify && <SpotifyEmbed embed={m.spotify} />}
-                    </div>
+                    {(() => {
+                      // Backend-enriched spotify wins; otherwise derive
+                      // from message content client-side so embeds work
+                      // even before the backend deploys SpotifyLinkExtractor.
+                      const sp = m.spotify ?? extractSpotifyEmbed(m.content)
+                      return (
+                        <div className="max-w-[70%] flex flex-col gap-1.5">
+                          <div
+                            className={`px-3 py-1.5 text-sm rounded-2xl leading-relaxed
+                              ${
+                                mine
+                                  ? 'bg-[var(--color-accent)] text-white rounded-tr-md'
+                                  : 'bg-[var(--color-surface-2)] text-[var(--color-fg)] rounded-tl-md'
+                              }`}
+                          >
+                            {m.content}
+                          </div>
+                          {sp && <SpotifyEmbed embed={sp} />}
+                        </div>
+                      )
+                    })()}
                   </div>
                 )
               })
