@@ -1,9 +1,40 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Music, Users, Disc3, ExternalLink, Plus } from 'lucide-react'
+import { Music, Users, Disc3, ExternalLink, Plus, Trash2, X, Play, ChevronDown } from 'lucide-react'
 import { roomsApi } from '../../api'
 import { useChatStore } from '../../stores/chatStore'
 import { useAuthStore } from '../../stores/authStore'
 import type { Message, SpotifyEmbedRef } from '../../types'
+
+// ── localStorage-backed per-user view state ──────────────────────────
+//  Music Lounge hides tracks at the VIEW layer (not the data layer) so
+//  one user clearing their list doesn't wipe history for everyone in
+//  the room. Two keys per room slug:
+//    • clearedBefore: timestamp — anything older is hidden
+//    • hiddenSet:     specific message-ids the user has individually
+//                     removed (newer than clearedBefore but still hidden)
+const lsClearedKey = (slug: string) => `chatverse:musicLounge:clearedBefore:${slug}`
+const lsHiddenKey  = (slug: string) => `chatverse:musicLounge:hidden:${slug}`
+
+function readClearedBefore(slug: string): number {
+  try {
+    const v = localStorage.getItem(lsClearedKey(slug))
+    return v ? Number(v) || 0 : 0
+  } catch { return 0 }
+}
+function writeClearedBefore(slug: string, ts: number) {
+  try { localStorage.setItem(lsClearedKey(slug), String(ts)) } catch { /* ignore */ }
+}
+function readHidden(slug: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(lsHiddenKey(slug))
+    if (!raw) return new Set()
+    const arr = JSON.parse(raw) as unknown
+    return new Set(Array.isArray(arr) ? arr as string[] : [])
+  } catch { return new Set() }
+}
+function writeHidden(slug: string, set: Set<string>) {
+  try { localStorage.setItem(lsHiddenKey(slug), JSON.stringify([...set])) } catch { /* ignore */ }
+}
 
 /**
  * Curated Spotify playlists for the one-tap share buttons. Each preset
@@ -133,6 +164,26 @@ export function SpotifyJukeboxPanel({
   //    a new reference on every unrelated chatStore update.
   const liveMessages = useChatStore((s) => s.messages[slug] ?? EMPTY_MESSAGES)
 
+  // ── Per-user hide state ──────────────────────────────────────
+  //  clearedBefore = unix ms; anything older is hidden for THIS user
+  //  hidden        = explicit message-ids the user dismissed one-by-one
+  //  Both reset on slug change so the previous room's hides don't leak.
+  const [clearedBefore, setClearedBefore] = useState<number>(() => readClearedBefore(slug))
+  const [hidden, setHidden] = useState<Set<string>>(() => readHidden(slug))
+
+  useEffect(() => {
+    setClearedBefore(readClearedBefore(slug))
+    setHidden(readHidden(slug))
+  }, [slug])
+
+  // Now Playing starts COLLAPSED. We don't want to bulldoze new joiners
+  // with a 380px iframe the moment they walk in — same reasoning as the
+  // hover-to-react design. They can tap to expand whenever they want.
+  // We keep a ref of "the messageId we last allowed to auto-stay-open"
+  // so if the user expanded, then a NEW track is shared by someone else,
+  // we collapse back instead of swapping iframes under their feet.
+  const [nowPlayingExpandedFor, setNowPlayingExpandedFor] = useState<string | null>(null)
+
   const tracks = useMemo<JukeboxTrack[]>(() => {
     const fromLive: JukeboxTrack[] = liveMessages
       .filter((m): m is Message & { spotify: SpotifyEmbedRef } =>
@@ -160,12 +211,46 @@ export function SpotifyJukeboxPanel({
       merged.push(t)
     }
     merged.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
-    return merged.slice(0, 20)
-  }, [liveMessages, seedTracks])
+
+    // Apply view-layer hides — clearedBefore wipes anything older than
+    // the cut, hidden filters specific message-ids the user dismissed.
+    return merged
+      .filter((t) => {
+        const ts = +new Date(t.createdAt)
+        if (clearedBefore > 0 && ts <= clearedBefore) return false
+        if (hidden.has(t.messageId)) return false
+        return true
+      })
+      .slice(0, 20)
+  }, [liveMessages, seedTracks, clearedBefore, hidden])
 
   const nowPlaying = tracks[0]
   const upNext = tracks.slice(1)
   const uniqueCurators = new Set(tracks.map((t) => t.senderId)).size
+
+  // Whether Now Playing should render its iframe right now.
+  // Stays collapsed by default; user must opt-in by clicking.
+  const isNowPlayingOpen = !!nowPlaying && nowPlayingExpandedFor === nowPlaying.messageId
+
+  const hideTrack = (messageId: string) => {
+    const next = new Set(hidden)
+    next.add(messageId)
+    setHidden(next)
+    writeHidden(slug, next)
+    if (nowPlayingExpandedFor === messageId) setNowPlayingExpandedFor(null)
+  }
+
+  const clearAllHistory = () => {
+    // Take "now" as the cut. Anything currently in the panel disappears
+    // for this user only; future shares will appear normally.
+    const ts = Date.now()
+    setClearedBefore(ts)
+    writeClearedBefore(slug, ts)
+    // Also clear the explicit hidden set so it doesn't accumulate cruft.
+    setHidden(new Set())
+    writeHidden(slug, new Set())
+    setNowPlayingExpandedFor(null)
+  }
 
   return (
     <aside className="w-full sm:w-[320px] shrink-0 h-full overflow-y-auto
@@ -185,6 +270,9 @@ export function SpotifyJukeboxPanel({
             {tracks.length} track{tracks.length === 1 ? '' : 's'}
           </p>
         </div>
+        {tracks.length > 0 && (
+          <ClearButton onConfirm={clearAllHistory} />
+        )}
         {onAddTrack && (
           <button
             onClick={onAddTrack}
@@ -232,39 +320,88 @@ export function SpotifyJukeboxPanel({
           <div className="h-20 rounded-xl bg-[var(--color-surface-2)] animate-pulse" />
         ) : nowPlaying ? (
           <>
-            {/* Title + cover when oEmbed enrichment is available — turns
-                the generic green block into a real-feeling "song card". */}
-            {(nowPlaying.spotify.title || nowPlaying.spotify.thumbnailUrl) && (
-              <div className="flex items-center gap-2.5 mb-2">
-                {nowPlaying.spotify.thumbnailUrl && (
-                  <img
-                    src={nowPlaying.spotify.thumbnailUrl}
-                    alt=""
-                    className="w-11 h-11 rounded-md object-cover shrink-0"
-                    loading="lazy"
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold text-[var(--color-fg)] truncate leading-tight">
-                    {nowPlaying.spotify.title ?? `Spotify ${nowPlaying.spotify.kind}`}
-                  </p>
-                  <p className="text-[10px] uppercase tracking-wide text-[#1DB954] font-semibold">
-                    {nowPlaying.spotify.kind}
-                  </p>
-                </div>
+            {/* Compact card — clickable to expand into iframe. We DON'T
+                auto-mount the iframe so new users entering the room
+                aren't smacked with a 380px playlist player. Click to
+                load player, click ✕ to dismiss the track from your list. */}
+            {!isNowPlayingOpen ? (
+              <div className="relative group">
+                <button
+                  type="button"
+                  onClick={() => setNowPlayingExpandedFor(nowPlaying.messageId)}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl
+                             bg-[#1DB954]/10 hover:bg-[#1DB954]/20
+                             border border-[#1DB954]/30 transition-colors
+                             text-left cursor-pointer"
+                  aria-label={`Play ${nowPlaying.spotify.title ?? nowPlaying.spotify.kind}`}
+                  title="Tap to load player"
+                >
+                  {nowPlaying.spotify.thumbnailUrl ? (
+                    <img
+                      src={nowPlaying.spotify.thumbnailUrl}
+                      alt=""
+                      className="w-11 h-11 rounded-md object-cover shrink-0"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span className="w-11 h-11 flex items-center justify-center rounded-md bg-[#1DB954]/85 shrink-0">
+                      <Music size={16} className="text-white" />
+                    </span>
+                  )}
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[13px] font-semibold text-[var(--color-fg)] truncate leading-tight">
+                      {nowPlaying.spotify.title ?? `Spotify ${nowPlaying.spotify.kind}`}
+                    </span>
+                    <span className="block text-[10px] uppercase tracking-wide text-[#1DB954] font-semibold truncate">
+                      {nowPlaying.spotify.kind}
+                    </span>
+                  </span>
+                  <span className="w-8 h-8 rounded-full bg-[#1DB954] flex items-center justify-center shrink-0">
+                    <Play size={13} className="text-white ml-0.5" fill="white" />
+                  </span>
+                </button>
+
+                {/* Per-track remove — appears on hover, removes ONLY for
+                    the current user (others still see this track). */}
+                <button
+                  onClick={() => hideTrack(nowPlaying.messageId)}
+                  className="absolute top-1 right-1 w-5 h-5 rounded-full
+                             bg-[var(--color-surface-1)] border border-[var(--color-line)]
+                             flex items-center justify-center
+                             opacity-0 group-hover:opacity-100 transition-opacity
+                             text-[var(--color-fg-mute)] hover:text-[var(--color-danger)]"
+                  title="Remove from your list"
+                  aria-label="Remove from your list"
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                {/* Expanded — actual iframe player + tiny "collapse" pill
+                    so users can dismiss the big block when they're done. */}
+                <iframe
+                  key={nowPlaying.messageId}
+                  title={`Now playing — ${nowPlaying.spotify.kind}`}
+                  src={nowPlaying.spotify.embedUrl}
+                  width="100%"
+                  height={nowPlaying.spotify.kind === 'track' ? 80 : 380}
+                  loading="lazy"
+                  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                  style={{ border: 0, borderRadius: 12 }}
+                />
+                <button
+                  onClick={() => setNowPlayingExpandedFor(null)}
+                  className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full
+                             bg-black/55 hover:bg-black/80 backdrop-blur
+                             text-white flex items-center justify-center"
+                  title="Collapse player"
+                  aria-label="Collapse player"
+                >
+                  <ChevronDown size={13} />
+                </button>
               </div>
             )}
-
-            <iframe
-              key={nowPlaying.messageId}
-              title={`Now playing — ${nowPlaying.spotify.kind}`}
-              src={nowPlaying.spotify.embedUrl}
-              width="100%"
-              height={nowPlaying.spotify.kind === 'track' ? 80 : 380}
-              loading="lazy"
-              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-              style={{ border: 0, borderRadius: 12 }}
-            />
 
             {/* Reactions row — clickable emojis bound to the message's
                 reactions map. Counts come straight from the server, so
@@ -319,7 +456,11 @@ export function SpotifyJukeboxPanel({
           </p>
           <ul className="flex flex-col gap-1.5">
             {upNext.map((t) => (
-              <QueueRow key={t.messageId} track={t} />
+              <QueueRow
+                key={t.messageId}
+                track={t}
+                onRemove={() => hideTrack(t.messageId)}
+              />
             ))}
           </ul>
         </div>
@@ -329,17 +470,63 @@ export function SpotifyJukeboxPanel({
 }
 
 /**
+ * Two-step clear button — first click arms it (showing "Sure?"), second
+ * click confirms. Avoids both a modal (overkill) and accidental wipes
+ * from a misclick. Auto-disarms after 4s if untouched.
+ */
+function ClearButton({ onConfirm }: { onConfirm: () => void }) {
+  const [armed, setArmed] = useState(false)
+  useEffect(() => {
+    if (!armed) return
+    const t = setTimeout(() => setArmed(false), 4000)
+    return () => clearTimeout(t)
+  }, [armed])
+
+  if (armed) {
+    return (
+      <button
+        onClick={() => { setArmed(false); onConfirm() }}
+        className="px-2 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider
+                   bg-[var(--color-danger-soft)] text-[var(--color-danger)]
+                   border border-[var(--color-danger-border)]
+                   hover:bg-[var(--color-danger)] hover:text-white transition-colors"
+        title="Click again to confirm — clears the list for you only"
+      >
+        Sure?
+      </button>
+    )
+  }
+  return (
+    <button
+      onClick={() => setArmed(true)}
+      className="p-1.5 rounded-md hover:bg-[var(--color-surface-2)]
+                 text-[var(--color-fg-mute)] hover:text-[var(--color-danger)]"
+      title="Clear your music history (this room only)"
+      aria-label="Clear your music history"
+    >
+      <Trash2 size={14} />
+    </button>
+  )
+}
+
+/**
  * One row in the "Up Next" queue. Click expands the static row into a
  * live iframe — same lazy-load policy as <SpotifyEmbed> in the chat
  * bubble. Keeps initial paint snappy even with 20 queued tracks.
  */
-function QueueRow({ track }: { track: JukeboxTrack }) {
+function QueueRow({
+  track,
+  onRemove,
+}: {
+  track: JukeboxTrack
+  onRemove?: () => void
+}) {
   const [open, setOpen] = useState(false)
   const tall = track.spotify.kind !== 'track'
 
   if (open) {
     return (
-      <li>
+      <li className="relative group">
         <iframe
           title={`Spotify ${track.spotify.kind}`}
           src={track.spotify.embedUrl}
@@ -349,9 +536,18 @@ function QueueRow({ track }: { track: JukeboxTrack }) {
           allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
           style={{ border: 0, borderRadius: 10 }}
         />
-        <p className="text-[10px] text-[var(--color-fg-mute)] mt-1 px-1">
-          {track.senderName}
-        </p>
+        <div className="flex items-center justify-between mt-1 px-1">
+          <p className="text-[10px] text-[var(--color-fg-mute)]">
+            {track.senderName}
+          </p>
+          <button
+            onClick={() => setOpen(false)}
+            className="text-[10px] text-[var(--color-fg-mute)] hover:text-[var(--color-fg)]"
+            title="Collapse"
+          >
+            collapse
+          </button>
+        </div>
       </li>
     )
   }
@@ -362,14 +558,14 @@ function QueueRow({ track }: { track: JukeboxTrack }) {
   const subText = track.spotify.title ? track.senderName : track.spotify.kind
 
   return (
-    <li>
+    <li className="relative group">
       <button
         type="button"
         onClick={() => setOpen(true)}
         className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg
                    bg-[var(--color-surface-2)] hover:bg-[#1DB954]/10
                    border border-transparent hover:border-[#1DB954]/30
-                   transition-colors text-left group cursor-pointer"
+                   transition-colors text-left cursor-pointer"
         title="Tap to play"
         aria-label={`Play ${track.spotify.kind}`}
       >
@@ -405,6 +601,23 @@ function QueueRow({ track }: { track: JukeboxTrack }) {
           <ExternalLink size={12} />
         </a>
       </button>
+
+      {/* Per-track remove — appears on hover. Hides the track for the
+          current user only; other room members still see it. */}
+      {onRemove && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onRemove() }}
+          className="absolute top-1/2 -translate-y-1/2 -right-1 w-5 h-5 rounded-full
+                     bg-[var(--color-surface-1)] border border-[var(--color-line)]
+                     flex items-center justify-center
+                     opacity-0 group-hover:opacity-100 transition-opacity
+                     text-[var(--color-fg-mute)] hover:text-[var(--color-danger)]"
+          title="Remove from your list"
+          aria-label="Remove from your list"
+        >
+          <X size={10} />
+        </button>
+      )}
     </li>
   )
 }
