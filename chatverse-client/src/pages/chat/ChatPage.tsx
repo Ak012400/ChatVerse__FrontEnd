@@ -20,6 +20,7 @@ import Loader from '../../components/ui/Loader'
 import Avatar from '../../components/ui/Avatar'
 import IconButton from '../../components/ui/IconButton'
 import TranslateButton from '../../components/chat/TranslateButton'
+import { SpotifyEmbed } from '../../components/chat/SpotifyEmbed'
 import { useTranslation, detectLanguage, preferredLanguageCode } from '../../hooks/useTranslation'
 
 export default function ChatPage() {
@@ -681,14 +682,27 @@ function MessageBubble({
   }
 
   if (msg.type === 'ephemeral_image' && msg.mediaUrl) {
+    // Server now broadcasts ephemeral images with modStatus="pending"
+    // (the old client-trusted "clean" was a bypass for moderation).
+    // While pending we keep the image visible but blurred so the reader
+    // gets a hint of context without exposing unmoderated content; once
+    // the server flips the row to "clean" the blur drops.
+    const isPending = msg.modStatus === 'pending'
     return (
       <div className={`relative p-1 ${baseRadius}
         ${isMine ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-surface-2)]'}`}>
         <img
           src={msg.mediaUrl}
           alt="Vanish mode"
-          className="rounded-md w-36 sm:w-44 max-h-52 object-cover"
+          className={`rounded-md w-36 sm:w-44 max-h-52 object-cover transition-all
+            ${isPending ? 'blur-md scale-105' : ''}`}
         />
+        {isPending && (
+          <span className="absolute inset-0 flex items-center justify-center
+            text-[10px] font-medium text-white/90 bg-black/30 rounded-md pointer-events-none">
+            Awaiting moderation…
+          </span>
+        )}
         <span className="absolute bottom-2 right-2 bg-black/70 px-1.5 py-0.5 rounded text-[9px] text-white/80 flex items-center gap-1 backdrop-blur">
           👻 Vanish
         </span>
@@ -697,15 +711,18 @@ function MessageBubble({
   }
 
   return (
-    <div
-      className={`px-3 py-1.5 text-sm leading-relaxed break-words whitespace-pre-wrap ${baseRadius}
-        ${
-          isMine
-            ? 'bg-[var(--color-accent)] text-white'
-            : 'bg-[var(--color-surface-2)] text-[var(--color-fg)]'
-        }`}
-    >
-      {msg.content}
+    <div className="flex flex-col gap-1.5 items-stretch">
+      <div
+        className={`px-3 py-1.5 text-sm leading-relaxed break-words whitespace-pre-wrap ${baseRadius}
+          ${
+            isMine
+              ? 'bg-[var(--color-accent)] text-white'
+              : 'bg-[var(--color-surface-2)] text-[var(--color-fg)]'
+          }`}
+      >
+        {msg.content}
+      </div>
+      {msg.spotify && <SpotifyEmbed embed={msg.spotify} />}
     </div>
   )
 }

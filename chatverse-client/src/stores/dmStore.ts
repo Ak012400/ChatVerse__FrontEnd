@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { SpotifyEmbedRef } from '../types'
 
 export interface DmMessage {
   id: string
@@ -10,6 +11,8 @@ export interface DmMessage {
   type: string
   mediaUrl?: string | null
   isRead?: boolean
+  /** Server-detected Spotify embed (mirrors room messages). */
+  spotify?: SpotifyEmbedRef | null
   createdAt: string
 }
 
