@@ -11,6 +11,9 @@ export const roomsApi = {
     api.get(`/rooms/${slug}`),
   getMessages: (slug: string, skip = 0, limit = 50) =>
     api.get(`/rooms/${slug}/messages`, { params: { skip, limit } }),
+  /** Last N Spotify-bearing messages — powers the Music Lounge jukebox. */
+  getSpotifyTracks: (slug: string, limit = 20) =>
+    api.get(`/rooms/${slug}/spotify-tracks`, { params: { limit } }),
   create: (data: {
     displayName: string
     description?: string
