@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  Monitor, Mic, MicOff, VideoOff, Video as VideoIcon,
+  Monitor, MonitorOff, Mic, MicOff, VideoOff, Video as VideoIcon,
   PhoneOff, Users, Loader2, AlertTriangle, Info,
   Globe, Search, ExternalLink, RefreshCw, X,
 } from 'lucide-react'
@@ -18,38 +18,30 @@ import { useChatHub } from '../../hooks/useChatHub'
 import * as signalR from '@microsoft/signalr'
 
 /**
- * Theater (Watch Party) — embedded-browser edition.
+ * Theater (Watch Party) — dual-mode edition.
  *
- * The old version used LiveKit screen-share: the host streamed their
- * desktop pixels and everyone watched at ~720p with 200ms lag. That
- * works but it's expensive (one upstream camera per host) and the
- * "browser" the host was operating only existed on their machine.
+ * Two ways to watch together, picked by the host:
  *
- * This version flips the model:
- *   • Host enters a URL in a top address bar (YouTube link, Twitch
- *     channel, a direct .mp4, etc.). The URL is synced via SignalR
- *     to every participant.
- *   • Each viewer loads the URL in their OWN iframe — they're each
- *     hitting the source CDN directly, so quality is whatever their
- *     own bandwidth allows. No re-encoding, no host upload tax.
- *   • LiveKit is still here for voice + a small camera strip so the
- *     party feels social. We just drop the screen-share track.
+ *   1. CO-BROWSE  — host pastes a URL (YouTube / Vimeo / Twitch /
+ *      direct .mp4). The URL is SignalR-synced and each viewer loads
+ *      the same page in their own iframe. Best quality per viewer
+ *      (direct CDN), but each iframe plays independently → mild
+ *      timing drift between viewers.
  *
- * Honest constraint: most walled-garden OTT (Netflix, Hotstar, Prime)
- * block iframe embedding via X-Frame-Options DENY or CSP
- * `frame-ancestors`. The browser shows a blank/blocked iframe. We
- * detect that with an onload timeout heuristic and surface a friendly
- * message + a button to open the site in a separate browser tab. The
- * sync is preserved — late joiners still get the URL — but for those
- * sites it's "everyone watches together from the same site" rather
- * than literally inside ChatVerse.
+ *   2. SCREEN SHARE — host streams their desktop pixels through
+ *      LiveKit. Everyone sees the EXACT same frame in lock-step.
+ *      Works for Netflix/Prime/Hotstar (and anything else that
+ *      blocks iframe embedding). Quality limited by host upload.
  *
- * Iframe-friendly sources that just work: YouTube, Vimeo, Dailymotion,
- * Twitch, JW Player demos, archive.org, direct .mp4 / .webm URLs.
+ * The mode itself is broadcast through `BroadcastTheaterState`, so
+ * when the host toggles, every participant flips at the same time —
+ * no one ends up looking at the wrong UI.
  *
- * Trust model: per product spec the host owns the URL choice. No
- * server-side moderation runs on the iframe content. The disclaimer
- * banner makes that explicit on every join.
+ * Late-joiner support: server caches `{ mode, url }` in Redis for
+ * 15 min and replays it on `JoinTheaterRoom`.
+ *
+ * Trust model unchanged: this room is private + invite-only, no
+ * automated moderation, whoever picks the content owns the consequences.
  */
 export default function TheaterRoomPage() {
   const { roomName } = useParams<{ roomName: string }>()
@@ -120,18 +112,15 @@ export default function TheaterRoomPage() {
   )
 }
 
-interface SharedUrlState {
-  url: string
-  hostName?: string | null
+type TheaterMode = 'cobrowse' | 'screenshare'
+
+interface SharedState {
+  mode: TheaterMode
+  url: string | null
+  hostName: string | null
   at: number
 }
 
-/**
- * Quick-jump targets — these are sites we KNOW iframe well. Sites
- * that don't iframe (Netflix etc.) we deliberately don't list as
- * one-tap targets so the user doesn't get a frustrating "blocked"
- * screen out of the box.
- */
 const QUICK_SOURCES: { label: string; url: string }[] = [
   { label: 'YouTube', url: 'https://www.youtube.com/' },
   { label: 'Vimeo', url: 'https://vimeo.com/' },
@@ -147,56 +136,62 @@ function TheaterUI({ roomName }: { roomName: string }) {
   const participants = useParticipants()
   const { getConnection, safeInvoke, isConnected } = useChatHub()
 
-  // Only camera tracks — no screen-share in this iteration.
   const cameraTracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: true }])
+  const screenTracks = useTracks([Track.Source.ScreenShare], { onlySubscribed: true })
+  const primaryScreen = screenTracks[0] ?? null
 
-  const [shared, setShared] = useState<SharedUrlState | null>(null)
+  // Default to co-browse — that's what the user wanted as the headline
+  // feature. Screen-share is the "fallback for Netflix" path.
+  const [shared, setShared] = useState<SharedState>({
+    mode: 'cobrowse', url: null, hostName: null, at: Date.now(),
+  })
   const [urlInput, setUrlInput] = useState('')
   const [iframeError, setIframeError] = useState<'unknown' | 'blocked' | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const loadTimerRef = useRef<number | null>(null)
 
-  // ── Join the SignalR theater group + subscribe to URL changes.
+  // ── Join the SignalR theater group + subscribe to state changes.
   useEffect(() => {
     const conn = getConnection()
     if (!conn || conn.state !== signalR.HubConnectionState.Connected) return
 
-    const handler = (payload: { url: string; hostName?: string; at?: string | number }) => {
-      if (!payload?.url) return
+    const handler = (payload: { mode: string; url?: string | null; hostName?: string | null; at?: string | number }) => {
+      const mode: TheaterMode = payload.mode === 'screenshare' ? 'screenshare' : 'cobrowse'
       const atMs = typeof payload.at === 'number' ? payload.at : (payload.at ? Date.parse(payload.at) : Date.now())
-      setShared({ url: payload.url, hostName: payload.hostName ?? null, at: atMs })
-      setUrlInput(payload.url)
+      setShared({
+        mode,
+        url: payload.url ?? null,
+        hostName: payload.hostName ?? null,
+        at: atMs,
+      })
+      if (mode === 'cobrowse' && payload.url) setUrlInput(payload.url)
       setIframeError(null)
     }
 
-    conn.on('TheaterUrlChanged', handler)
+    conn.on('TheaterStateChanged', handler)
     safeInvoke('JoinTheaterRoom', roomName).catch(() => {
-      showToast({ type: 'warning', title: 'Sync offline', message: 'URL sync unavailable — try refreshing.', duration: 3000 })
+      showToast({ type: 'warning', title: 'Sync offline', message: 'Mode sync unavailable — try refreshing.', duration: 3000 })
     })
 
     return () => {
-      try { conn.off('TheaterUrlChanged', handler) } catch { /* ignore */ }
+      try { conn.off('TheaterStateChanged', handler) } catch { /* ignore */ }
       safeInvoke('LeaveTheaterRoom', roomName).catch(() => { /* best effort */ })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomName, isConnected()])
 
-  // ── Iframe load detection: if onload doesn't fire within 6s OR the
-  //    iframe loads into a known X-Frame-Options blocked state, we flag
-  //    it so the UI can show a fallback CTA. (We can't read the iframe's
-  //    contentDocument cross-origin, so this is best-effort.)
+  // ── Iframe load detection (co-browse only).
   useEffect(() => {
-    if (!shared?.url) return
+    if (shared.mode !== 'cobrowse' || !shared.url) return
     setIframeError(null)
     if (loadTimerRef.current) window.clearTimeout(loadTimerRef.current)
     loadTimerRef.current = window.setTimeout(() => {
-      // If onload never fired we assume it's blocked.
       setIframeError((prev) => prev ?? 'unknown')
     }, 6000)
     return () => {
       if (loadTimerRef.current) window.clearTimeout(loadTimerRef.current)
     }
-  }, [shared?.url])
+  }, [shared.mode, shared.url])
 
   const onIframeLoad = () => {
     if (loadTimerRef.current) {
@@ -205,18 +200,15 @@ function TheaterUI({ roomName }: { roomName: string }) {
     }
   }
 
-  /** Normalise / convert known patterns to embeddable URLs. */
+  /** Normalise embed-friendly patterns. */
   const normaliseUrl = (raw: string): string => {
     let url = raw.trim()
     if (!url) return ''
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url
-    // youtube.com/watch?v=ID → youtube.com/embed/ID
     const ytWatch = url.match(/(?:youtube\.com\/watch\?[^#]*v=|youtu\.be\/)([\w-]{11})/)
     if (ytWatch) return `https://www.youtube.com/embed/${ytWatch[1]}?autoplay=1`
-    // vimeo.com/123 → player.vimeo.com/video/123
     const vimeo = url.match(/vimeo\.com\/(\d+)/)
     if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}?autoplay=1`
-    // twitch.tv/channel → player.twitch.tv/?channel=...
     const twitch = url.match(/^https?:\/\/(?:www\.)?twitch\.tv\/([\w-]+)(?:\/|$)/)
     if (twitch && !twitch[1].startsWith('videos')) {
       const parent = window.location.hostname || 'localhost'
@@ -225,13 +217,25 @@ function TheaterUI({ roomName }: { roomName: string }) {
     return url
   }
 
+  /** Broadcast just a URL (mode stays as-is, defaults to cobrowse). */
   const broadcastUrl = async (raw: string) => {
     const url = normaliseUrl(raw)
     if (!url) return
     try {
-      await safeInvoke('BroadcastTheaterUrl', roomName, url)
+      await safeInvoke('BroadcastTheaterState', roomName, 'cobrowse', url)
     } catch {
       showToast({ type: 'danger', title: 'Sync failed', message: 'Could not broadcast the URL.', duration: 2500 })
+    }
+  }
+
+  /** Switch mode — broadcasts to everyone so the UI flips in unison. */
+  const switchMode = async (nextMode: TheaterMode) => {
+    try {
+      // Preserve URL when switching modes so a host can flip to
+      // screen-share to deal with a Netflix link then flip back.
+      await safeInvoke('BroadcastTheaterState', roomName, nextMode, nextMode === 'cobrowse' ? shared.url : null)
+    } catch {
+      showToast({ type: 'danger', title: 'Sync failed', message: 'Could not switch mode.', duration: 2500 })
     }
   }
 
@@ -241,7 +245,7 @@ function TheaterUI({ roomName }: { roomName: string }) {
     broadcastUrl(urlInput)
   }
 
-  // ── Disclaimer banner: dismiss persists per device
+  // ── Disclaimer banner
   const [showDisclaimer, setShowDisclaimer] = useState(() => {
     try { return !localStorage.getItem('chatverse:theater:disclaimerDismissed') }
     catch { return true }
@@ -255,9 +259,22 @@ function TheaterUI({ roomName }: { roomName: string }) {
     try { await theaterApi.end(roomName).catch(() => {}) } finally { navigate('/video') }
   }
 
-  // ── Sandbox flags. We allow scripts + same-origin so video players
-  // actually work, but block top-navigation so a malicious page can't
-  // redirect the user's whole ChatVerse session.
+  // ── Screen-share helpers (only meaningful in screenshare mode)
+  const canShareScreen = useMemo(() => {
+    if (typeof navigator === 'undefined') return false
+    return !!(navigator.mediaDevices && typeof (navigator.mediaDevices as any).getDisplayMedia === 'function')
+  }, [])
+  const isMyScreenSharing = localParticipant.isScreenShareEnabled
+  const toggleScreenShare = async () => {
+    try {
+      await localParticipant.setScreenShareEnabled(!isMyScreenSharing)
+    } catch (err: any) {
+      if (err?.name !== 'NotAllowedError') {
+        showToast({ type: 'danger', title: 'Screen share failed', message: err?.message ?? 'Try again', duration: 3000 })
+      }
+    }
+  }
+
   const iframeSandbox = useMemo(
     () => 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-presentation',
     [],
@@ -274,9 +291,20 @@ function TheaterUI({ roomName }: { roomName: string }) {
           <p className="text-sm font-medium truncate">Theater · {roomName.replace('th-', '')}</p>
           <p className="text-[11px] text-[var(--color-fg-mute)] flex items-center gap-1.5">
             <Users size={10} /> {participants.length}/10 watching
-            {shared?.hostName && <span className="ml-2">· playing {shared.hostName}'s pick</span>}
+            {shared.hostName && <span className="ml-2 truncate">· {shared.hostName}'s pick</span>}
           </p>
         </div>
+
+        {/* Mode pill toggle — synced for everyone */}
+        <div className="hidden sm:inline-flex rounded-full bg-[var(--color-surface-2)] p-0.5 text-[11px] font-semibold">
+          <ModeButton active={shared.mode === 'cobrowse'} onClick={() => switchMode('cobrowse')}>
+            <Globe size={11} /> Co-browse
+          </ModeButton>
+          <ModeButton active={shared.mode === 'screenshare'} onClick={() => switchMode('screenshare')}>
+            <Monitor size={11} /> Screen share
+          </ModeButton>
+        </div>
+
         <button
           onClick={handleLeave}
           className="h-8 px-3 rounded-md text-xs bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-white inline-flex items-center gap-1.5"
@@ -287,14 +315,25 @@ function TheaterUI({ roomName }: { roomName: string }) {
         </button>
       </header>
 
-      {/* Copyright disclaimer */}
+      {/* Mobile mode pill — header was getting too cramped on phone */}
+      <div className="sm:hidden shrink-0 px-3 py-1.5 border-b border-[var(--color-line)] bg-[var(--color-surface-1)] flex justify-center">
+        <div className="inline-flex rounded-full bg-[var(--color-surface-2)] p-0.5 text-[11px] font-semibold">
+          <ModeButton active={shared.mode === 'cobrowse'} onClick={() => switchMode('cobrowse')}>
+            <Globe size={11} /> Co-browse
+          </ModeButton>
+          <ModeButton active={shared.mode === 'screenshare'} onClick={() => switchMode('screenshare')}>
+            <Monitor size={11} /> Screen
+          </ModeButton>
+        </div>
+      </div>
+
+      {/* Disclaimer */}
       {showDisclaimer && (
         <div className="shrink-0 px-3 sm:px-5 py-2 bg-[var(--color-warning-soft)] border-b border-[var(--color-warning-border)] flex items-start gap-2 text-[11px] text-[var(--color-warning-fg)]">
           <Info size={12} className="shrink-0 mt-0.5" />
           <span className="flex-1 leading-snug">
-            This room is private and no automated moderation runs on the embedded page —
-            whoever picks the URL is responsible for what's on screen. Don't stream
-            copyrighted content without authorisation.
+            Private room — no automated moderation runs on whatever's on screen.
+            The person picking the content is responsible for it.
           </span>
           <button onClick={dismissDisclaimer} className="shrink-0 px-2 text-[var(--color-warning-fg)] hover:text-[var(--color-fg)]" title="Got it" aria-label="Dismiss">
             <X size={12} />
@@ -302,109 +341,107 @@ function TheaterUI({ roomName }: { roomName: string }) {
         </div>
       )}
 
-      {/* Address bar */}
-      <form onSubmit={onSubmitUrl} className="shrink-0 px-3 sm:px-5 py-2 border-b border-[var(--color-line)] bg-[var(--color-surface-1)] flex items-center gap-2">
-        <Globe size={14} className="text-[var(--color-fg-mute)] shrink-0" />
-        <input
-          type="text"
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
-          placeholder="Paste a YouTube / Vimeo / Twitch / direct video URL…"
-          className="flex-1 h-9 px-3 rounded-md text-sm bg-[var(--color-surface-2)] border border-[var(--color-line)] focus:outline-none focus:border-[var(--color-line-strong)] text-[var(--color-fg)] placeholder-[var(--color-fg-mute)]"
-        />
-        <button
-          type="submit"
-          className="h-9 px-3 rounded-md text-xs font-semibold bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] inline-flex items-center gap-1.5"
-        >
-          <Search size={12} />
-          <span>Play for all</span>
-        </button>
-      </form>
+      {/* Co-browse address bar — only in cobrowse mode */}
+      {shared.mode === 'cobrowse' && (
+        <>
+          <form onSubmit={onSubmitUrl} className="shrink-0 px-3 sm:px-5 py-2 border-b border-[var(--color-line)] bg-[var(--color-surface-1)] flex items-center gap-2">
+            <Globe size={14} className="text-[var(--color-fg-mute)] shrink-0" />
+            <input
+              type="text"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              placeholder="Paste a YouTube / Vimeo / Twitch / direct video URL…"
+              className="flex-1 h-9 px-3 rounded-md text-sm bg-[var(--color-surface-2)] border border-[var(--color-line)] focus:outline-none focus:border-[var(--color-line-strong)] text-[var(--color-fg)] placeholder-[var(--color-fg-mute)]"
+            />
+            <button type="submit" className="h-9 px-3 rounded-md text-xs font-semibold bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] inline-flex items-center gap-1.5">
+              <Search size={12} />
+              <span>Play for all</span>
+            </button>
+          </form>
 
-      {/* Quick-jump shortcuts */}
-      <div className="shrink-0 px-3 sm:px-5 py-1.5 border-b border-[var(--color-line)] bg-[var(--color-surface-1)] flex items-center gap-1.5 overflow-x-auto">
-        <span className="text-[10px] uppercase tracking-wider text-[var(--color-fg-mute)] font-semibold shrink-0">Quick:</span>
-        {QUICK_SOURCES.map((src) => (
-          <button
-            key={src.url}
-            type="button"
-            onClick={() => { setUrlInput(src.url); broadcastUrl(src.url) }}
-            className="shrink-0 h-7 px-2.5 rounded-full text-[11px] font-medium bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)] text-[var(--color-fg-dim)] transition-colors"
-          >
-            {src.label}
-          </button>
-        ))}
-      </div>
+          <div className="shrink-0 px-3 sm:px-5 py-1.5 border-b border-[var(--color-line)] bg-[var(--color-surface-1)] flex items-center gap-1.5 overflow-x-auto">
+            <span className="text-[10px] uppercase tracking-wider text-[var(--color-fg-mute)] font-semibold shrink-0">Quick:</span>
+            {QUICK_SOURCES.map((src) => (
+              <button
+                key={src.url}
+                type="button"
+                onClick={() => { setUrlInput(src.url); broadcastUrl(src.url) }}
+                className="shrink-0 h-7 px-2.5 rounded-full text-[11px] font-medium bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)] text-[var(--color-fg-dim)] transition-colors"
+              >
+                {src.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Centre stage */}
       <div className="flex-1 min-h-0 flex flex-col gap-2 p-2 sm:p-3 overflow-hidden">
         <div className="flex-1 min-h-0 rounded-md overflow-hidden border border-[var(--color-line)] bg-black flex items-center justify-center relative">
-          {shared?.url ? (
-            <>
-              <iframe
-                ref={iframeRef}
-                key={shared.url}
-                src={shared.url}
-                onLoad={onIframeLoad}
-                className="w-full h-full"
-                allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-                allowFullScreen
-                sandbox={iframeSandbox}
-                referrerPolicy="no-referrer"
-                title="Theater content"
+          {shared.mode === 'cobrowse' ? (
+            shared.url ? (
+              <>
+                <iframe
+                  ref={iframeRef}
+                  key={shared.url}
+                  src={shared.url}
+                  onLoad={onIframeLoad}
+                  className="w-full h-full"
+                  allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+                  allowFullScreen
+                  sandbox={iframeSandbox}
+                  referrerPolicy="no-referrer"
+                  title="Theater content"
+                />
+                {iframeError && (
+                  <div className="absolute inset-x-0 bottom-0 p-3 bg-black/85 text-white text-xs flex items-center gap-2">
+                    <AlertTriangle size={14} className="text-[var(--color-warning-fg)] shrink-0" />
+                    <span className="flex-1 leading-snug">
+                      Looks like this site blocks embedded viewing. Switch to <b>Screen share</b> mode
+                      (top right) — host opens it normally, everyone watches their screen.
+                    </span>
+                    <a href={shared.url} target="_blank" rel="noreferrer" className="shrink-0 px-2 py-1 rounded-md bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-[11px] inline-flex items-center gap-1">
+                      <ExternalLink size={11} /> Open
+                    </a>
+                    <button onClick={() => setIframeError(null)} className="shrink-0 px-1 text-white/70 hover:text-white" aria-label="Dismiss">
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
+                <button
+                  onClick={() => { if (iframeRef.current) iframeRef.current.src = shared.url! }}
+                  className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white inline-flex items-center justify-center"
+                  title="Reload"
+                >
+                  <RefreshCw size={13} />
+                </button>
+              </>
+            ) : (
+              <EmptyStage
+                title="Nothing playing yet"
+                body="Paste a video URL above or hit a quick-source to start the party. Everyone in the room loads the same page in their own browser."
               />
-              {iframeError && (
-                <div className="absolute inset-x-0 bottom-0 p-3 bg-black/85 text-white text-xs flex items-center gap-2">
-                  <AlertTriangle size={14} className="text-[var(--color-warning-fg)] shrink-0" />
-                  <span className="flex-1 leading-snug">
-                    This site might block embedded viewing. If the player is blank, open it in a new tab —
-                    you'll still chat together here.
-                  </span>
-                  <a
-                    href={shared.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0 px-2 py-1 rounded-md bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-[11px] inline-flex items-center gap-1"
-                  >
-                    <ExternalLink size={11} /> Open
-                  </a>
-                  <button
-                    onClick={() => setIframeError(null)}
-                    className="shrink-0 px-1 text-white/70 hover:text-white"
-                    aria-label="Dismiss"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              )}
-              <button
-                onClick={() => { if (iframeRef.current) iframeRef.current.src = shared.url }}
-                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white inline-flex items-center justify-center"
-                title="Reload"
-              >
-                <RefreshCw size={13} />
-              </button>
-            </>
+            )
           ) : (
-            <div className="text-center px-6 py-10 text-[var(--color-fg-mute)]">
-              <Monitor size={32} className="mx-auto mb-3 opacity-50" />
-              <p className="text-sm font-medium text-[var(--color-fg)]">Nothing playing yet</p>
-              <p className="text-xs mt-1 max-w-sm mx-auto">
-                Paste a video URL above or hit a quick-source to start the party.
-                Everyone in the room will load the same page in their own browser.
-              </p>
-            </div>
+            // SCREEN SHARE MODE
+            primaryScreen ? (
+              <ParticipantTile trackRef={primaryScreen} className="w-full h-full" />
+            ) : (
+              <EmptyStage
+                title="No one is sharing yet"
+                body={canShareScreen
+                  ? 'Tap "Share screen" below to start the watch party. Use this for Netflix / Prime / Hotstar / anything that blocks iframe embedding.'
+                  : 'Phone browsers can only view a screen share — ask a desktop user to start it.'}
+              />
+            )
           )}
         </div>
 
-        {/* Participant strip — webcams stay so people feel social. */}
+        {/* Webcam strip */}
         {cameraTracks.length > 0 && (
           <div className="shrink-0 h-20 flex gap-2 overflow-x-auto pb-1">
             {cameraTracks.map((trackRef, i) => (
-              <div
-                key={trackRef.participant.identity + i}
-                className="shrink-0 w-28 h-full rounded-md overflow-hidden border border-[var(--color-line)] bg-black"
-              >
+              <div key={trackRef.participant.identity + i} className="shrink-0 w-28 h-full rounded-md overflow-hidden border border-[var(--color-line)] bg-black">
                 <ParticipantTile trackRef={trackRef} className="w-full h-full" />
               </div>
             ))}
@@ -412,12 +449,54 @@ function TheaterUI({ roomName }: { roomName: string }) {
         )}
       </div>
 
-      <ControlBar />
+      <ControlBar
+        mode={shared.mode}
+        canShareScreen={canShareScreen}
+        isMyScreenSharing={isMyScreenSharing}
+        onToggleScreenShare={toggleScreenShare}
+      />
     </>
   )
 }
 
-function ControlBar() {
+function ModeButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        'h-7 px-2.5 rounded-full inline-flex items-center gap-1 transition-colors',
+        active
+          ? 'bg-[var(--color-accent)] text-white'
+          : 'text-[var(--color-fg-dim)] hover:text-[var(--color-fg)]',
+      ].join(' ')}
+    >
+      {children}
+    </button>
+  )
+}
+
+function EmptyStage({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="text-center px-6 py-10 text-[var(--color-fg-mute)]">
+      <Monitor size={32} className="mx-auto mb-3 opacity-50" />
+      <p className="text-sm font-medium text-[var(--color-fg)]">{title}</p>
+      <p className="text-xs mt-1 max-w-sm mx-auto">{body}</p>
+    </div>
+  )
+}
+
+function ControlBar({
+  mode,
+  canShareScreen,
+  isMyScreenSharing,
+  onToggleScreenShare,
+}: {
+  mode: TheaterMode
+  canShareScreen: boolean
+  isMyScreenSharing: boolean
+  onToggleScreenShare: () => void
+}) {
   const { localParticipant } = useLocalParticipant()
   const [micOn, setMicOn] = useState(true)
   const [camOn, setCamOn] = useState(true)
@@ -447,6 +526,24 @@ function ControlBar() {
       >
         {camOn ? <VideoIcon size={16} /> : <VideoOff size={16} />}
       </button>
+
+      {/* Share-screen button only appears in screen-share mode AND when
+          the device supports getDisplayMedia (no mobile init). */}
+      {mode === 'screenshare' && canShareScreen && (
+        <button
+          onClick={onToggleScreenShare}
+          className={[
+            'h-10 px-3 rounded-full inline-flex items-center gap-1.5 text-xs font-semibold transition-colors',
+            isMyScreenSharing
+              ? 'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]'
+              : 'bg-[var(--color-surface-2)] text-[var(--color-fg)] hover:bg-[var(--color-surface-3)]',
+          ].join(' ')}
+          aria-label={isMyScreenSharing ? 'Stop sharing' : 'Share screen'}
+        >
+          {isMyScreenSharing ? <MonitorOff size={14} /> : <Monitor size={14} />}
+          <span>{isMyScreenSharing ? 'Stop sharing' : 'Share screen'}</span>
+        </button>
+      )}
     </div>
   )
 }
