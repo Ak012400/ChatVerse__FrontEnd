@@ -4,10 +4,12 @@ import {
   PhoneCall, PhoneOff, UserPlus, X, Mic, MicOff,
   Video as VideoIcon, VideoOff, Loader2,
 } from 'lucide-react'
-import { CaptionOverlay, CaptionsToggle } from '../../components/call/CaptionOverlay'
+import { CaptionOverlay, CaptionsToggle, CaptionTTSToggle } from '../../components/call/CaptionOverlay'
 import { useCaptionBroadcaster } from '../../hooks/useCaptionBroadcaster'
 import { useCaptions } from '../../hooks/useCaptions'
+import { useCaptionTTS } from '../../hooks/useCaptionTTS'
 import { useCaptionsStore } from '../../stores/captionsStore'
+import { useAuthStore } from '../../stores/authStore'
 import {
   LiveKitRoom,
   GridLayout,
@@ -465,6 +467,9 @@ function DirectCallUI({
   const setCaptionsEnabled = useCaptionsStore((s) => s.setEnabled)
   const spokenLang = useCaptionsStore((s) => s.spokenLang)
   const preferredLang = useCaptionsStore((s) => s.preferredLang)
+  const ttsEnabled = useCaptionsStore((s) => s.ttsEnabled)
+  const setTtsEnabled = useCaptionsStore((s) => s.setTtsEnabled)
+  const selfId = useAuthStore((s) => s.user?.userId)
   const { showToast } = useToastStore()
 
   const broadcaster = useCaptionBroadcaster({
@@ -497,6 +502,15 @@ function DirectCallUI({
     enabled: captionsEnabled,
   })
 
+  // TTS — read incoming translated finals aloud. Driven directly off
+  // the same `lines` array; the hook tracks its own dedupe + cancel.
+  useCaptionTTS({
+    lines: captionLines,
+    preferredLang,
+    enabled: captionsEnabled && ttsEnabled,
+    selfId,
+  })
+
   const toggleMic = async () => { const n = !micOn; await localParticipant.setMicrophoneEnabled(n); setMicOn(n) }
   const toggleCam = async () => { const n = !camOn; await localParticipant.setCameraEnabled(n); setCamOn(n) }
   const leave = async () => { await room.disconnect(); onLeave(); navigate('/video') }
@@ -526,9 +540,17 @@ function DirectCallUI({
 
       <div className="relative h-full pt-14 pb-24">
         {tracks.length > 0 ? (
-          <GridLayout tracks={tracks} style={{ height: '100%' }}>
-            <ParticipantTile />
-          </GridLayout>
+          // Desktop compaction: cap the tile area at ~max-w-4xl so a
+          // portrait-camera peer doesn't blow up to a quarter of the
+          // viewport on a laptop. Mobile (<lg) keeps full-bleed so
+          // small screens use every pixel.
+          <div className="h-full w-full mx-auto lg:max-w-4xl lg:px-4 lg:flex lg:items-center">
+            <div className="w-full h-full lg:h-auto lg:aspect-video lg:max-h-[calc(100vh-220px)] [&_.lk-participant-tile]:lg:rounded-md [&_.lk-participant-tile_video]:lg:!object-contain [&_.lk-participant-tile]:lg:bg-black/60">
+              <GridLayout tracks={tracks} style={{ height: '100%' }}>
+                <ParticipantTile />
+              </GridLayout>
+            </div>
+          </div>
         ) : (
           <div className="h-full flex items-center justify-center">
             <Loader2 size={20} className="text-white/40" style={{ animation: 'spin 1s linear infinite' }} />
@@ -558,12 +580,19 @@ function DirectCallUI({
             actually supports SpeechRecognition. The hook returns
             isSupported=false on Firefox so we'd be teasing the user. */}
         {broadcaster.isSupported && (
-          <CaptionsToggle
-            enabled={captionsEnabled}
-            onToggle={() => setCaptionsEnabled(!captionsEnabled)}
-            listening={broadcaster.listening}
-            spokenLang={spokenLang.split('-')[0]}
-          />
+          <>
+            <CaptionsToggle
+              enabled={captionsEnabled}
+              onToggle={() => setCaptionsEnabled(!captionsEnabled)}
+              listening={broadcaster.listening}
+              spokenLang={spokenLang.split('-')[0]}
+            />
+            <CaptionTTSToggle
+              enabled={ttsEnabled}
+              captionsOn={captionsEnabled}
+              onToggle={() => setTtsEnabled(!ttsEnabled)}
+            />
+          </>
         )}
         <button onClick={leave} className="h-11 px-5 rounded-md text-sm font-medium bg-[var(--color-danger)] hover:bg-[#dc2626] text-white inline-flex items-center gap-1.5 transition-colors">
           <PhoneOff size={15} />

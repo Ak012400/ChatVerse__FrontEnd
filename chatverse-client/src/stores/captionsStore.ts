@@ -15,9 +15,12 @@ interface CaptionsState {
   spokenLang: SpeechLang
   preferredLang: string
   enabled: boolean
+  /** Read incoming translated captions aloud via Web Speech SpeechSynthesis. */
+  ttsEnabled: boolean
   setSpokenLang: (l: SpeechLang) => void
   setPreferredLang: (l: string) => void
   setEnabled: (e: boolean) => void
+  setTtsEnabled: (e: boolean) => void
 }
 
 const LS_KEY = 'chatverse:captions'
@@ -26,8 +29,9 @@ interface Persisted {
   spokenLang: SpeechLang
   preferredLang: string
   enabled: boolean
+  ttsEnabled: boolean
 }
-const defaults: Persisted = { spokenLang: 'en-IN', preferredLang: 'en', enabled: false }
+const defaults: Persisted = { spokenLang: 'en-IN', preferredLang: 'en', enabled: false, ttsEnabled: false }
 
 function loadInitial(): Persisted {
   try {
@@ -38,6 +42,7 @@ function loadInitial(): Persisted {
       spokenLang: parsed.spokenLang ?? defaults.spokenLang,
       preferredLang: parsed.preferredLang ?? defaults.preferredLang,
       enabled: parsed.enabled ?? defaults.enabled,
+      ttsEnabled: parsed.ttsEnabled ?? defaults.ttsEnabled,
     }
   } catch { return defaults }
 }
@@ -53,5 +58,6 @@ export const useCaptionsStore = create<CaptionsState>((set, get) => {
     setSpokenLang: (l) => { set({ spokenLang: l }); persist({ ...get(), spokenLang: l }) },
     setPreferredLang: (l) => { set({ preferredLang: l }); persist({ ...get(), preferredLang: l }) },
     setEnabled: (e) => { set({ enabled: e }); persist({ ...get(), enabled: e }) },
+    setTtsEnabled: (e) => { set({ ttsEnabled: e }); persist({ ...get(), ttsEnabled: e }) },
   }
 })

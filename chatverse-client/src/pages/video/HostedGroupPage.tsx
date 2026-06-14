@@ -21,6 +21,12 @@ import '@livekit/components-styles'
 
 import { groupCallApi } from '../../api'
 import { useToastStore } from '../../stores/toastStore'
+import { useAuthStore } from '../../stores/authStore'
+import { useCaptionsStore } from '../../stores/captionsStore'
+import { useCaptionBroadcaster } from '../../hooks/useCaptionBroadcaster'
+import { useCaptions } from '../../hooks/useCaptions'
+import { useCaptionTTS } from '../../hooks/useCaptionTTS'
+import { CaptionOverlay, CaptionsToggle, CaptionTTSToggle } from '../../components/call/CaptionOverlay'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import IconButton from '../../components/ui/IconButton'
@@ -256,6 +262,31 @@ function HostedGroupUI({
   const [camOn, setCamOn] = useState(true)
   const [copied, setCopied] = useState(false)
 
+  // Captions + TTS wire-up — same hooks as DirectCallPage.
+  const { showToast } = useToastStore()
+  const selfId = useAuthStore((s) => s.user?.userId)
+  const captionsEnabled = useCaptionsStore((s) => s.enabled)
+  const setCaptionsEnabled = useCaptionsStore((s) => s.setEnabled)
+  const spokenLang = useCaptionsStore((s) => s.spokenLang)
+  const preferredLang = useCaptionsStore((s) => s.preferredLang)
+  const ttsEnabled = useCaptionsStore((s) => s.ttsEnabled)
+  const setTtsEnabled = useCaptionsStore((s) => s.setTtsEnabled)
+  const broadcaster = useCaptionBroadcaster({
+    roomName,
+    enabled: captionsEnabled,
+    speakLang: spokenLang,
+    onUnsupported: () => {
+      showToast({ type: 'warning', title: 'Captions unavailable', message: 'Your browser does not support live speech recognition.', duration: 3500 })
+      setCaptionsEnabled(false)
+    },
+    onPermissionDenied: () => {
+      showToast({ type: 'warning', title: 'Mic access denied', message: 'Captions need mic permission.', duration: 4000 })
+      setCaptionsEnabled(false)
+    },
+  })
+  const { lines: captionLines } = useCaptions({ roomName, preferredLang, enabled: captionsEnabled })
+  useCaptionTTS({ lines: captionLines, preferredLang, enabled: captionsEnabled && ttsEnabled, selfId })
+
   const toggleMic = async () => {
     const next = !micOn
     await localParticipant.setMicrophoneEnabled(next)
@@ -302,27 +333,41 @@ function HostedGroupUI({
         </button>
       </header>
 
-      <div className="h-full pt-10 pb-20 md:pt-12 md:pb-22 lg:pt-14 lg:pb-24">
+      {/* Desktop: cap container width + clamp each tile to aspect-video
+          so a portrait-camera peer letter-boxes instead of stretching. */}
+      <div className="h-full pt-10 pb-20 md:pt-12 md:pb-22 lg:pt-14 lg:pb-24 lg:px-6">
         {tracks.length > 0 ? (
-          <GridLayout 
-            tracks={tracks} 
-            style={{ 
-              height: '100%',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))',
-              gap: '3px',
-              padding: '4px'
-            }}>
-            <ParticipantTile />
-          </GridLayout>
+          <div className="h-full w-full lg:max-w-6xl lg:mx-auto">
+            <GridLayout
+              tracks={tracks}
+              style={{
+                height: '100%',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))',
+                gap: '4px',
+                padding: '4px',
+              }}
+              className="[&_.lk-participant-tile]:lg:aspect-video [&_.lk-participant-tile]:lg:max-h-[320px] [&_.lk-participant-tile_video]:lg:!object-contain [&_.lk-participant-tile]:lg:bg-black/60 [&_.lk-participant-tile]:lg:rounded-md"
+            >
+              <ParticipantTile />
+            </GridLayout>
+          </div>
         ) : (
           <div className="h-full flex items-center justify-center">
             <Loader2 size={20} className="text-white/40" style={{ animation: 'spin 1s linear infinite' }} />
           </div>
         )}
+
+        {captionsEnabled && captionLines.length > 0 && (
+          <CaptionOverlay
+            lines={captionLines}
+            preferredLang={preferredLang}
+            className="bottom-20"
+          />
+        )}
       </div>
 
-      <div className="absolute bottom-0 inset-x-0 z-30 px-3 md:px-5 pb-4 md:pb-5 pt-8 md:pt-12 flex items-center justify-center gap-2 bg-gradient-to-t from-black/85 to-transparent">
+      <div className="absolute bottom-0 inset-x-0 z-30 px-3 md:px-5 pb-4 md:pb-5 pt-8 md:pt-12 flex items-center justify-center gap-2 flex-wrap bg-gradient-to-t from-black/85 to-transparent">
         <IconButton
           variant="subtle"
           size="lg"
@@ -341,6 +386,21 @@ function HostedGroupUI({
         >
           {camOn ? <VideoIcon size={18} /> : <VideoOff size={18} />}
         </IconButton>
+        {broadcaster.isSupported && (
+          <>
+            <CaptionsToggle
+              enabled={captionsEnabled}
+              onToggle={() => setCaptionsEnabled(!captionsEnabled)}
+              listening={broadcaster.listening}
+              spokenLang={spokenLang.split('-')[0]}
+            />
+            <CaptionTTSToggle
+              enabled={ttsEnabled}
+              captionsOn={captionsEnabled}
+              onToggle={() => setTtsEnabled(!ttsEnabled)}
+            />
+          </>
+        )}
         <button
           onClick={leave}
           className="h-11 px-5 rounded-md text-sm font-medium bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-white inline-flex items-center gap-1.5 transition-colors"
