@@ -15,6 +15,7 @@ import '@livekit/components-styles'
 import { theaterApi } from '../../api'
 import { useToastStore } from '../../stores/toastStore'
 import { useChatHub } from '../../hooks/useChatHub'
+import { useYouTubeSync, youtubeVideoIdFromEmbedUrl } from '../../hooks/useYouTubeSync'
 import * as signalR from '@microsoft/signalr'
 
 /**
@@ -148,7 +149,22 @@ function TheaterUI({ roomName }: { roomName: string }) {
   const [urlInput, setUrlInput] = useState('')
   const [iframeError, setIframeError] = useState<'unknown' | 'blocked' | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const ytContainerRef = useRef<HTMLDivElement | null>(null)
   const loadTimerRef = useRef<number | null>(null)
+
+  // YouTube videoId is extracted from our normalised embed URL. When
+  // present we render the YT IFrame Player API (full play/pause/seek
+  // sync) instead of the dumb iframe. Falls through to plain iframe
+  // for non-YouTube URLs.
+  const ytVideoId = shared.mode === 'cobrowse'
+    ? youtubeVideoIdFromEmbedUrl(shared.url)
+    : null
+  useYouTubeSync({
+    roomName,
+    videoId: ytVideoId,
+    containerRef: ytContainerRef,
+    enabled: shared.mode === 'cobrowse' && !!ytVideoId,
+  })
 
   // ── Join the SignalR theater group + subscribe to state changes.
   useEffect(() => {
@@ -381,19 +397,31 @@ function TheaterUI({ roomName }: { roomName: string }) {
           {shared.mode === 'cobrowse' ? (
             shared.url ? (
               <>
-                <iframe
-                  ref={iframeRef}
-                  key={shared.url}
-                  src={shared.url}
-                  onLoad={onIframeLoad}
-                  className="w-full h-full"
-                  allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-                  allowFullScreen
-                  sandbox={iframeSandbox}
-                  referrerPolicy="no-referrer"
-                  title="Theater content"
-                />
-                {iframeError && (
+                {ytVideoId ? (
+                  // YouTube IFrame API mount — the hook attaches the
+                  // player here and broadcasts play/pause/seek through
+                  // SignalR. Sub-second sync across all viewers.
+                  <div ref={ytContainerRef} className="w-full h-full" />
+                ) : (
+                  <iframe
+                    ref={iframeRef}
+                    key={shared.url}
+                    src={shared.url}
+                    onLoad={onIframeLoad}
+                    className="w-full h-full"
+                    allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+                    allowFullScreen
+                    sandbox={iframeSandbox}
+                    referrerPolicy="no-referrer"
+                    title="Theater content"
+                  />
+                )}
+                {ytVideoId && (
+                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-bold tracking-wide inline-flex items-center gap-1 shadow-lg">
+                    ▶ YT Synced
+                  </span>
+                )}
+                {iframeError && !ytVideoId && (
                   <div className="absolute inset-x-0 bottom-0 p-3 bg-black/85 text-white text-xs flex items-center gap-2">
                     <AlertTriangle size={14} className="text-[var(--color-warning-fg)] shrink-0" />
                     <span className="flex-1 leading-snug">
@@ -408,13 +436,15 @@ function TheaterUI({ roomName }: { roomName: string }) {
                     </button>
                   </div>
                 )}
-                <button
-                  onClick={() => { if (iframeRef.current) iframeRef.current.src = shared.url! }}
-                  className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white inline-flex items-center justify-center"
-                  title="Reload"
-                >
-                  <RefreshCw size={13} />
-                </button>
+                {!ytVideoId && (
+                  <button
+                    onClick={() => { if (iframeRef.current) iframeRef.current.src = shared.url! }}
+                    className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 text-white inline-flex items-center justify-center"
+                    title="Reload"
+                  >
+                    <RefreshCw size={13} />
+                  </button>
+                )}
               </>
             ) : (
               <EmptyStage
