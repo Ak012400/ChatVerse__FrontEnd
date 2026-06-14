@@ -3,9 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft, Copy, Check, Flag, Play, UserPlus,
   UserCheck, UserX, Crown, Loader2, Hand, UserPlus2, DoorOpen,
-  Clock, X, ChevronDown,
+  Clock, X, ChevronDown, MessageCircle,
 } from 'lucide-react'
 import InvitePlayerModal from '../../components/games/InvitePlayerModal'
+import { MobileBottomSheet } from '../../components/ui/MobileBottomSheet'
+import { useResizableWidth } from '../../hooks/useResizableWidth'
 import { gamesApi } from '../../api'
 import { useGameHub } from '../../hooks/useGameHub'
 import { useGameStore } from '../../stores/gameStore'
@@ -83,6 +85,18 @@ export default function PlayRoomPage() {
   }, [slug, navigate])
 
   const [showInviteModal, setShowInviteModal] = useState(false)
+  // Mobile commentary drawer — chat rail is hidden on phones to keep
+  // the board area uncluttered; this toggle opens it as a bottom sheet.
+  const [showMobileChat, setShowMobileChat] = useState(false)
+  // Drag-to-resize for the desktop side rail (board vs chat/seats).
+  // Persists per browser. Phone layouts ignore this.
+  const sideResize = useResizableWidth({
+    storageKey: 'chess-side-rail',
+    defaultWidth: 360,
+    minWidth: 280,
+    maxWidth: 560,
+    direction: 'left',
+  })
   // "I have asked for a player seat" — hydrated from sessionStorage so
   // a refresh (or accidental tab navigation away + back) doesn't lose
   // the badge. The flag is cleared either when our role flips to
@@ -366,10 +380,12 @@ export default function PlayRoomPage() {
         />
       )}
 
-      {/* Body — board left, side rail right */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 p-4 overflow-hidden">
+      {/* Body — board left, side rail right. Mobile collapses to single
+          column with the chat hidden behind a floating button. On
+          desktop the rail width is draggable via a handle on its left. */}
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 sm:gap-0 p-3 sm:p-4 sm:pr-0 overflow-hidden">
         {/* BOARD */}
-        <section className="overflow-y-auto flex items-start justify-center pt-2">
+        <section className="flex-1 min-w-0 overflow-y-auto flex items-start justify-center pt-2 sm:pr-4">
           {chess ? (
             <ChessBoardPanel
               snapshot={chess}
@@ -383,10 +399,55 @@ export default function PlayRoomPage() {
           )}
         </section>
 
-        {/* SIDE RAIL */}
-        <aside className="flex flex-col gap-3 overflow-hidden h-full">
-          {/* Live feed */}
-          <div className="flex-1 min-h-0 overflow-hidden">
+        {/* Desktop drag handle — between board and side rail. */}
+        <div
+          onPointerDown={sideResize.onPointerDown}
+          onDoubleClick={sideResize.resetToDefault}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize side rail (double-click to reset)"
+          title="Drag to resize · Double-click to reset"
+          className={[
+            'hidden lg:flex shrink-0 w-1.5 cursor-col-resize relative group transition-colors',
+            sideResize.isDragging
+              ? 'bg-[var(--color-accent)]'
+              : 'bg-[var(--color-line)] hover:bg-[var(--color-line-strong)]',
+          ].join(' ')}
+        >
+          <span
+            className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-hidden
+          >
+            {[0, 1, 2].map((i) => (
+              <span key={i} className="w-0.5 h-0.5 rounded-full bg-[var(--color-fg-mute)]" />
+            ))}
+          </span>
+        </div>
+
+        {/* SIDE RAIL — seats / moves / requests stay visible on phones
+            (stacked below the board); only the chat is moved into a
+            floating Chat FAB + bottom sheet to free up vertical space.
+            Desktop width comes from the drag handle above. */}
+        <aside
+          className="flex flex-col gap-3 overflow-hidden h-full max-h-[55vh] lg:max-h-none lg:pl-4 shrink-0 w-full lg:w-auto"
+          style={{
+            // Inline width applies on lg+; mobile already gets w-full
+            // via the Tailwind class. We can't conditionally apply the
+            // style attribute by media query, so we let mobile's
+            // `w-full` win by virtue of being a higher-priority class.
+          }}
+        >
+          {/* Apply the dragged width via a wrapper data attribute so we
+              don't fight the mobile w-full. The CSS rule below only
+              kicks in at lg+. */}
+          <style>{`
+            @media (min-width: 1024px) {
+              [data-chess-rail] { width: ${sideResize.width}px; }
+            }
+          `}</style>
+          <div data-chess-rail className="flex flex-col gap-3 overflow-hidden h-full">
+          {/* Live feed — desktop only; mobile uses the FAB drawer below. */}
+          <div className="flex-1 min-h-0 overflow-hidden hidden lg:block">
             <CommentaryChat
               messages={chat}
               onSend={(t) => sendChat(slug, t)}
@@ -518,6 +579,8 @@ export default function PlayRoomPage() {
               </div>
             )
           )}
+          </div>
+          {/* end data-chess-rail wrapper */}
         </aside>
       </div>
 
@@ -529,6 +592,33 @@ export default function PlayRoomPage() {
           catch { /* error toast comes via hub Error event */ }
         }}
       />
+
+      {/* Mobile commentary FAB + drawer. The desktop right-rail chat
+          is `hidden lg:flex`, so phones need this alternate surface to
+          stay in the conversation while a long match is underway. */}
+      <button
+        type="button"
+        onClick={() => setShowMobileChat(true)}
+        className="lg:hidden fixed bottom-4 right-3 z-30
+                   flex items-center gap-1.5 h-10 px-3 rounded-full
+                   bg-[var(--color-accent)] text-white text-xs font-semibold shadow-lg
+                   active:scale-[0.96] transition-transform"
+        aria-label="Open commentary chat"
+      >
+        <MessageCircle size={14} />
+        Chat{chat.length > 0 ? ` · ${chat.length}` : ''}
+      </button>
+      <MobileBottomSheet
+        open={showMobileChat}
+        onClose={() => setShowMobileChat(false)}
+        title="Commentary"
+        heightVh={75}
+      >
+        <CommentaryChat
+          messages={chat}
+          onSend={(t) => sendChat(slug, t)}
+        />
+      </MobileBottomSheet>
     </div>
   )
 }

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  ArrowLeft, Play, Eye, Crown, Dices, Loader2, PhoneOff, Copy, Check, X, Hand,
+  ArrowLeft, Play, Eye, Crown, Dices, Loader2, PhoneOff, Copy, Check, X, Hand, MessageCircle,
 } from 'lucide-react'
+import { MobileBottomSheet } from '../../components/ui/MobileBottomSheet'
+import { useResizableWidth } from '../../hooks/useResizableWidth'
 import { gamesApi } from '../../api'
 import { useGameHub, HubNotReadyError } from '../../hooks/useGameHub'
 import { useGameStore } from '../../stores/gameStore'
@@ -66,6 +68,18 @@ export default function LudoRoomPage() {
   const [joining, setJoining] = useState(true)
   const [joinError, setJoinError] = useState<string | null>(null)
   const [enterAttempt, setEnterAttempt] = useState(0)
+  // Mobile commentary drawer — chat aside is already hidden on phones;
+  // this surfaces it via a floating button + bottom sheet so phone
+  // players can still talk during the match.
+  const [showMobileChat, setShowMobileChat] = useState(false)
+  // Drag-to-resize for the desktop side rail. Persisted per browser.
+  const sideResize = useResizableWidth({
+    storageKey: 'ludo-side-rail',
+    defaultWidth: 320,
+    minWidth: 260,
+    maxWidth: 520,
+    direction: 'left',
+  })
 
   // ─── Entry (same hardened sequence as quiz) ─────────────────────
   useEffect(() => {
@@ -237,9 +251,9 @@ export default function LudoRoomPage() {
         </div>
       </header>
 
-      {/* ─── Body ─── */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 p-4 overflow-hidden">
-        <section className="overflow-y-auto flex flex-col items-center gap-4">
+      {/* ─── Body ─── (tighter padding on phones; resizable rail on desktop) */}
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 sm:gap-0 p-3 sm:p-4 sm:pr-0 overflow-hidden">
+        <section className="flex-1 min-w-0 overflow-y-auto flex flex-col items-center gap-4 sm:pr-4">
           {/* Winner banner + confetti */}
           {status === 'Ended' && (
             <div className="relative w-full max-w-[560px] overflow-hidden text-center bg-[var(--color-surface-1)] border border-[var(--color-line)] rounded-md p-4">
@@ -321,10 +335,60 @@ export default function LudoRoomPage() {
           )}
         </section>
 
-        <aside className="overflow-hidden h-full hidden lg:block">
+        {/* Desktop drag handle — splits board and commentary. */}
+        <div
+          onPointerDown={sideResize.onPointerDown}
+          onDoubleClick={sideResize.resetToDefault}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize commentary panel (double-click to reset)"
+          title="Drag to resize · Double-click to reset"
+          className={[
+            'hidden lg:flex shrink-0 w-1.5 cursor-col-resize relative group transition-colors',
+            sideResize.isDragging
+              ? 'bg-[var(--color-accent)]'
+              : 'bg-[var(--color-line)] hover:bg-[var(--color-line-strong)]',
+          ].join(' ')}
+        >
+          <span
+            className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-hidden
+          >
+            {[0, 1, 2].map((i) => (
+              <span key={i} className="w-0.5 h-0.5 rounded-full bg-[var(--color-fg-mute)]" />
+            ))}
+          </span>
+        </div>
+        <aside
+          className="overflow-hidden h-full hidden lg:block shrink-0 lg:pl-4"
+          style={{ width: `${sideResize.width}px` }}
+        >
           <CommentaryChat messages={chat} onSend={(t) => sendChat(slug, t)} />
         </aside>
       </div>
+
+      {/* Mobile commentary FAB + drawer — same pattern as Chess room
+          so phones can join the chat without sacrificing board space. */}
+      <button
+        type="button"
+        onClick={() => setShowMobileChat(true)}
+        className="lg:hidden fixed bottom-4 right-3 z-30
+                   flex items-center gap-1.5 h-10 px-3 rounded-full
+                   bg-[var(--color-accent)] text-white text-xs font-semibold shadow-lg
+                   active:scale-[0.96] transition-transform"
+        aria-label="Open commentary chat"
+      >
+        <MessageCircle size={14} />
+        Chat{chat.length > 0 ? ` · ${chat.length}` : ''}
+      </button>
+      <MobileBottomSheet
+        open={showMobileChat}
+        onClose={() => setShowMobileChat(false)}
+        title="Commentary"
+        heightVh={75}
+      >
+        <CommentaryChat messages={chat} onSend={(t) => sendChat(slug, t)} />
+      </MobileBottomSheet>
     </div>
   )
 }

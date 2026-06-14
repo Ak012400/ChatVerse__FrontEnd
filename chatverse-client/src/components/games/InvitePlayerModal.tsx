@@ -77,23 +77,26 @@ export default function InvitePlayerModal({ open, onClose, onInvite }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
+      {/* Mobile-friendly: bottom-sheet on phones, centred card on sm+. */}
       <div
-        className="w-full max-w-md bg-[var(--color-bg)] border border-[var(--color-line)] rounded-md shadow-xl"
+        className="w-full sm:max-w-md max-h-[85vh] flex flex-col
+                   bg-[var(--color-bg)] border border-[var(--color-line)]
+                   rounded-t-2xl sm:rounded-md shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="px-5 py-3 border-b border-[var(--color-line)] flex items-center justify-between">
+        <header className="shrink-0 px-5 py-3 border-b border-[var(--color-line)] flex items-center justify-between">
           <h2 className="text-sm font-medium">Invite a player</h2>
           <button onClick={onClose} aria-label="Close"
             className="text-[var(--color-fg-mute)] hover:text-[var(--color-fg-dim)] transition-colors">
             <X size={16} />
           </button>
         </header>
-        <div className="p-5 space-y-3">
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">
           <div className="relative">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-fg-mute)]" />
             <input

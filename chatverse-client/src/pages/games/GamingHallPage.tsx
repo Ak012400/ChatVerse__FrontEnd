@@ -73,13 +73,15 @@ export default function GamingHallPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-[var(--color-bg)] text-[var(--color-fg)]">
-      <div className="max-w-4xl mx-auto px-6 py-10">
-        <header className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[var(--color-surface-1)] border border-[var(--color-line)] mb-4">
-            <Gamepad2 size={22} className="text-[var(--color-accent-fg)]" />
+      {/* Tighter padding on phones — `py-10 px-6` ate the screen on
+          a 360px viewport. Desktop spacing restored at sm:. */}
+      <div className="max-w-4xl mx-auto px-4 py-5 sm:px-6 sm:py-10">
+        <header className="text-center mb-5 sm:mb-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[var(--color-surface-1)] border border-[var(--color-line)] mb-3 sm:mb-4">
+            <Gamepad2 size={20} className="text-[var(--color-accent-fg)] sm:w-[22px] sm:h-[22px]" />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">Gaming Hall</h1>
-          <p className="text-sm text-[var(--color-fg-faint)] mt-1">
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Gaming Hall</h1>
+          <p className="text-xs sm:text-sm text-[var(--color-fg-faint)] mt-1 px-2">
             Play live quiz rooms with friends or strangers. Spectators welcome.
           </p>
         </header>
@@ -307,7 +309,9 @@ function CreateForm({
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      {/* Number fields — 3 across is OK on tablet, but cramped on
+          phones with 12px label text. Wrap to 1-col below sm:. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <NumberField
           label="Questions"
           value={questionCount}

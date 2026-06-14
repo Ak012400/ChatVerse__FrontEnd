@@ -11,8 +11,10 @@ import Avatar from '../../components/ui/Avatar'
 import Loader from '../../components/ui/Loader'
 import Input from '../../components/ui/Input'
 import Badge from '../../components/ui/Badge'
+import { DragHandle } from '../../components/ui/DragHandle'
 import { SpotifyEmbed } from '../../components/chat/SpotifyEmbed'
 import { extractSpotifyEmbed } from '../../lib/spotifyExtract'
+import { useResizableWidth } from '../../hooks/useResizableWidth'
 
 // 👇 FIX: Declare a constant stable reference for empty arrays to prevent infinite re-renders
 const EMPTY_ARRAY: any[] = []
@@ -31,6 +33,16 @@ export default function DmsPage() {
   const { otherUserId } = useParams<{ otherUserId?: string }>()
   const me = useAuthStore((s) => s.user)
   const { sendDm, sendDmTyping, markDmRead } = useChatHub()
+
+  // Resizable conversation list — desktop only. The handle sits on
+  // the list's right edge so dragging right grows it.
+  const listResize = useResizableWidth({
+    storageKey: 'dms-conversation-list',
+    defaultWidth: 288,   // matches the original w-72
+    minWidth: 220,
+    maxWidth: 480,
+    direction: 'right',
+  })
 
   const conversations = useDmStore((s) => s.conversations)
   const setConversations = useDmStore((s) => s.setConversations)
@@ -109,11 +121,18 @@ export default function DmsPage() {
 
   return (
     <div className="flex h-full bg-[var(--color-bg)] text-[var(--color-fg)]">
-      {/* Conversation list */}
+      {/* Conversation list — width draggable on desktop via the
+          DragHandle rendered between this aside and the thread main. */}
       <aside
         className={`${onMobileShowList ? 'flex' : 'hidden'} sm:flex
-          w-full sm:w-72 shrink-0 border-r border-[var(--color-line)] flex-col`}
+          w-full shrink-0 border-r-0 lg:border-r border-[var(--color-line)] flex-col`}
+        style={{
+          // Apply the dynamic width only on sm+ (mobile is full-width).
+          ['--dms-list-w' as never]: `${listResize.width}px`,
+        }}
       >
+        <style>{`@media (min-width: 640px) { [data-dms-aside] { width: var(--dms-list-w); } }`}</style>
+        <div data-dms-aside className="flex flex-col h-full w-full">
         <div className="h-14 px-4 flex items-center justify-between border-b border-[var(--color-line)]">
           <h2 className="text-sm font-semibold tracking-tight">Direct messages</h2>
           <button
@@ -194,7 +213,16 @@ export default function DmsPage() {
             </ul>
           )}
         </div>
+        </div>
       </aside>
+
+      {/* Drag handle between list and thread — desktop only. */}
+      <DragHandle
+        isDragging={listResize.isDragging}
+        onPointerDown={listResize.onPointerDown}
+        onDoubleClick={listResize.resetToDefault}
+        label="Resize conversation list"
+      />
 
       {/* Thread pane — full width on mobile when active, hidden when none picked */}
       {otherUserId ? (
