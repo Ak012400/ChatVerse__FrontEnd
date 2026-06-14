@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useChatHub } from './useChatHub'
 import { useSpeechRecognition, type SpeechLang } from './useSpeechRecognition'
 
@@ -23,9 +23,22 @@ export function useCaptionBroadcaster(opts: {
   speakLang: SpeechLang
   onUnsupported?: () => void
   onPermissionDenied?: () => void
+  /**
+   * Optional local echo so the SPEAKER can see their own captions on
+   * screen too. Without this, a solo tester (or anyone speaking when
+   * the other side hasn't connected yet) never sees ANY captions and
+   * thinks the feature is broken. Server still uses GroupExcept for
+   * remote fanout — this echo is local-only.
+   */
+  onLocalCaption?: (text: string, isFinal: boolean) => void
 }) {
-  const { roomName, enabled, speakLang, onUnsupported, onPermissionDenied } = opts
+  const { roomName, enabled, speakLang, onUnsupported, onPermissionDenied, onLocalCaption } = opts
   const { safeInvoke } = useChatHub()
+
+  // Keep callback in a ref so the hooks below don't re-run when the
+  // parent re-binds an arrow fn.
+  const onLocalCaptionRef = useRef(onLocalCaption)
+  useEffect(() => { onLocalCaptionRef.current = onLocalCaption }, [onLocalCaption])
 
   // Source language as a short ISO code, derived from the BCP-47 tag.
   const sourceShort = speakLang.split('-')[0].toLowerCase()
@@ -50,6 +63,10 @@ export function useCaptionBroadcaster(opts: {
 
   const onInterim = useCallback((text: string) => {
     if (!roomName) return
+    // Local echo first — speaker's own UI updates instantly without
+    // waiting on the round-trip. Solo testers see ALL their words.
+    onLocalCaptionRef.current?.(text, false)
+
     pendingInterimRef.current = text
     const since = Date.now() - lastInterimSentRef.current
     if (since >= INTERIM_INTERVAL) {
@@ -61,6 +78,9 @@ export function useCaptionBroadcaster(opts: {
 
   const onFinal = useCallback((text: string) => {
     if (!roomName) return
+    // Local echo — same reason as interims.
+    onLocalCaptionRef.current?.(text, true)
+
     // Cancel any pending interim — the final supersedes it.
     if (interimTimerRef.current !== null) {
       window.clearTimeout(interimTimerRef.current)

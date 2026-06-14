@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Video as VideoIcon, Plus, LogIn, Loader2, Users,
@@ -24,7 +24,7 @@ import { useToastStore } from '../../stores/toastStore'
 import { useAuthStore } from '../../stores/authStore'
 import { useCaptionsStore } from '../../stores/captionsStore'
 import { useCaptionBroadcaster } from '../../hooks/useCaptionBroadcaster'
-import { useCaptions } from '../../hooks/useCaptions'
+import { useCaptions, type CaptionLine } from '../../hooks/useCaptions'
 import { useCaptionTTS } from '../../hooks/useCaptionTTS'
 import { CaptionOverlay, CaptionsToggle, CaptionTTSToggle } from '../../components/call/CaptionOverlay'
 import Button from '../../components/ui/Button'
@@ -271,6 +271,9 @@ function HostedGroupUI({
   const preferredLang = useCaptionsStore((s) => s.preferredLang)
   const ttsEnabled = useCaptionsStore((s) => s.ttsEnabled)
   const setTtsEnabled = useCaptionsStore((s) => s.setTtsEnabled)
+  // Local self-caption echo so the speaker sees their own words.
+  const [selfCaption, setSelfCaption] = useState<CaptionLine | null>(null)
+  const selfClearTimerRef = useRef<number | null>(null)
   const broadcaster = useCaptionBroadcaster({
     roomName,
     enabled: captionsEnabled,
@@ -283,9 +286,20 @@ function HostedGroupUI({
       showToast({ type: 'warning', title: 'Mic access denied', message: 'Captions need mic permission.', duration: 4000 })
       setCaptionsEnabled(false)
     },
+    onLocalCaption: (text, isFinal) => {
+      setSelfCaption({
+        speakerId: selfId || 'self',
+        speakerName: 'You',
+        sourceLang: spokenLang.split('-')[0].toLowerCase(),
+        originalText: text, text, isFinal, at: Date.now(),
+      })
+      if (selfClearTimerRef.current) window.clearTimeout(selfClearTimerRef.current)
+      selfClearTimerRef.current = window.setTimeout(() => setSelfCaption(null), 5000)
+    },
   })
-  const { lines: captionLines } = useCaptions({ roomName, preferredLang, enabled: captionsEnabled })
-  useCaptionTTS({ lines: captionLines, preferredLang, enabled: captionsEnabled && ttsEnabled, selfId })
+  const { lines: remoteCaptionLines } = useCaptions({ roomName, preferredLang, enabled: captionsEnabled })
+  const captionLines: CaptionLine[] = selfCaption ? [...remoteCaptionLines, selfCaption] : remoteCaptionLines
+  useCaptionTTS({ lines: remoteCaptionLines, preferredLang, enabled: captionsEnabled && ttsEnabled, selfId })
 
   const toggleMic = async () => {
     const next = !micOn

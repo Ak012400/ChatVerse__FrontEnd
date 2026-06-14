@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   PhoneCall, PhoneOff, UserPlus, X, Mic, MicOff,
@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { CaptionOverlay, CaptionsToggle, CaptionTTSToggle } from '../../components/call/CaptionOverlay'
 import { useCaptionBroadcaster } from '../../hooks/useCaptionBroadcaster'
-import { useCaptions } from '../../hooks/useCaptions'
+import { useCaptions, type CaptionLine } from '../../hooks/useCaptions'
 import { useCaptionTTS } from '../../hooks/useCaptionTTS'
 import { useCaptionsStore } from '../../stores/captionsStore'
 import { useAuthStore } from '../../stores/authStore'
@@ -472,6 +472,12 @@ function DirectCallUI({
   const selfId = useAuthStore((s) => s.user?.userId)
   const { showToast } = useToastStore()
 
+  // Self-caption: speaker's own STT echo so they see their words on
+  // screen too. Without this, a solo tester thinks captions are broken.
+  // Auto-clears 5s after the last update so finals don't linger forever.
+  const [selfCaption, setSelfCaption] = useState<CaptionLine | null>(null)
+  const selfClearTimerRef = useRef<number | null>(null)
+
   const broadcaster = useCaptionBroadcaster({
     roomName,
     enabled: captionsEnabled,
@@ -494,18 +500,37 @@ function DirectCallUI({
       })
       setCaptionsEnabled(false)
     },
+    onLocalCaption: (text, isFinal) => {
+      setSelfCaption({
+        speakerId: selfId ?? 'self',
+        speakerName: 'You',
+        sourceLang: spokenLang.split('-')[0].toLowerCase(),
+        originalText: text,
+        text,
+        isFinal,
+        at: Date.now(),
+      })
+      if (selfClearTimerRef.current) window.clearTimeout(selfClearTimerRef.current)
+      selfClearTimerRef.current = window.setTimeout(() => setSelfCaption(null), 5000)
+    },
   })
 
-  const { lines: captionLines } = useCaptions({
+  const { lines: remoteCaptionLines } = useCaptions({
     roomName,
     preferredLang,
     enabled: captionsEnabled,
   })
 
+  // Merge remote + local so the overlay shows both sides of the
+  // conversation in a single subtitle strip, newest at the bottom.
+  const captionLines: CaptionLine[] = selfCaption
+    ? [...remoteCaptionLines, selfCaption]
+    : remoteCaptionLines
+
   // TTS — read incoming translated finals aloud. Driven directly off
-  // the same `lines` array; the hook tracks its own dedupe + cancel.
+  // the REMOTE lines only (self-TTS would echo the speaker's own voice).
   useCaptionTTS({
-    lines: captionLines,
+    lines: remoteCaptionLines,
     preferredLang,
     enabled: captionsEnabled && ttsEnabled,
     selfId,

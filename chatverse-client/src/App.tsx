@@ -7,6 +7,7 @@ import { authApi } from './api/auth'
 import ToastContainer from './components/ui/ToastContainer'
 import ThemeProvider from './components/ui/ThemeProvider'
 import AppLayout from './components/layout/AppLayout'
+import ErrorBoundary from './components/ui/ErrorBoundary'
 
 // Google OAuth — exposes the popup/button machinery. If the client ID
 // isn't set we still render the app (Login page renders a disabled button).
@@ -69,14 +70,27 @@ export default function App() {
   const { token, setAuth, setReady } = useAuthStore()
 
   useEffect(() => {
-    if (!token) { setReady(true); return }
+    // ── Auth bootstrap. Splash stays up (gated by `cv:app-ready`
+    //    event below) until this resolves, so the user never sees the
+    //    `null`-rendering route guards.
+    const markReady = () => {
+      setReady(true)
+      // One paint cycle after ready flips so the first real page has
+      // a chance to commit before we tell the splash to fade.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        window.dispatchEvent(new Event('cv:app-ready'))
+      }))
+    }
+
+    if (!token) { markReady(); return }
     authApi.me()
       .then((res) => setAuth(res.data.data, token))
       .catch(() => { useAuthStore.getState().clearAuth() })
-      .finally(() => setReady(true))
+      .finally(markReady)
   }, [])
 
   const tree = (
+    <ErrorBoundary>
     <ThemeProvider>
       <ToastContainer />
       <BrowserRouter>
@@ -140,6 +154,7 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </ThemeProvider>
+    </ErrorBoundary>
   )
 
   // Only mount the OAuth provider when the client ID is configured —
