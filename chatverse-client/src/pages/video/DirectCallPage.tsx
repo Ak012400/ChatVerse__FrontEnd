@@ -66,12 +66,20 @@ export default function DirectCallPage() {
   const [searching, setSearching] = useState(false)
 
   // When the user clicked "Accept" in IncomingCallModal we navigate
-  // here with state {autoJoinRoomName, peerName}. Pick that up on mount
-  // and jump straight into the connecting state — no manual search step.
+  // here with state {roomName | autoJoinRoomName, ...}. Pick that up on
+  // mount and jump straight into the connecting state — no manual
+  // search step.
+  //
+  // We accept BOTH field names ("roomName" and "autoJoinRoomName") so
+  // that nothing breaks if either the modal or this page is updated
+  // out-of-step. Earlier the modal sent `roomName` while this page only
+  // looked for `autoJoinRoomName`, and the receiver got stuck on the
+  // join form — the caller worked because they were already on this
+  // page when CallAccepted fired.
   useEffect(() => {
-    const navState = (location.state as { autoJoinRoomName?: string; peerName?: string } | null) ?? null
-    if (!navState?.autoJoinRoomName) return
-    const roomName = navState.autoJoinRoomName
+    const navState = (location.state as { autoJoinRoomName?: string; roomName?: string; peerName?: string } | null) ?? null
+    const roomName = navState?.autoJoinRoomName ?? navState?.roomName
+    if (!roomName) return
 
     let cancelled = false
     ;(async () => {
