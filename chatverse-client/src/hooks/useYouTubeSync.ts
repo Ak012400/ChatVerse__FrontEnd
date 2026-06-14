@@ -61,8 +61,10 @@ declare global {
   }
 }
 
-const DRIFT_THRESHOLD_SECONDS = 2.5
-const HEARTBEAT_INTERVAL_MS = 10_000
+const DRIFT_THRESHOLD_SECONDS = 2.0
+// 5s heartbeat — tighter than the original 10s so a viewer who lagged
+// on a network blip catches back up within a few seconds, not minutes.
+const HEARTBEAT_INTERVAL_MS = 5_000
 const ECHO_GUARD_MS = 600
 
 /**
@@ -108,8 +110,12 @@ export function useYouTubeSync(opts: {
   containerRef: React.RefObject<HTMLDivElement | null>
   /** Toggle. When false the hook is fully inert. */
   enabled: boolean
+  /** Fires when another participant pauses — used for "Paused by X" toast. */
+  onRemotePause?: (senderName: string | null) => void
+  /** Fires when another participant plays. */
+  onRemotePlay?: (senderName: string | null) => void
 }) {
-  const { roomName, videoId, containerRef, enabled } = opts
+  const { roomName, videoId, containerRef, enabled, onRemotePause, onRemotePlay } = opts
   const { getConnection, safeInvoke, isConnected } = useChatHub()
 
   const playerRef = useRef<YTPlayer | null>(null)
@@ -175,7 +181,7 @@ export function useYouTubeSync(opts: {
     const conn = getConnection()
     if (!conn || conn.state !== signalR.HubConnectionState.Connected) return
 
-    const handler = (payload: { action: string; position: number }) => {
+    const handler = (payload: { action: string; position: number; senderName?: string | null }) => {
       const p = playerRef.current
       if (!p) return
       const targetTime = Math.max(0, payload.position ?? 0)
@@ -186,19 +192,25 @@ export function useYouTubeSync(opts: {
           case 'play':
             p.seekTo(targetTime, true)
             p.playVideo()
+            onRemotePlay?.(payload.senderName ?? null)
             break
           case 'pause':
             p.seekTo(targetTime, true)
             p.pauseVideo()
+            onRemotePause?.(payload.senderName ?? null)
             break
           case 'seek':
             p.seekTo(targetTime, true)
             break
           case 'sync': {
-            // Only correct drift when it's noticeable — small jitter
-            // gets smoothed by the YT player itself.
+            // "Leader-follows-the-most-ahead" rule. Per Arun's spec:
+            // whichever viewer is furthest along becomes the truth,
+            // others jump forward to match. Going BACKWARD on a sync
+            // would feel like rewinding for no reason — we only ever
+            // pull forward.
             const local = p.getCurrentTime()
-            if (Math.abs(local - targetTime) > DRIFT_THRESHOLD_SECONDS) {
+            const drift = targetTime - local
+            if (drift > DRIFT_THRESHOLD_SECONDS) {
               p.seekTo(targetTime, true)
             }
             break
