@@ -17,6 +17,7 @@ import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import LanguageSwitcher from '../../components/ui/LanguageSwitcher'
 import { BlockedUsersSection } from '../../components/users/BlockedUsersSection'
+import { CaptionsLanguageSection } from '../../components/users/CaptionsLanguageSection'
 
 const BAND_TONE: Record<string, 'neutral' | 'accent' | 'success' | 'warning' | 'danger'> = {
   new:        'neutral',
@@ -341,6 +342,11 @@ export default function ProfilePage() {
         {/* Block list — outgoing list with names + inbound count only. */}
         <div className="mb-5">
           <BlockedUsersSection />
+        </div>
+
+        {/* Captions / translation language preferences. */}
+        <div className="mb-5">
+          <CaptionsLanguageSection />
         </div>
 
         {/* Sign out */}
