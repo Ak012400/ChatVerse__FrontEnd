@@ -13,6 +13,7 @@ import {
   useRoomContext,
 } from '@livekit/components-react'
 import AllParticipantsGrid from '../../components/call/AllParticipantsGrid'
+import DraggableSelfTile from '../../components/call/DraggableSelfTile'
 import { groupRoomOptions } from '../../lib/livekitOptions'
 import { Track } from 'livekit-client'
 import * as nsfwjs from 'nsfwjs'
@@ -198,6 +199,11 @@ function GroupRoomUI({
     ],
     { onlySubscribed: false },
   )
+  // Self goes into a draggable PiP, remote stays in the grid. Same
+  // approach as DirectCallPage — keeps the main canvas focused on
+  // OTHER people, with your own preview in the corner.
+  const selfTrack = tracks.find((t) => t.participant.isLocal)
+  const remoteTracks = tracks.filter((t) => !t.participant.isLocal)
 
   const [micOn, setMicOn] = useState(true)
   const [camOn, setCamOn] = useState(true)
@@ -394,9 +400,9 @@ function GroupRoomUI({
           video sits letter-boxed inside instead of overflowing. */}
       <div className="flex-1 pt-10 pb-20 md:pt-12 md:pb-22 lg:pt-14 lg:pb-24 lg:px-6">
         {tracks.length > 0 ? (
-          <div className="h-full w-full lg:max-w-6xl lg:mx-auto">
+          <div className="relative h-full w-full lg:max-w-6xl lg:mx-auto">
             <AllParticipantsGrid
-              tracks={tracks}
+              tracks={remoteTracks}
               tileWrap={(track) => (
                 <ParticipantTileWithReport
                   trackRef={track}
@@ -405,6 +411,7 @@ function GroupRoomUI({
                 />
               )}
             />
+            {selfTrack && <DraggableSelfTile track={selfTrack} />}
           </div>
         ) : (
           <div className="h-full flex items-center justify-center">

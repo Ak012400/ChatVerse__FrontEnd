@@ -62,10 +62,17 @@ export function useCaptionBroadcaster(opts: {
   }, [roomName, sourceShort, safeInvoke])
 
   const onInterim = useCallback((text: string) => {
-    if (!roomName) return
+    if (!roomName) {
+      console.warn('[captions] onInterim called but roomName is null — dropping')
+      return
+    }
     // Local echo first — speaker's own UI updates instantly without
     // waiting on the round-trip. Solo testers see ALL their words.
-    onLocalCaptionRef.current?.(text, false)
+    if (onLocalCaptionRef.current) {
+      onLocalCaptionRef.current(text, false)
+    } else {
+      console.warn('[captions] onLocalCaptionRef is empty — local echo skipped')
+    }
 
     pendingInterimRef.current = text
     const since = Date.now() - lastInterimSentRef.current
@@ -77,9 +84,15 @@ export function useCaptionBroadcaster(opts: {
   }, [roomName, flushInterim])
 
   const onFinal = useCallback((text: string) => {
-    if (!roomName) return
+    if (!roomName) {
+      console.warn('[captions] onFinal called but roomName is null — dropping')
+      return
+    }
+    console.log('[captions] broadcasting final:', text)
     // Local echo — same reason as interims.
-    onLocalCaptionRef.current?.(text, true)
+    if (onLocalCaptionRef.current) {
+      onLocalCaptionRef.current(text, true)
+    }
 
     // Cancel any pending interim — the final supersedes it.
     if (interimTimerRef.current !== null) {
@@ -88,7 +101,11 @@ export function useCaptionBroadcaster(opts: {
     }
     pendingInterimRef.current = null
     safeInvoke('BroadcastCaption', roomName, text, sourceShort, true)
-      .catch(() => { /* network blip — receivers may miss this phrase */ })
+      .catch((err) => {
+        // Broadcast failure is OK — local echo already showed the
+        // speaker their own captions. Receivers just miss this phrase.
+        console.warn('[captions] BroadcastCaption failed (receivers will miss):', err?.message ?? err)
+      })
   }, [roomName, sourceShort, safeInvoke])
 
   const onError = useCallback((kind: 'permission' | 'unsupported' | 'network' | 'unknown') => {
