@@ -4,6 +4,7 @@ import {
   Monitor, MonitorOff, Mic, MicOff, VideoOff, Video as VideoIcon,
   PhoneOff, Users, Loader2, AlertTriangle, Info,
   Globe, Search, ExternalLink, RefreshCw, X, Copy, Check,
+  Settings, UserX, Pause, Power,
 } from 'lucide-react'
 import {
   LiveKitRoom, ParticipantTile, useTracks,
@@ -12,8 +13,9 @@ import {
 import { Track } from 'livekit-client'
 import '@livekit/components-styles'
 
-import { theaterApi } from '../../api'
+import { theaterApi, usersApi } from '../../api'
 import { useToastStore } from '../../stores/toastStore'
+import { useAuthStore } from '../../stores/authStore'
 import { useChatHub } from '../../hooks/useChatHub'
 import { useYouTubeSync, youtubeVideoIdFromEmbedUrl } from '../../hooks/useYouTubeSync'
 import * as signalR from '@microsoft/signalr'
@@ -119,6 +121,8 @@ interface SharedState {
   mode: TheaterMode
   url: string | null
   hostName: string | null
+  creatorId: string | null
+  creatorName: string | null
   at: number
 }
 
@@ -160,6 +164,8 @@ function TheaterUI({ roomName }: { roomName: string }) {
   const { localParticipant } = useLocalParticipant()
   const participants = useParticipants()
   const { getConnection, safeInvoke, isConnected } = useChatHub()
+  const me = useAuthStore((s) => s.user)
+  const myId = me?.userId ?? ''
 
   const cameraTracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: true }])
   const screenTracks = useTracks([Track.Source.ScreenShare], { onlySubscribed: true })
@@ -168,13 +174,27 @@ function TheaterUI({ roomName }: { roomName: string }) {
   // Default to co-browse — that's what the user wanted as the headline
   // feature. Screen-share is the "fallback for Netflix" path.
   const [shared, setShared] = useState<SharedState>({
-    mode: 'cobrowse', url: null, hostName: null, at: Date.now(),
+    mode: 'cobrowse', url: null, hostName: null, creatorId: null, creatorName: null, at: Date.now(),
   })
   const [urlInput, setUrlInput] = useState('')
   const [iframeError, setIframeError] = useState<'unknown' | 'blocked' | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const ytContainerRef = useRef<HTMLDivElement | null>(null)
   const loadTimerRef = useRef<number | null>(null)
+
+  // Who is the room creator? Derived from server-pushed state so it's
+  // race-free across browser tabs / refreshes.
+  const amCreator = !!shared.creatorId && shared.creatorId === myId
+
+  // "Paused by X" / "Playing again — X" transient overlay.
+  const [actionBy, setActionBy] = useState<{ kind: 'play' | 'pause'; name: string } | null>(null)
+  const actionTimerRef = useRef<number | null>(null)
+  const flashAction = (kind: 'play' | 'pause', name: string | null) => {
+    const who = name ?? 'someone'
+    setActionBy({ kind, name: who })
+    if (actionTimerRef.current) window.clearTimeout(actionTimerRef.current)
+    actionTimerRef.current = window.setTimeout(() => setActionBy(null), 2400)
+  }
 
   // YouTube videoId is extracted from our normalised embed URL. When
   // present we render the YT IFrame Player API (full play/pause/seek
@@ -188,6 +208,8 @@ function TheaterUI({ roomName }: { roomName: string }) {
     videoId: ytVideoId,
     containerRef: ytContainerRef,
     enabled: shared.mode === 'cobrowse' && !!ytVideoId,
+    onRemotePause: (name) => flashAction('pause', name),
+    onRemotePlay: (name) => flashAction('play', name),
   })
 
   // ── Join the SignalR theater group + subscribe to state changes.
@@ -195,26 +217,61 @@ function TheaterUI({ roomName }: { roomName: string }) {
     const conn = getConnection()
     if (!conn || conn.state !== signalR.HubConnectionState.Connected) return
 
-    const handler = (payload: { mode: string; url?: string | null; hostName?: string | null; at?: string | number }) => {
+    const handler = (payload: {
+      mode: string; url?: string | null;
+      hostName?: string | null;
+      creatorId?: string | null; creatorName?: string | null;
+      at?: string | number
+    }) => {
       const mode: TheaterMode = payload.mode === 'screenshare' ? 'screenshare' : 'cobrowse'
       const atMs = typeof payload.at === 'number' ? payload.at : (payload.at ? Date.parse(payload.at) : Date.now())
-      setShared({
+      setShared((prev) => ({
         mode,
         url: payload.url ?? null,
         hostName: payload.hostName ?? null,
+        // Server only sends creatorId/Name on JOIN / replay payloads;
+        // keep what we have if a later play/pause broadcast omits it.
+        creatorId: payload.creatorId ?? prev.creatorId,
+        creatorName: payload.creatorName ?? prev.creatorName,
         at: atMs,
-      })
+      }))
       if (mode === 'cobrowse' && payload.url) setUrlInput(payload.url)
       setIframeError(null)
     }
 
+    // Creator ended the room → everyone navigates out.
+    const onEnded = (payload: { reason?: string; byUsername?: string }) => {
+      showToast({
+        type: 'info',
+        title: 'Theater ended',
+        message: payload.byUsername ? `${payload.byUsername} closed the room.` : 'The room was closed.',
+        duration: 3500,
+      })
+      navigate('/video')
+    }
+
+    // I was kicked → leave with a toast that names who.
+    const onKicked = (payload: { byUsername?: string }) => {
+      showToast({
+        type: 'warning',
+        title: 'Removed from theater',
+        message: payload.byUsername ? `${payload.byUsername} removed you.` : 'The host removed you from the room.',
+        duration: 4000,
+      })
+      navigate('/video')
+    }
+
     conn.on('TheaterStateChanged', handler)
+    conn.on('TheaterEnded', onEnded)
+    conn.on('KickedFromTheater', onKicked)
     safeInvoke('JoinTheaterRoom', roomName).catch(() => {
       showToast({ type: 'warning', title: 'Sync offline', message: 'Mode sync unavailable — try refreshing.', duration: 3000 })
     })
 
     return () => {
       try { conn.off('TheaterStateChanged', handler) } catch { /* ignore */ }
+      try { conn.off('TheaterEnded', onEnded) } catch { /* ignore */ }
+      try { conn.off('KickedFromTheater', onKicked) } catch { /* ignore */ }
       safeInvoke('LeaveTheaterRoom', roomName).catch(() => { /* best effort */ })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -309,7 +366,90 @@ function TheaterUI({ roomName }: { roomName: string }) {
   }
 
   const handleLeave = async () => {
-    try { await theaterApi.end(roomName).catch(() => {}) } finally { navigate('/video') }
+    // Plain "leave" — does NOT close the room. End-room is a separate
+    // creator-only action below.
+    try { await safeInvoke('LeaveTheaterRoom', roomName).catch(() => {}) } finally { navigate('/video') }
+  }
+
+  // Creator-only "End room for all" — fans out TheaterEnded.
+  const handleEndRoom = async () => {
+    if (!amCreator) return
+    if (!window.confirm('End the theater for everyone? Nobody will be able to rejoin until you start a new room.')) return
+    try { await safeInvoke('EndTheaterRoom', roomName, 'creator_ended') } catch { /* navigation fires from TheaterEnded handler */ }
+    // We DON'T navigate here — the broadcast handler does, so the creator's
+    // experience matches every other viewer's.
+  }
+
+  // ── Manage drawer (creator-only) ─────────────────────────────
+  //   Surfaces the live participant list with kick buttons. Loaded
+  //   lazily on first open so we don't punch the network on every
+  //   theater mount.
+  const [manageOpen, setManageOpen] = useState(false)
+  const [participantUserIds, setParticipantUserIds] = useState<string[]>([])
+  const [participantNames, setParticipantNames] = useState<Record<string, string>>({})
+  const [manageLoading, setManageLoading] = useState(false)
+
+  const refreshParticipants = async () => {
+    if (!amCreator) return
+    setManageLoading(true)
+    try { await safeInvoke('GetTheaterParticipants', roomName) } catch { /* listener handles failure */ }
+    finally { setManageLoading(false) }
+  }
+
+  // Wire the GetTheaterParticipants → TheaterParticipants response and
+  // the live TheaterParticipantsChanged delta event.
+  useEffect(() => {
+    const conn = getConnection()
+    if (!conn) return
+
+    const onList = async (payload: { userIds?: string[] }) => {
+      const ids = payload?.userIds ?? []
+      setParticipantUserIds(ids)
+      // Best-effort name lookup so the drawer doesn't show bare UUIDs.
+      // We only fetch names we don't already have cached.
+      const missing = ids.filter((id) => !participantNames[id] && id !== myId)
+      if (missing.length === 0) return
+      try {
+        const results = await Promise.all(
+          missing.map((id) => usersApi.byId(id).then((r) => [id, r.data?.data?.username ?? id] as const).catch(() => [id, id] as const)),
+        )
+        setParticipantNames((prev) => {
+          const next = { ...prev }
+          for (const [id, name] of results) next[id] = name
+          return next
+        })
+      } catch { /* ignore */ }
+    }
+
+    const onDelta = (payload: { joinedUserId?: string; leftUserId?: string }) => {
+      if (payload.joinedUserId) {
+        setParticipantUserIds((prev) => prev.includes(payload.joinedUserId!) ? prev : [...prev, payload.joinedUserId!])
+      }
+      if (payload.leftUserId) {
+        setParticipantUserIds((prev) => prev.filter((u) => u !== payload.leftUserId))
+      }
+    }
+
+    conn.on('TheaterParticipants', onList)
+    conn.on('TheaterParticipantsChanged', onDelta)
+    return () => {
+      try { conn.off('TheaterParticipants', onList) } catch { /* ignore */ }
+      try { conn.off('TheaterParticipantsChanged', onDelta) } catch { /* ignore */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getConnection, myId])
+
+  const handleKick = async (targetUserId: string) => {
+    if (!amCreator) return
+    const name = participantNames[targetUserId] ?? 'this user'
+    if (!window.confirm(`Remove ${name} from the room?`)) return
+    try {
+      await safeInvoke('KickFromTheater', roomName, targetUserId)
+      // Optimistic prune — the server delta event will reconcile.
+      setParticipantUserIds((prev) => prev.filter((u) => u !== targetUserId))
+    } catch {
+      showToast({ type: 'danger', title: 'Could not remove', message: 'Try again.', duration: 2500 })
+    }
   }
 
   // ── Screen-share helpers (only meaningful in screenshare mode)
