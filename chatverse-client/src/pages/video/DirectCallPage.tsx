@@ -233,10 +233,14 @@ export default function DirectCallPage() {
     showToast({ type: 'success', title: 'Reconnected', message: 'You\'re back in the call.', duration: 1500 })
   }
 
-  // ── Promote the in-call session into the AppLayout-level activeCall
-  //    so the LiveKitRoom lives outside the route. The user can browse
-  //    /profile / /chat while the call stays alive in the corner.
+  // ── Persistent-call sync. Three orthogonal effects (push / restore /
+  //    clear) keep `state` and the global activeCallStore aligned
+  //    without racing each other on first join — see RandomGroupPage
+  //    for the full rationale.
   const inCallToken = state.kind === 'in-call' ? state.token : null
+  const hadActiveCallRef = useRef(false)
+
+  // 1. Push: local in-call → global
   useEffect(() => {
     if (state.kind !== 'in-call') return
     setCall({
@@ -249,22 +253,39 @@ export default function DirectCallPage() {
       roomOptions,
       label: 'Direct call',
     })
-    // We intentionally do NOT clear the call when this page unmounts —
-    // navigating away should keep the call alive (that's the whole
-    // point of the persistent shell). The call only ends when the user
-    // explicitly hangs up or LiveKit fires onDisconnected on the room.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inCallToken])
 
-  // Mirror LiveKit's disconnect signal — AppLayout's onDisconnected
-  // calls endCall(), and we also want the page state to reset.
+  // 2. Restore: global has a direct call but we're idle (page just
+  //    re-mounted after navigation) → put state back in-call so the
+  //    UI shows the call instead of the join form.
   useEffect(() => {
-    if (state.kind === 'in-call' && activeCall == null) {
-      // Call ended out from under us (server shutdown, kicked, etc.)
+    if (activeCall?.kind === 'direct' && state.kind === 'idle') {
+      setState({
+        kind: 'in-call',
+        roomName: activeCall.roomName,
+        token: activeCall.token,
+        serverUrl: activeCall.serverUrl,
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCall?.token])
+
+  // 3. Clear: only if we've previously observed a non-null activeCall.
+  //    Guards against the initial-render gap where state is "in-call"
+  //    but activeCall hasn't updated yet — without this the user gets
+  //    bounced to the idle screen on join.
+  useEffect(() => {
+    if (activeCall) {
+      hadActiveCallRef.current = true
+      return
+    }
+    if (hadActiveCallRef.current && state.kind === 'in-call') {
+      hadActiveCallRef.current = false
       handleDisconnected(undefined)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCall, state.kind])
+  }, [activeCall])
 
   if (state.kind === 'in-call') {
     return (
