@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import {
   Monitor, MonitorOff, Mic, MicOff, VideoOff, Video as VideoIcon,
   PhoneOff, Users, Loader2, AlertTriangle, Info,
-  Globe, Search, ExternalLink, RefreshCw, X,
+  Globe, Search, ExternalLink, RefreshCw, X, Copy, Check,
 } from 'lucide-react'
 import {
   LiveKitRoom, ParticipantTile, useTracks,
@@ -261,6 +261,19 @@ function TheaterUI({ roomName }: { roomName: string }) {
     broadcastUrl(urlInput)
   }
 
+  // ── "Copy room ID" — host shares this with friends to invite them.
+  //    Without this they had to fish the slug out of the URL bar.
+  const [copied, setCopied] = useState(false)
+  const copyRoomId = async () => {
+    try {
+      await navigator.clipboard.writeText(roomName)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch {
+      showToast({ type: 'warning', title: 'Copy failed', message: roomName, duration: 3000 })
+    }
+  }
+
   // ── Disclaimer banner
   const [showDisclaimer, setShowDisclaimer] = useState(() => {
     try { return !localStorage.getItem('chatverse:theater:disclaimerDismissed') }
@@ -320,6 +333,17 @@ function TheaterUI({ roomName }: { roomName: string }) {
             <Monitor size={11} /> Screen share
           </ModeButton>
         </div>
+
+        {/* Copy room ID — invitees paste this on the video lobby's
+            "Join by ID" entry, or click a shared link. */}
+        <button
+          onClick={copyRoomId}
+          className="hidden sm:inline-flex h-8 px-3 rounded-md text-xs items-center gap-1.5 bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] transition-colors"
+          title="Copy room ID — share with friends to invite them"
+        >
+          {copied ? <Check size={12} /> : <Copy size={12} />}
+          <span className="font-mono">{copied ? 'Copied' : 'Room ID'}</span>
+        </button>
 
         <button
           onClick={handleLeave}

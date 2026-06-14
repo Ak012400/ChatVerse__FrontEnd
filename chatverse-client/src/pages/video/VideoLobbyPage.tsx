@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Shuffle, Users, UserPlus, Video as VideoIcon, ShieldAlert, Sparkles, Lock, Monitor, Loader2 } from 'lucide-react'
+import { Shuffle, Users, UserPlus, Video as VideoIcon, ShieldAlert, Sparkles, Lock, Monitor, Loader2, LogIn, Hash } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
 import { theaterApi } from '../../api'
@@ -84,6 +84,24 @@ export default function VideoLobbyPage() {
   // we keep it out of the generic MODES grid and use this dedicated
   // creator that wraps the title prompt + create call.
   const [creatingTheater, setCreatingTheater] = useState(false)
+
+  // "Join theater by room ID" — for invitees who got a room ID from
+  // the host. We accept either the raw slug (`th-watchparty-ab12cd`)
+  // or a full URL pasted in, and normalise either way.
+  const [joinTheaterId, setJoinTheaterId] = useState('')
+  const [joinTheaterOpen, setJoinTheaterOpen] = useState(false)
+
+  const handleJoinTheaterById = (e: React.FormEvent) => {
+    e.preventDefault()
+    const raw = joinTheaterId.trim()
+    if (!raw) return
+    // Accept full URLs too — `/theater/<slug>` or `https://…/theater/<slug>`
+    const match = raw.match(/(?:\/theater\/)([^/?#\s]+)/i)
+    const slug = match ? match[1] : raw
+    // Theater slugs are prefixed `th-` by the backend creator; if user
+    // typed without it, leave as-is — server will 404 if it doesn't exist.
+    navigate(`/theater/${slug}`)
+  }
   const handleStartTheater = async () => {
     if (isGuest) {
       showToast({
@@ -207,13 +225,60 @@ export default function VideoLobbyPage() {
                       : <Badge tone="success" size="sm">New</Badge>}
                   </div>
                   <p className="text-xs text-[var(--color-fg-mute)]">
-                    Share one screen with up to 10 friends in real time — live video reactions, mic/cam controls, copyright-friendly disclaimer baked in.
+                    Co-browse a YouTube link OR share a screen with up to 10 friends — live video reactions, voice chat, no moderation inside the room.
                   </p>
                 </div>
               </div>
             </Card>
           </button>
         </div>
+
+        {/* Join theater by room ID — for invitees. Collapsed by default
+            to keep the lobby uncluttered; expands to a single input row
+            when the user wants to jump straight into a friend's room. */}
+        {!isGuest && (
+          <div className="mt-3">
+            {!joinTheaterOpen ? (
+              <button
+                onClick={() => setJoinTheaterOpen(true)}
+                className="w-full px-4 py-3 rounded-md border border-dashed border-[var(--color-line)] hover:border-[var(--color-line-strong)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] text-xs inline-flex items-center justify-center gap-2 transition-colors"
+              >
+                <LogIn size={13} />
+                Have a theater room ID? Join it
+              </button>
+            ) : (
+              <form
+                onSubmit={handleJoinTheaterById}
+                className="bg-[var(--color-surface-1)] border border-[var(--color-line)] rounded-md p-3 flex items-center gap-2"
+              >
+                <Hash size={13} className="text-[var(--color-fg-mute)] shrink-0" />
+                <input
+                  value={joinTheaterId}
+                  onChange={(e) => setJoinTheaterId(e.target.value)}
+                  autoFocus
+                  placeholder="th-watchparty-ab12cd  or  paste full link"
+                  className="flex-1 h-9 px-3 rounded-md text-sm bg-[var(--color-surface-2)] border border-[var(--color-line)] focus:outline-none focus:border-[var(--color-line-strong)] text-[var(--color-fg)] placeholder-[var(--color-fg-mute)]"
+                />
+                <button
+                  type="submit"
+                  disabled={!joinTheaterId.trim()}
+                  className="h-9 px-3 rounded-md text-xs font-semibold bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                >
+                  <LogIn size={12} />
+                  Join
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setJoinTheaterOpen(false); setJoinTheaterId('') }}
+                  className="h-9 px-2 text-xs text-[var(--color-fg-mute)] hover:text-[var(--color-fg)]"
+                  aria-label="Cancel"
+                >
+                  ✕
+                </button>
+              </form>
+            )}
+          </div>
+        )}
 
         {isGuest && (
           <div className="mt-6 px-4 py-3 rounded-md bg-[var(--color-accent-soft)] border border-[rgba(99,102,241,0.3)] flex items-start gap-2.5">
