@@ -12,6 +12,7 @@ import Loader from '../../components/ui/Loader'
 import Input from '../../components/ui/Input'
 import Badge from '../../components/ui/Badge'
 import { DragHandle } from '../../components/ui/DragHandle'
+import { BlockUserButton } from '../../components/users/BlockUserButton'
 import { SpotifyEmbed } from '../../components/chat/SpotifyEmbed'
 import { extractSpotifyEmbed } from '../../lib/spotifyExtract'
 import { useResizableWidth } from '../../hooks/useResizableWidth'
@@ -43,6 +44,22 @@ export default function DmsPage() {
     maxWidth: 480,
     direction: 'right',
   })
+
+  // Is the other party in this thread blocked? Hydrate once per
+  // otherUserId by checking the outgoing block list. The cost is one
+  // small GET per thread switch; we cache via the BlockedUsersSection's
+  // own load when the user visits Profile.
+  const [otherIsBlocked, setOtherIsBlocked] = useState(false)
+  useEffect(() => {
+    if (!otherUserId) { setOtherIsBlocked(false); return }
+    let cancelled = false
+    usersApi.myBlocks().then((res) => {
+      if (cancelled) return
+      const blocks: { userId: string }[] = res.data?.data ?? []
+      setOtherIsBlocked(blocks.some((b) => b.userId === otherUserId))
+    }).catch(() => { /* best effort */ })
+    return () => { cancelled = true }
+  }, [otherUserId])
 
   const conversations = useDmStore((s) => s.conversations)
   const setConversations = useDmStore((s) => s.setConversations)
@@ -244,6 +261,16 @@ export default function DmsPage() {
                 <p className="text-[11px] text-[var(--color-accent-fg)]">typing…</p>
               )}
             </div>
+            {/* Block / Unblock — tucked into the header so it's there
+                when needed without dominating the chat. Visibility logic
+                lives in the button (two-tap confirm on first block). */}
+            {otherUserId && (
+              <BlockUserButton
+                targetUserId={otherUserId}
+                isBlocked={otherIsBlocked}
+                onChanged={setOtherIsBlocked}
+              />
+            )}
           </header>
 
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
