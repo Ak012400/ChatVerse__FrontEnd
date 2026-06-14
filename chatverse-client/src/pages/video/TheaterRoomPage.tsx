@@ -122,12 +122,36 @@ interface SharedState {
   at: number
 }
 
-const QUICK_SOURCES: { label: string; url: string }[] = [
-  { label: 'YouTube', url: 'https://www.youtube.com/' },
-  { label: 'Vimeo', url: 'https://vimeo.com/' },
-  { label: 'Twitch', url: 'https://www.twitch.tv/' },
-  { label: 'Dailymotion', url: 'https://www.dailymotion.com/' },
-  { label: 'Archive.org', url: 'https://archive.org/details/movies' },
+/**
+ * Two flavours of quick source:
+ *
+ *   kind: 'iframe'   — known to allow embedding (the URL goes straight
+ *                      into the broadcast → both viewers load it).
+ *
+ *   kind: 'external' — homepage / search-page that blocks iframe
+ *                      embedding via X-Frame-Options. We OPEN IT IN A
+ *                      NEW TAB so the host can find a video, copy the
+ *                      URL, and paste it into the address bar above.
+ *                      Trying to iframe these gives "refused to connect".
+ */
+type QuickSource =
+  | { kind: 'iframe'; label: string; url: string; hint?: string }
+  | { kind: 'external'; label: string; url: string; hint?: string }
+
+const QUICK_SOURCES: QuickSource[] = [
+  // The only true iframe-friendly free movie/series site on the list.
+  { kind: 'iframe', label: 'Archive.org', url: 'https://archive.org/details/movies', hint: 'Free public-domain films — works inside the room' },
+  // External searchers — opens in a new tab so the host can find a video,
+  // then paste the URL back into the address bar.
+  { kind: 'external', label: 'Search YouTube ↗', url: 'https://www.youtube.com/', hint: "YouTube's homepage blocks iframes — search here, then paste the video URL above" },
+  { kind: 'external', label: 'Search Vimeo ↗', url: 'https://vimeo.com/', hint: 'Find a Vimeo video, paste its URL above' },
+  { kind: 'external', label: 'Search Twitch ↗', url: 'https://www.twitch.tv/directory', hint: 'Pick a channel, paste its URL above' },
+]
+
+/** Sample URLs that ARE iframe-friendly — one-click paste to demo it. */
+const SAMPLE_EMBEDS: { label: string; url: string }[] = [
+  // Big Buck Bunny — license-clean, every YouTube watch-party demo uses it.
+  { label: 'Try YouTube demo', url: 'https://www.youtube.com/watch?v=YE7VzlLtp-4' },
 ]
 
 function TheaterUI({ roomName }: { roomName: string }) {
@@ -400,17 +424,60 @@ function TheaterUI({ roomName }: { roomName: string }) {
           </form>
 
           <div className="shrink-0 px-3 sm:px-5 py-1.5 border-b border-[var(--color-line)] bg-[var(--color-surface-1)] flex items-center gap-1.5 overflow-x-auto">
-            <span className="text-[10px] uppercase tracking-wider text-[var(--color-fg-mute)] font-semibold shrink-0">Quick:</span>
-            {QUICK_SOURCES.map((src) => (
+            <span className="text-[10px] uppercase tracking-wider text-[var(--color-fg-mute)] font-semibold shrink-0">Sources:</span>
+            {QUICK_SOURCES.map((src) => {
+              if (src.kind === 'iframe') {
+                // Loads inside the room — broadcast to all.
+                return (
+                  <button
+                    key={src.url}
+                    type="button"
+                    onClick={() => { setUrlInput(src.url); broadcastUrl(src.url) }}
+                    title={src.hint}
+                    className="shrink-0 h-7 px-2.5 rounded-full text-[11px] font-medium bg-[var(--color-accent-soft)] hover:bg-[var(--color-accent)]/30 text-[var(--color-accent-fg)] inline-flex items-center gap-1 transition-colors"
+                  >
+                    <Globe size={10} />
+                    {src.label}
+                  </button>
+                )
+              }
+              // External — opens in a new tab so the host can browse / search,
+              // then come back and paste a video URL into the address bar.
+              return (
+                <a
+                  key={src.url}
+                  href={src.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  title={src.hint}
+                  className="shrink-0 h-7 px-2.5 rounded-full text-[11px] font-medium bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] inline-flex items-center gap-1 transition-colors"
+                >
+                  <ExternalLink size={10} />
+                  {src.label}
+                </a>
+              )
+            })}
+            <span className="shrink-0 w-px h-4 bg-[var(--color-line)] mx-1" />
+            {SAMPLE_EMBEDS.map((src) => (
               <button
                 key={src.url}
                 type="button"
                 onClick={() => { setUrlInput(src.url); broadcastUrl(src.url) }}
-                className="shrink-0 h-7 px-2.5 rounded-full text-[11px] font-medium bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)] text-[var(--color-fg-dim)] transition-colors"
+                title="Demo URL — proves the room is wired up"
+                className="shrink-0 h-7 px-2.5 rounded-full text-[11px] font-medium bg-[var(--color-success-soft,rgba(34,197,94,0.12))] hover:bg-[rgba(34,197,94,0.22)] text-[var(--color-success-fg,#22c55e)] transition-colors"
               >
-                {src.label}
+                ▶ {src.label}
               </button>
             ))}
+          </div>
+
+          {/* One-line explainer so users don't waste 5 minutes wondering
+              why "youtube.com" itself wouldn't load inside the iframe. */}
+          <div className="shrink-0 px-3 sm:px-5 py-1.5 border-b border-[var(--color-line)] bg-[var(--color-surface-1)] text-[10px] text-[var(--color-fg-mute)] leading-snug">
+            <Info size={10} className="inline -mt-px mr-1" />
+            Homepages of YouTube / Netflix / Prime block iframe embedding (browser security).
+            Open them in a new tab, copy a <b>specific video URL</b>, and paste above — or use{' '}
+            <b>Screen share</b> mode for sites that block.
           </div>
         </>
       )}
