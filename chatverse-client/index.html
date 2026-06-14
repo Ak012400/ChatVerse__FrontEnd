@@ -5,8 +5,169 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ChatVerse</title>
+    <!--
+      Splash screen — inline CSS + SVG so the browser paints something
+      branded BEFORE the React bundle has even parsed. Without this the
+      first 200-1500ms of a cold load is black, which the user reported
+      as feeling broken. The splash hides itself the moment React mounts
+      (see main.tsx — it removes #cv-splash from the DOM).
+    -->
+    <style>
+      html, body { background:#0b0a14; margin:0; padding:0; }
+      #cv-splash {
+        position: fixed; inset: 0; z-index: 99999;
+        display: flex; align-items: center; justify-content: center;
+        background:
+          radial-gradient(circle at 50% 45%, rgba(126,20,255,0.25) 0%, rgba(11,10,20,0) 55%),
+          radial-gradient(circle at 50% 55%, rgba(71,191,255,0.18) 0%, rgba(11,10,20,0) 60%),
+          #0b0a14;
+        overflow: hidden;
+        transition: opacity 350ms ease;
+      }
+      #cv-splash.cv-fade { opacity: 0; pointer-events: none; }
+
+      /* Logo container */
+      .cv-splash-stack {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        animation: cv-rise 600ms ease-out both;
+      }
+      @keyframes cv-rise {
+        from { transform: translateY(10px); opacity: 0; }
+        to   { transform: translateY(0);    opacity: 1; }
+      }
+
+      /* The bolt itself */
+      .cv-bolt-wrap {
+        position: relative;
+        width: 132px; height: 132px;
+        display: flex; align-items: center; justify-content: center;
+        filter: drop-shadow(0 0 24px rgba(126,20,255,0.55));
+        animation: cv-flicker 2.2s ease-in-out infinite;
+      }
+      @keyframes cv-flicker {
+        0%,100% { filter: drop-shadow(0 0 24px rgba(126,20,255,0.55)); }
+        45%     { filter: drop-shadow(0 0 36px rgba(71,191,255,0.85)); }
+        55%     { filter: drop-shadow(0 0 30px rgba(255,255,255,0.8)); }
+      }
+
+      /* Pulse rings behind the bolt */
+      .cv-ring {
+        position: absolute; left: 50%; top: 50%;
+        width: 132px; height: 132px;
+        margin-left: -66px; margin-top: -66px;
+        border-radius: 50%;
+        border: 1.5px solid rgba(132, 60, 255, 0.55);
+        opacity: 0;
+        animation: cv-ring 2s ease-out infinite;
+      }
+      .cv-ring.r2 { animation-delay: 0.5s; border-color: rgba(71,191,255,0.55); }
+      .cv-ring.r3 { animation-delay: 1.0s; border-color: rgba(237,230,255,0.45); }
+      @keyframes cv-ring {
+        0%   { transform: scale(0.45); opacity: 0.9; }
+        80%  { opacity: 0; }
+        100% { transform: scale(2.2);  opacity: 0; }
+      }
+
+      /* Sparks orbiting */
+      .cv-spark {
+        position: absolute; width: 6px; height: 6px; border-radius: 50%;
+        background: radial-gradient(circle, #fff 0%, #c9a3ff 60%, transparent 70%);
+        top: 50%; left: 50%; margin: -3px 0 0 -3px;
+      }
+      .cv-spark.s1 { animation: cv-orbit-a 3.2s linear infinite; }
+      .cv-spark.s2 { animation: cv-orbit-b 4.1s linear infinite; }
+      .cv-spark.s3 { animation: cv-orbit-c 2.7s linear infinite; }
+      @keyframes cv-orbit-a {
+        from { transform: rotate(0deg)   translateX(64px) rotate(0deg); }
+        to   { transform: rotate(360deg) translateX(64px) rotate(-360deg); }
+      }
+      @keyframes cv-orbit-b {
+        from { transform: rotate(120deg) translateX(82px) rotate(-120deg); }
+        to   { transform: rotate(480deg) translateX(82px) rotate(-480deg); }
+      }
+      @keyframes cv-orbit-c {
+        from { transform: rotate(240deg) translateX(54px) rotate(-240deg); }
+        to   { transform: rotate(600deg) translateX(54px) rotate(-600deg); }
+      }
+
+      /* Wordmark */
+      .cv-wordmark {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+        font-weight: 700; letter-spacing: 0.08em; font-size: 18px;
+        color: #ede6ff;
+        background: linear-gradient(120deg, #ede6ff 0%, #c9a3ff 40%, #47bfff 70%, #ede6ff 100%);
+        background-size: 200% 100%;
+        -webkit-background-clip: text; background-clip: text;
+        color: transparent;
+        animation: cv-shimmer 2.6s linear infinite;
+      }
+      @keyframes cv-shimmer {
+        from { background-position: 0% 50%; }
+        to   { background-position: 200% 50%; }
+      }
+
+      /* Loader dots */
+      .cv-dots { display: inline-flex; gap: 6px; margin-top: 4px; }
+      .cv-dots span {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: #7e14ff;
+        animation: cv-pulse 1.2s ease-in-out infinite;
+      }
+      .cv-dots span:nth-child(2) { animation-delay: 0.15s; background: #b07eff; }
+      .cv-dots span:nth-child(3) { animation-delay: 0.30s; background: #47bfff; }
+      @keyframes cv-pulse {
+        0%,100% { transform: scale(0.6); opacity: 0.35; }
+        50%     { transform: scale(1.1); opacity: 1; }
+      }
+
+      /* Bolt SVG inner — animated stroke fill */
+      .cv-bolt svg { width: 100%; height: 100%; display: block; }
+      .cv-bolt-fill {
+        animation: cv-fill 2.2s ease-in-out infinite;
+      }
+      @keyframes cv-fill {
+        0%,100% { fill: #863bff; }
+        50%     { fill: #b07eff; }
+      }
+
+      /* Reduce motion preference — keep static logo, drop animations */
+      @media (prefers-reduced-motion: reduce) {
+        .cv-bolt-wrap, .cv-ring, .cv-spark, .cv-wordmark,
+        .cv-dots span, .cv-splash-stack, .cv-bolt-fill {
+          animation: none !important;
+        }
+      }
+    </style>
   </head>
   <body>
+    <!-- Inline splash — survives until main.tsx removes it on mount. -->
+    <div id="cv-splash" aria-hidden="true">
+      <div class="cv-splash-stack">
+        <div class="cv-bolt-wrap">
+          <div class="cv-ring r1"></div>
+          <div class="cv-ring r2"></div>
+          <div class="cv-ring r3"></div>
+          <div class="cv-spark s1"></div>
+          <div class="cv-spark s2"></div>
+          <div class="cv-spark s3"></div>
+          <div class="cv-bolt">
+            <!-- Same path the favicon uses, just scaled up. -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 46" fill="none">
+              <path class="cv-bolt-fill" d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z"/>
+            </svg>
+          </div>
+        </div>
+        <div class="cv-wordmark">CHATVERSE</div>
+        <div class="cv-dots" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
