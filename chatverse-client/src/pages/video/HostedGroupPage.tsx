@@ -50,7 +50,13 @@ export default function HostedGroupPage() {
   const [loading, setLoading] = useState(false)
   const [conn, setConn] = useState<Connection | null>(null)
 
-  // Promote into shared call shell so /profile / /chat don't drop the call.
+  // Three-effect persistence pattern (push / restore / clear) — see
+  // RandomGroupPage for the full rationale. The `hadActiveCallRef`
+  // guard prevents the initial-join race that was forcing users to
+  // click "Join" twice.
+  const hadActiveCallRef = useRef(false)
+
+  // 1. Push
   useEffect(() => {
     if (!conn) return
     setCall({
@@ -66,9 +72,30 @@ export default function HostedGroupPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conn?.token])
 
+  // 2. Restore from global on (re-)mount
   useEffect(() => {
-    if (conn && activeCall == null) setConn(null)
-  }, [activeCall, conn])
+    if (activeCall?.kind === 'hosted' && !conn) {
+      setConn({
+        token: activeCall.token,
+        serverUrl: activeCall.serverUrl,
+        roomName: activeCall.roomName,
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCall?.token])
+
+  // 3. Clear only after we've observed the call as set
+  useEffect(() => {
+    if (activeCall) {
+      hadActiveCallRef.current = true
+      return
+    }
+    if (hadActiveCallRef.current && conn) {
+      hadActiveCallRef.current = false
+      setConn(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCall])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()

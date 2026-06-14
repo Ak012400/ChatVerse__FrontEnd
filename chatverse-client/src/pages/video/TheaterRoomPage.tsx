@@ -498,21 +498,43 @@ function TheaterUI({ roomName }: { roomName: string }) {
           </ModeButton>
         </div>
 
-        {/* Copy room ID — invitees paste this on the video lobby's
-            "Join by ID" entry, or click a shared link. */}
+        {/* Copy room ID — works for everyone (any participant can
+            share the invite). Mobile sees just the icon. */}
         <button
           onClick={copyRoomId}
-          className="hidden sm:inline-flex h-8 px-3 rounded-md text-xs items-center gap-1.5 bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] transition-colors"
+          className="inline-flex h-8 px-2 sm:px-3 rounded-md text-xs items-center gap-1.5 bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] transition-colors"
           title="Copy room ID — share with friends to invite them"
         >
           {copied ? <Check size={12} /> : <Copy size={12} />}
-          <span className="font-mono">{copied ? 'Copied' : 'Room ID'}</span>
+          <span className="hidden sm:inline font-mono">{copied ? 'Copied' : 'Invite'}</span>
         </button>
+
+        {/* Creator-only: Manage (kick) + End room. */}
+        {amCreator && (
+          <>
+            <button
+              onClick={() => { setManageOpen(true); refreshParticipants() }}
+              className="inline-flex h-8 px-2 sm:px-3 rounded-md text-xs items-center gap-1.5 bg-[var(--color-surface-2)] hover:bg-[var(--color-surface-3)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] transition-colors"
+              title="Manage participants"
+            >
+              <Settings size={12} />
+              <span className="hidden sm:inline">Manage</span>
+            </button>
+            <button
+              onClick={handleEndRoom}
+              className="inline-flex h-8 px-2 sm:px-3 rounded-md text-xs items-center gap-1.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 border border-amber-500/30 transition-colors"
+              title="End the theater for everyone"
+            >
+              <Power size={12} />
+              <span className="hidden sm:inline">End</span>
+            </button>
+          </>
+        )}
 
         <button
           onClick={handleLeave}
-          className="h-8 px-3 rounded-md text-xs bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-white inline-flex items-center gap-1.5"
-          title="Leave theater"
+          className="h-8 px-2 sm:px-3 rounded-md text-xs bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-white inline-flex items-center gap-1.5"
+          title="Leave theater (room stays open for others)"
         >
           <PhoneOff size={12} />
           <span className="hidden sm:inline">Leave</span>
@@ -622,9 +644,10 @@ function TheaterUI({ roomName }: { roomName: string }) {
         </>
       )}
 
-      {/* Centre stage */}
+      {/* Centre stage. Mobile gets a tighter player so the controls
+          + URL bar are reachable without scrolling. */}
       <div className="flex-1 min-h-0 flex flex-col gap-2 p-2 sm:p-3 overflow-hidden">
-        <div className="flex-1 min-h-0 rounded-md overflow-hidden border border-[var(--color-line)] bg-black flex items-center justify-center relative">
+        <div className="flex-1 min-h-0 max-h-[40vh] sm:max-h-none rounded-md overflow-hidden border border-[var(--color-line)] bg-black flex items-center justify-center relative">
           {shared.mode === 'cobrowse' ? (
             shared.url ? (
               <>
@@ -651,6 +674,19 @@ function TheaterUI({ roomName }: { roomName: string }) {
                   <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-bold tracking-wide inline-flex items-center gap-1 shadow-lg">
                     ▶ YT Synced
                   </span>
+                )}
+
+                {/* "Paused by X" / "Playing — X" floating toast — fades
+                    in for ~2.4s on each remote action so viewers know
+                    who triggered the change. Pinned to top-center so
+                    YouTube's own UI elements at the bottom don't
+                    fight it. */}
+                {actionBy && (
+                  <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 px-3 py-1.5 rounded-full bg-black/85 text-white text-xs font-semibold backdrop-blur-md shadow-2xl border border-white/15 inline-flex items-center gap-1.5 animate-fadeIn">
+                    {actionBy.kind === 'pause' ? <Pause size={11} /> : <span className="text-[10px]">▶</span>}
+                    <span>{actionBy.kind === 'pause' ? 'Paused by' : 'Playing —'}</span>
+                    <b>{actionBy.name}</b>
+                  </div>
                 )}
                 {iframeError && !ytVideoId && (
                   <div className="absolute inset-x-0 bottom-0 p-3 bg-black/85 text-white text-xs flex items-center gap-2">
@@ -698,11 +734,12 @@ function TheaterUI({ roomName }: { roomName: string }) {
           )}
         </div>
 
-        {/* Webcam strip */}
+        {/* Webcam strip — shorter on mobile so the video player keeps
+            more of the limited vertical room. */}
         {cameraTracks.length > 0 && (
-          <div className="shrink-0 h-20 flex gap-2 overflow-x-auto pb-1">
+          <div className="shrink-0 h-14 sm:h-20 flex gap-2 overflow-x-auto pb-1">
             {cameraTracks.map((trackRef, i) => (
-              <div key={trackRef.participant.identity + i} className="shrink-0 w-28 h-full rounded-md overflow-hidden border border-[var(--color-line)] bg-black">
+              <div key={trackRef.participant.identity + i} className="shrink-0 w-20 sm:w-28 h-full rounded-md overflow-hidden border border-[var(--color-line)] bg-black">
                 <ParticipantTile trackRef={trackRef} className="w-full h-full" />
               </div>
             ))}
@@ -716,6 +753,115 @@ function TheaterUI({ roomName }: { roomName: string }) {
         isMyScreenSharing={isMyScreenSharing}
         onToggleScreenShare={toggleScreenShare}
       />
+
+      {/* ── Manage drawer (creator-only) ──────────────────────────
+            Right-side slide-in panel listing every participant with a
+            Kick button. Opens via the header "Manage" pill. Only the
+            room creator sees the trigger button. */}
+      {amCreator && manageOpen && (
+        <div className="fixed inset-0 z-[1000] flex">
+          {/* Backdrop — tap to close. */}
+          <div className="flex-1 bg-black/55 backdrop-blur-sm" onClick={() => setManageOpen(false)} />
+          {/* Drawer card */}
+          <div className="w-full sm:w-80 max-w-full h-full bg-[var(--color-surface-1)] border-l border-[var(--color-line)] flex flex-col">
+            <header className="shrink-0 h-12 px-4 border-b border-[var(--color-line)] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Settings size={14} className="text-[var(--color-accent-fg)]" />
+                <span className="text-sm font-semibold">Manage participants</span>
+              </div>
+              <button
+                onClick={() => setManageOpen(false)}
+                className="w-7 h-7 rounded-md hover:bg-[var(--color-surface-2)] inline-flex items-center justify-center text-[var(--color-fg-mute)] hover:text-[var(--color-fg)]"
+                aria-label="Close"
+              >
+                <X size={14} />
+              </button>
+            </header>
+
+            <div className="shrink-0 px-4 py-2 border-b border-[var(--color-line)] flex items-center justify-between gap-2">
+              <p className="text-[11px] text-[var(--color-fg-mute)]">
+                {participantUserIds.length} watching · you're the host
+              </p>
+              <button
+                onClick={refreshParticipants}
+                disabled={manageLoading}
+                className="text-[10px] text-[var(--color-accent-fg)] hover:underline disabled:opacity-50"
+              >
+                {manageLoading ? 'Refreshing…' : 'Refresh'}
+              </button>
+            </div>
+
+            {/* Invite block — single-click copy of room ID so the host
+                can paste it into WhatsApp/etc. */}
+            <div className="shrink-0 px-4 py-3 border-b border-[var(--color-line)] bg-[var(--color-surface-2)]">
+              <p className="text-[10px] uppercase tracking-wider text-[var(--color-fg-mute)] font-semibold mb-1.5">Invite a friend</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 px-2 py-1.5 rounded-md bg-[var(--color-bg)] text-[11px] font-mono text-[var(--color-fg)] truncate">{roomName}</code>
+                <button
+                  onClick={copyRoomId}
+                  className="h-7 px-3 rounded-md text-[11px] font-semibold bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] inline-flex items-center gap-1"
+                >
+                  {copied ? <Check size={11} /> : <Copy size={11} />}
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <p className="text-[10px] text-[var(--color-fg-mute)] mt-1.5 leading-snug">
+                Friend pastes it on the video lobby's "Join by room ID" entry.
+              </p>
+            </div>
+
+            {/* Participant list */}
+            <div className="flex-1 overflow-y-auto p-2">
+              {participantUserIds.length === 0 ? (
+                <p className="text-[11px] text-[var(--color-fg-mute)] text-center p-6">
+                  Just you in the room. Share the room ID above to invite friends.
+                </p>
+              ) : (
+                <ul className="space-y-1">
+                  {participantUserIds.map((uid) => {
+                    const isSelf = uid === myId
+                    const name = isSelf ? 'You (host)' : (participantNames[uid] ?? uid.slice(0, 8))
+                    return (
+                      <li key={uid} className="flex items-center gap-2 px-2.5 py-2 rounded-md hover:bg-[var(--color-surface-2)]">
+                        <div className="w-7 h-7 rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent-fg)] inline-flex items-center justify-center text-[10px] font-bold uppercase">
+                          {name.slice(0, 2)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium truncate">{name}</p>
+                          {isSelf && <p className="text-[10px] text-[var(--color-fg-mute)]">Creator</p>}
+                        </div>
+                        {!isSelf && (
+                          <button
+                            onClick={() => handleKick(uid)}
+                            className="h-7 px-2 rounded-md text-[10px] font-semibold bg-[var(--color-danger)]/15 hover:bg-[var(--color-danger)]/25 text-[var(--color-danger)] inline-flex items-center gap-1 transition-colors"
+                            title={`Remove ${name}`}
+                          >
+                            <UserX size={11} /> Remove
+                          </button>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+
+            {/* Footer with End-room red button so it's always reachable. */}
+            <footer className="shrink-0 p-3 border-t border-[var(--color-line)]">
+              <button
+                onClick={() => { setManageOpen(false); handleEndRoom() }}
+                className="w-full h-9 rounded-md text-xs font-semibold bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-white inline-flex items-center justify-center gap-1.5"
+              >
+                <Power size={12} />
+                End room for everyone
+              </button>
+              <p className="text-[10px] text-[var(--color-fg-mute)] text-center mt-1.5">
+                Closes the room for all viewers immediately.
+              </p>
+            </footer>
+          </div>
+        </div>
+      )}
     </>
   )
 }

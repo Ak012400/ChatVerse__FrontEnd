@@ -76,10 +76,28 @@ export default function RandomGroupPage() {
     setJoinData(null)
   }
 
-  // Promote into the AppLayout-level call shell so the LiveKitRoom
-  // outlives any route change. Without this, clicking /profile (or any
-  // sidebar link) would unmount this page → tear down LiveKit → drop
-  // the call.
+  // ── Persistent-call wiring. Three orthogonal effects keep local
+  //    `joinData` and the global `activeCallStore` in sync without
+  //    racing each other on initial join:
+  //
+  //   1. PUSH — when joinData appears, broadcast it to the global
+  //             store so AppLayout's LiveKitRoom can activate.
+  //
+  //   2. RESTORE — when the page re-mounts (user came back to this
+  //                route after going to /profile etc.), pull the call
+  //                back out of the global store so the UI shows the
+  //                in-call screen instead of the join button.
+  //
+  //   3. CLEAR — when the global call goes from set→null AFTER we've
+  //              observed it as set at least once, mirror that by
+  //              clearing local joinData. The "had it once" ref is
+  //              critical — without it, the initial-render gap
+  //              (joinData set, activeCall still null in closure)
+  //              would falsely fire the clear and bounce the user back
+  //              to the join screen, requiring a second click to enter.
+  const hadActiveCallRef = useRef(false)
+
+  // 1. Push
   useEffect(() => {
     if (!joinData) return
     setCall({
@@ -95,13 +113,32 @@ export default function RandomGroupPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [joinData?.token])
 
-  // If LiveKitRoom tears down (server kick, network blip past retries),
-  // AppLayout calls endCall() → activeCall becomes null → we mirror.
+  // 2. Restore
   useEffect(() => {
-    if (joinData && activeCall == null) {
+    if (activeCall?.kind === 'random-group' && !joinData) {
+      setJoinData({
+        token: activeCall.token,
+        serverUrl: activeCall.serverUrl,
+        roomName: activeCall.roomName,
+        count: 0,
+        maxParticipants: 6,
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCall?.token])
+
+  // 3. Clear (only after we've seen activeCall set at least once)
+  useEffect(() => {
+    if (activeCall) {
+      hadActiveCallRef.current = true
+      return
+    }
+    if (hadActiveCallRef.current && joinData) {
+      hadActiveCallRef.current = false
       setJoinData(null)
     }
-  }, [activeCall, joinData])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCall])
 
   /* Pre-join screen */
   if (!joinData) {
