@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { PanelLeftOpen } from 'lucide-react'
+import { LiveKitRoom, RoomAudioRenderer } from '@livekit/components-react'
 import PrimarySidebar from './Sidebar/PrimarySidebar'
 import SecondarySidebar from './Sidebar/SecondarySidebar'
 import ChatSidebar from './Sidebar/ChatSidebar'
 import VideoSidebar from './Sidebar/VideoSidebar'
 import OnlineBadge from '../ui/OnlineBadge'
 import IncomingCallModal from '../call/IncomingCallModal'
+import FloatingCallWidget from '../call/FloatingCallWidget'
 import GameInviteListener from '../games/GameInviteListener'
 import MobileBottomNav from './MobileBottomNav'
 import { useUiStore } from '../../stores/uiStore'
 import { useChatHub } from '../../hooks/useChatHub'
+import { useActiveCallStore } from '../../stores/activeCallStore'
 
 type Tab = 'chat' | 'video'
 
@@ -70,7 +73,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     /^\/video\/.+/.test(pathname)
   const secondaryMobileClass = mobileDrillDown ? 'hidden sm:flex' : 'flex'
 
-  return (
+  // ── Active call shell. When a call is in progress (set from any call
+  //   page after token fetch) we mount LiveKitRoom HERE at the layout
+  //   level. That way navigation between pages doesn't unmount it →
+  //   the connection survives → call doesn't drop. Call pages then
+  //   render their UI inside that LiveKit context instead of building
+  //   their own LiveKitRoom wrapper.
+  const activeCall = useActiveCallStore((s) => s.call)
+  const endCall = useActiveCallStore((s) => s.endCall)
+
+  const layoutContent = (
     <div className="flex h-screen bg-[var(--color-bg)] text-[var(--color-fg)] overflow-hidden">
       <PrimarySidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
@@ -119,5 +131,35 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           the recipient is on. Self-hides when no invite is pending. */}
       <IncomingCallModal />
     </div>
+  )
+
+  // CRITICAL: LiveKitRoom must ALWAYS be the root, not conditional.
+  // If we swap between `<div>` (no call) and `<LiveKitRoom>` (call) as
+  // the root, React sees a parent-type change and remounts every child
+  // — which destroys the call page's local state (joinData, the in-call
+  // step state, etc.) the moment the call starts. The user would get
+  // bounced back to the join screen in an infinite loop.
+  //
+  // So we mount LiveKitRoom unconditionally and toggle `connect` based
+  // on whether there's an active call. When no call, LiveKitRoom sits
+  // dormant — no WS, no media — but its position in the tree stays
+  // stable so children's state survives the activate/deactivate edge.
+  return (
+    <LiveKitRoom
+      token={activeCall?.token ?? ''}
+      serverUrl={activeCall?.serverUrl ?? 'wss://placeholder.livekit.cloud'}
+      connect={!!activeCall}
+      audio={activeCall?.audio ?? true}
+      video={activeCall?.video ?? true}
+      options={activeCall?.roomOptions}
+      onDisconnected={() => endCall()}
+      data-lk-theme="default"
+    >
+      {activeCall && <RoomAudioRenderer />}
+      {layoutContent}
+      {/* Floating mini-controls only render when call is active AND user
+          is off the call page — self-gated inside the widget. */}
+      {activeCall && <FloatingCallWidget />}
+    </LiveKitRoom>
   )
 }

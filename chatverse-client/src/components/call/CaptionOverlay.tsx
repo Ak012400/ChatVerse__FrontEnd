@@ -19,12 +19,48 @@ export function CaptionOverlay({
   lines,
   preferredLang,
   className,
+  // Optional metadata so the overlay can render a visible "Listening…"
+  // empty state instead of being totally invisible when captions are
+  // on but nobody has spoken yet. Without this users tap the toggle
+  // and see no UI change at all — looks broken.
+  enabled,
+  listening,
+  micMuted,
 }: {
   lines: CaptionLine[]
   preferredLang: string
   className?: string
+  enabled?: boolean
+  listening?: boolean
+  micMuted?: boolean
 }) {
-  if (lines.length === 0) return null
+  // ── Empty state: explicit "Listening…" pill + mic-mute warning so
+  //    users know STT is actually running. Without this the overlay
+  //    was completely invisible until somebody spoke, which made the
+  //    feature feel broken even when it was working.
+  if (lines.length === 0) {
+    if (!enabled) return null
+    return (
+      <div
+        className={[
+          'pointer-events-none absolute inset-x-0 bottom-0 px-2 sm:px-4 pb-3 sm:pb-5',
+          'flex flex-col items-center gap-1.5',
+          className ?? '',
+        ].join(' ')}
+        aria-live="polite"
+      >
+        <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full bg-black/65 text-white text-[11px] font-semibold backdrop-blur-sm">
+          <span className={`w-1.5 h-1.5 rounded-full ${listening ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+          {listening ? 'Listening…' : 'Captions starting…'}
+        </span>
+        {micMuted && (
+          <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-[var(--color-danger,#ef4444)]/85 text-white text-[10px] font-medium backdrop-blur-sm">
+            🎙 Mic is muted — unmute to caption your voice
+          </span>
+        )}
+      </div>
+    )
+  }
 
   // Show only the 3 newest, oldest first so they read top-to-bottom.
   const recent = lines.slice(-3)

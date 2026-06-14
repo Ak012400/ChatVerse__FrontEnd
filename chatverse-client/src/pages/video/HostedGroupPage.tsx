@@ -1,20 +1,17 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Video as VideoIcon, Plus, LogIn, Loader2, Users,
   Mic, MicOff, VideoOff, PhoneOff, Copy, Check,
 } from 'lucide-react'
 import {
-  LiveKitRoom,
-  GridLayout,
   ParticipantTile,
   useTracks,
   useLocalParticipant,
   useParticipants,
-  RoomAudioRenderer,
   useRoomContext,
-  ConnectionStateToast,
 } from '@livekit/components-react'
+import AllParticipantsGrid from '../../components/call/AllParticipantsGrid'
 import { groupRoomOptions } from '../../lib/livekitOptions'
 import { Track } from 'livekit-client'
 import '@livekit/components-styles'
@@ -22,6 +19,7 @@ import '@livekit/components-styles'
 import { groupCallApi } from '../../api'
 import { useToastStore } from '../../stores/toastStore'
 import { useAuthStore } from '../../stores/authStore'
+import { useActiveCallStore } from '../../stores/activeCallStore'
 import { useCaptionsStore } from '../../stores/captionsStore'
 import { useCaptionBroadcaster } from '../../hooks/useCaptionBroadcaster'
 import { useCaptions, type CaptionLine } from '../../hooks/useCaptions'
@@ -41,12 +39,35 @@ type Connection = {
 export default function HostedGroupPage() {
   const navigate = useNavigate()
   const { showToast } = useToastStore()
+  const setCall = useActiveCallStore((s) => s.setCall)
+  const endCall = useActiveCallStore((s) => s.endCall)
+  const activeCall = useActiveCallStore((s) => s.call)
 
   const [mode, setMode] = useState<'pick' | 'create' | 'join'>('pick')
   const [roomName, setRoomName] = useState('')
   const [maxParticipants, setMaxParticipants] = useState(10)
   const [loading, setLoading] = useState(false)
   const [conn, setConn] = useState<Connection | null>(null)
+
+  // Promote into shared call shell so /profile / /chat don't drop the call.
+  useEffect(() => {
+    if (!conn) return
+    setCall({
+      kind: 'hosted',
+      roomName: conn.roomName,
+      token: conn.token,
+      serverUrl: conn.serverUrl,
+      returnPath: '/video/hosted',
+      startedAt: Date.now(),
+      roomOptions: groupRoomOptions,
+      label: `Hosted · ${conn.roomName}`,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conn?.token])
+
+  useEffect(() => {
+    if (conn && activeCall == null) setConn(null)
+  }, [activeCall, conn])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -88,30 +109,17 @@ export default function HostedGroupPage() {
     }
   }
 
-  /* In-call */
+  /* In-call. LiveKitRoom lives in AppLayout — we just render UI here. */
   if (conn) {
     return (
-      <LiveKitRoom
-        token={conn.token}
-        serverUrl={conn.serverUrl}
-        video
-        audio
-        connect
-        options={groupRoomOptions}
-        onDisconnected={() => setConn(null)}
-        data-lk-theme="default"
-        style={{ height: '100%', background: 'var(--color-bg)' }}
-      >
-        <RoomAudioRenderer />
-        <ConnectionStateToast />
-        <HostedGroupUI
-          roomName={conn.roomName}
-          onLeave={() => {
-            setConn(null)
-            navigate('/video')
-          }}
-        />
-      </LiveKitRoom>
+      <HostedGroupUI
+        roomName={conn.roomName}
+        onLeave={() => {
+          endCall()
+          setConn(null)
+          navigate('/video')
+        }}
+      />
     )
   }
 
@@ -348,23 +356,14 @@ function HostedGroupUI({
       </header>
 
       {/* Desktop: cap container width + clamp each tile to aspect-video
-          so a portrait-camera peer letter-boxes instead of stretching. */}
+          so a portrait-camera peer letter-boxes instead of stretching.
+          Uses AllParticipantsGrid (custom CSS grid) so EVERY participant
+          is always visible — LiveKit's GridLayout has a focus-mode that
+          could hide tiles after a tap. */}
       <div className="h-full pt-10 pb-20 md:pt-12 md:pb-22 lg:pt-14 lg:pb-24 lg:px-6">
         {tracks.length > 0 ? (
           <div className="h-full w-full lg:max-w-6xl lg:mx-auto">
-            <GridLayout
-              tracks={tracks}
-              style={{
-                height: '100%',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))',
-                gap: '4px',
-                padding: '4px',
-              }}
-              className="[&_.lk-participant-tile]:lg:aspect-video [&_.lk-participant-tile]:lg:max-h-[320px] [&_.lk-participant-tile_video]:lg:!object-contain [&_.lk-participant-tile]:lg:bg-black/60 [&_.lk-participant-tile]:lg:rounded-md"
-            >
-              <ParticipantTile />
-            </GridLayout>
+            <AllParticipantsGrid tracks={tracks} />
           </div>
         ) : (
           <div className="h-full flex items-center justify-center">
@@ -372,11 +371,14 @@ function HostedGroupUI({
           </div>
         )}
 
-        {captionsEnabled && captionLines.length > 0 && (
+        {captionsEnabled && (
           <CaptionOverlay
             lines={captionLines}
             preferredLang={preferredLang}
             className="bottom-20"
+            enabled={captionsEnabled}
+            listening={broadcaster.listening}
+            micMuted={!micOn}
           />
         )}
       </div>

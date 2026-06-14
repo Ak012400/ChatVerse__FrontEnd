@@ -11,14 +11,12 @@ import { useCaptionTTS } from '../../hooks/useCaptionTTS'
 import { useCaptionsStore } from '../../stores/captionsStore'
 import { useAuthStore } from '../../stores/authStore'
 import {
-  LiveKitRoom,
-  GridLayout,
   ParticipantTile,
   useTracks,
   useLocalParticipant,
-  RoomAudioRenderer,
   useRoomContext,
 } from '@livekit/components-react'
+import AllParticipantsGrid from '../../components/call/AllParticipantsGrid'
 // `RoomOptions` is exported as a TypeScript type only (not a runtime value),
 // so it needs the inline `type` modifier or the bundler errors out with
 // "is not exported by livekit-client". `ConnectionState` and `DisconnectReason`
@@ -30,6 +28,7 @@ import '@livekit/components-styles'
 import { directCallApi, usersApi } from '../../api'
 import { useChatHub } from '../../hooks/useChatHub'
 import { useToastStore } from '../../stores/toastStore'
+import { useActiveCallStore } from '../../stores/activeCallStore'
 import Button from '../../components/ui/Button'
 import IconButton from '../../components/ui/IconButton'
 import Input from '../../components/ui/Input'
@@ -54,6 +53,9 @@ export default function DirectCallPage() {
   const location = useLocation()
   const { showToast } = useToastStore()
   const { getConnection, safeInvoke } = useChatHub()
+  const setCall = useActiveCallStore((s) => s.setCall)
+  const activeCall = useActiveCallStore((s) => s.call)
+  const endCall = useActiveCallStore((s) => s.endCall)
 
   const [state, setState] = useState<CallState>({ kind: 'idle' })
   const [targetInput, setTargetInput] = useState('')
@@ -230,29 +232,47 @@ export default function DirectCallPage() {
     showToast({ type: 'success', title: 'Reconnected', message: 'You\'re back in the call.', duration: 1500 })
   }
 
+  // ── Promote the in-call session into the AppLayout-level activeCall
+  //    so the LiveKitRoom lives outside the route. The user can browse
+  //    /profile / /chat while the call stays alive in the corner.
+  const inCallToken = state.kind === 'in-call' ? state.token : null
+  useEffect(() => {
+    if (state.kind !== 'in-call') return
+    setCall({
+      kind: 'direct',
+      roomName: state.roomName,
+      token: state.token,
+      serverUrl: state.serverUrl,
+      returnPath: '/video/invite',
+      startedAt: Date.now(),
+      roomOptions,
+      label: 'Direct call',
+    })
+    // We intentionally do NOT clear the call when this page unmounts —
+    // navigating away should keep the call alive (that's the whole
+    // point of the persistent shell). The call only ends when the user
+    // explicitly hangs up or LiveKit fires onDisconnected on the room.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inCallToken])
+
+  // Mirror LiveKit's disconnect signal — AppLayout's onDisconnected
+  // calls endCall(), and we also want the page state to reset.
+  useEffect(() => {
+    if (state.kind === 'in-call' && activeCall == null) {
+      // Call ended out from under us (server shutdown, kicked, etc.)
+      handleDisconnected(undefined)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCall, state.kind])
+
   if (state.kind === 'in-call') {
     return (
-      <LiveKitRoom
-        token={state.token}
-        serverUrl={state.serverUrl}
-        video
-        audio
-        connect
-        options={roomOptions}
-        onDisconnected={handleDisconnected}
-        onConnected={() => console.log('[direct-call] connected to', state.roomName)}
-        onError={(err) => console.error('[direct-call] LiveKit error', err)}
-        data-lk-theme="default"
-        style={{ height: '100%', background: 'var(--color-bg)' }}
-      >
-        <RoomAudioRenderer />
-        <DirectCallUI
-          roomName={state.roomName}
-          onLeave={() => { userInitiatedLeaveRef.current = true; handleEndCall() }}
-          onReconnecting={handleReconnecting}
-          onReconnected={handleReconnected}
-        />
-      </LiveKitRoom>
+      <DirectCallUI
+        roomName={state.roomName}
+        onLeave={() => { userInitiatedLeaveRef.current = true; endCall(); handleEndCall() }}
+        onReconnecting={handleReconnecting}
+        onReconnected={handleReconnected}
+      />
     )
   }
 
@@ -566,15 +586,10 @@ function DirectCallUI({
       <div className="relative h-full pt-14 pb-24">
         {tracks.length > 0 ? (
           // Desktop compaction: cap the tile area at ~max-w-4xl so a
-          // portrait-camera peer doesn't blow up to a quarter of the
-          // viewport on a laptop. Mobile (<lg) keeps full-bleed so
-          // small screens use every pixel.
-          <div className="h-full w-full mx-auto lg:max-w-4xl lg:px-4 lg:flex lg:items-center">
-            <div className="w-full h-full lg:h-auto lg:aspect-video lg:max-h-[calc(100vh-220px)] [&_.lk-participant-tile]:lg:rounded-md [&_.lk-participant-tile_video]:lg:!object-contain [&_.lk-participant-tile]:lg:bg-black/60">
-              <GridLayout tracks={tracks} style={{ height: '100%' }}>
-                <ParticipantTile />
-              </GridLayout>
-            </div>
+          // portrait-camera peer doesn't blow up across half the screen.
+          // Mobile keeps full-bleed for maximum face area.
+          <div className="h-full w-full mx-auto lg:max-w-4xl lg:px-4">
+            <AllParticipantsGrid tracks={tracks} />
           </div>
         ) : (
           <div className="h-full flex items-center justify-center">
@@ -582,14 +597,18 @@ function DirectCallUI({
           </div>
         )}
 
-        {/* Live caption overlay — only renders when there are lines.
-            Positioned above the bottom control bar so subtitles don't
-            collide with the mic / cam / leave buttons. */}
-        {captionsEnabled && captionLines.length > 0 && (
+        {/* Live caption overlay — also handles the empty-state pill
+            ("Listening…" / mic-muted warning) so users get feedback
+            the moment they toggle captions on, even before anyone has
+            actually spoken. */}
+        {captionsEnabled && (
           <CaptionOverlay
             lines={captionLines}
             preferredLang={preferredLang}
             className="bottom-20"
+            enabled={captionsEnabled}
+            listening={broadcaster.listening}
+            micMuted={!micOn}
           />
         )}
       </div>
