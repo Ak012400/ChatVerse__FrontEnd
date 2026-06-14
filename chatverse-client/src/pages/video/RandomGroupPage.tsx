@@ -5,17 +5,14 @@ import {
   Users, Flag, Loader2, Sparkles, ShieldAlert,
 } from 'lucide-react'
 import {
-  LiveKitRoom,
-  GridLayout,
   ParticipantTile,
   useTracks,
   useLocalParticipant,
   useParticipants,
   useMaybeParticipantContext,
-  RoomAudioRenderer,
   useRoomContext,
-  ConnectionStateToast,
 } from '@livekit/components-react'
+import AllParticipantsGrid from '../../components/call/AllParticipantsGrid'
 import { groupRoomOptions } from '../../lib/livekitOptions'
 import { Track } from 'livekit-client'
 import * as nsfwjs from 'nsfwjs'
@@ -24,6 +21,7 @@ import '@livekit/components-styles'
 import { randomGroupApi } from '../../api'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
+import { useActiveCallStore } from '../../stores/activeCallStore'
 import { useCaptionsStore } from '../../stores/captionsStore'
 import { useCaptionBroadcaster } from '../../hooks/useCaptionBroadcaster'
 import { useCaptions, type CaptionLine } from '../../hooks/useCaptions'
@@ -44,6 +42,9 @@ type JoinData = {
 export default function RandomGroupPage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
+  const setCall = useActiveCallStore((s) => s.setCall)
+  const endCall = useActiveCallStore((s) => s.endCall)
+  const activeCall = useActiveCallStore((s) => s.call)
 
   const [joinData, setJoinData] = useState<JoinData | null>(null)
   const [isJoining, setIsJoining] = useState(false)
@@ -70,8 +71,36 @@ export default function RandomGroupPage() {
         /* best effort */
       }
     }
+    endCall()
     setJoinData(null)
   }
+
+  // Promote into the AppLayout-level call shell so the LiveKitRoom
+  // outlives any route change. Without this, clicking /profile (or any
+  // sidebar link) would unmount this page → tear down LiveKit → drop
+  // the call.
+  useEffect(() => {
+    if (!joinData) return
+    setCall({
+      kind: 'random-group',
+      roomName: joinData.roomName,
+      token: joinData.token,
+      serverUrl: joinData.serverUrl,
+      returnPath: '/video/random-group',
+      startedAt: Date.now(),
+      roomOptions: groupRoomOptions,
+      label: `Random group · ${joinData.count}/${joinData.maxParticipants}`,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [joinData?.token])
+
+  // If LiveKitRoom tears down (server kick, network blip past retries),
+  // AppLayout calls endCall() → activeCall becomes null → we mirror.
+  useEffect(() => {
+    if (joinData && activeCall == null) {
+      setJoinData(null)
+    }
+  }, [activeCall, joinData])
 
   /* Pre-join screen */
   if (!joinData) {
@@ -122,30 +151,16 @@ export default function RandomGroupPage() {
     )
   }
 
-  /* In-call screen */
+  /* In-call screen. LiveKitRoom now lives in AppLayout (driven by
+     activeCallStore), so this page just renders the UI inside that
+     shared context — navigating away keeps the call alive. */
   return (
-    <LiveKitRoom
-      token={joinData.token}
-      serverUrl={joinData.serverUrl}
-      video
-      audio
-      connect
-      options={groupRoomOptions}
-      onDisconnected={handleLeave}
-      data-lk-theme="default"
-      style={{ height: '100%', background: 'var(--color-bg)' }}
-    >
-      <RoomAudioRenderer />
-      {/* Built-in banner for connecting/reconnecting states — users
-          SEE the recovery instead of assuming the call died. */}
-      <ConnectionStateToast />
-      <GroupRoomUI
-        roomName={joinData.roomName}
-        maxParticipants={joinData.maxParticipants}
-        onLeave={handleLeave}
-        currentUserId={user?.userId ?? ''}
-      />
-    </LiveKitRoom>
+    <GroupRoomUI
+      roomName={joinData.roomName}
+      maxParticipants={joinData.maxParticipants}
+      onLeave={handleLeave}
+      currentUserId={user?.userId ?? ''}
+    />
   )
 }
 
@@ -380,22 +395,16 @@ function GroupRoomUI({
       <div className="flex-1 pt-10 pb-20 md:pt-12 md:pb-22 lg:pt-14 lg:pb-24 lg:px-6">
         {tracks.length > 0 ? (
           <div className="h-full w-full lg:max-w-6xl lg:mx-auto">
-            <GridLayout
+            <AllParticipantsGrid
               tracks={tracks}
-              style={{
-                height: '100%',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))',
-                gap: '4px',
-                padding: '4px',
-              }}
-              className="[&_.lk-participant-tile]:lg:aspect-video [&_.lk-participant-tile]:lg:max-h-[320px] [&_.lk-participant-tile_video]:lg:!object-contain [&_.lk-participant-tile]:lg:bg-black/60 [&_.lk-participant-tile]:lg:rounded-md"
-            >
-              <ParticipantTileWithReport
-                currentUserId={currentUserId}
-                onReport={reportPeer}
-              />
-            </GridLayout>
+              tileWrap={(track) => (
+                <ParticipantTileWithReport
+                  trackRef={track}
+                  currentUserId={currentUserId}
+                  onReport={reportPeer}
+                />
+              )}
+            />
           </div>
         ) : (
           <div className="h-full flex items-center justify-center">
@@ -403,11 +412,14 @@ function GroupRoomUI({
           </div>
         )}
 
-        {captionsEnabled && captionLines.length > 0 && (
+        {captionsEnabled && (
           <CaptionOverlay
             lines={captionLines}
             preferredLang={preferredLang}
             className="bottom-20"
+            enabled={captionsEnabled}
+            listening={broadcaster.listening}
+            micMuted={!micOn}
           />
         )}
       </div>
@@ -469,21 +481,24 @@ function GroupRoomUI({
 // for free, and only paint the report button on top.
 // ──────────────────────────────────────────────────────────────
 function ParticipantTileWithReport({
+  trackRef,
   currentUserId,
   onReport,
 }: {
+  // trackRef explicit so we can render inside the new AllParticipantsGrid
+  // (which doesn't wrap tiles in a ParticipantContext the way LiveKit's
+  // own GridLayout did). Fallback to ParticipantContext if no ref.
+  trackRef?: { participant: { identity: string; name?: string } } & any
   currentUserId: string
   onReport: (violatorUserId: string) => void
 }) {
-  // GridLayout wraps each rendered tile in a ParticipantContext, so we
-  // can pull the current participant out via the maybe-context hook
-  // without throwing if (somehow) the context isn't there.
-  const participant = useMaybeParticipantContext()
+  const ctxParticipant = useMaybeParticipantContext()
+  const participant = trackRef?.participant ?? ctxParticipant
   const isSelf = participant?.identity === currentUserId
 
   return (
-    <div className="relative h-full">
-      <ParticipantTile />
+    <div className="relative h-full w-full">
+      <ParticipantTile trackRef={trackRef} />
       {!isSelf && participant && (
         <button
           type="button"
