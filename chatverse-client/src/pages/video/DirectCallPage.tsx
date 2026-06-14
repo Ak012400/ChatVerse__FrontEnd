@@ -4,6 +4,10 @@ import {
   PhoneCall, PhoneOff, UserPlus, X, Mic, MicOff,
   Video as VideoIcon, VideoOff, Loader2,
 } from 'lucide-react'
+import { CaptionOverlay, CaptionsToggle } from '../../components/call/CaptionOverlay'
+import { useCaptionBroadcaster } from '../../hooks/useCaptionBroadcaster'
+import { useCaptions } from '../../hooks/useCaptions'
+import { useCaptionsStore } from '../../stores/captionsStore'
 import {
   LiveKitRoom,
   GridLayout,
@@ -451,6 +455,48 @@ function DirectCallUI({
     return () => window.clearInterval(t)
   }, [])
 
+  // ── Live captions (Phase A) ─────────────────────────────────
+  //  Speaker side: Web Speech transcribes the local mic and forwards
+  //  phrases via the SignalR caption group. Receiver side: listens to
+  //  the same group and translates as needed for the local user's
+  //  preferred language. Both sides run unconditionally — the only
+  //  toggle is whether captions are enabled at all.
+  const captionsEnabled = useCaptionsStore((s) => s.enabled)
+  const setCaptionsEnabled = useCaptionsStore((s) => s.setEnabled)
+  const spokenLang = useCaptionsStore((s) => s.spokenLang)
+  const preferredLang = useCaptionsStore((s) => s.preferredLang)
+  const { showToast } = useToastStore()
+
+  const broadcaster = useCaptionBroadcaster({
+    roomName,
+    enabled: captionsEnabled,
+    speakLang: spokenLang,
+    onUnsupported: () => {
+      showToast({
+        type: 'warning',
+        title: 'Captions unavailable',
+        message: 'Your browser does not support live speech recognition.',
+        duration: 3500,
+      })
+      setCaptionsEnabled(false)
+    },
+    onPermissionDenied: () => {
+      showToast({
+        type: 'warning',
+        title: 'Microphone access denied',
+        message: 'Captions need mic permission — re-grant in browser settings.',
+        duration: 4000,
+      })
+      setCaptionsEnabled(false)
+    },
+  })
+
+  const { lines: captionLines } = useCaptions({
+    roomName,
+    preferredLang,
+    enabled: captionsEnabled,
+  })
+
   const toggleMic = async () => { const n = !micOn; await localParticipant.setMicrophoneEnabled(n); setMicOn(n) }
   const toggleCam = async () => { const n = !camOn; await localParticipant.setCameraEnabled(n); setCamOn(n) }
   const leave = async () => { await room.disconnect(); onLeave(); navigate('/video') }
@@ -478,7 +524,7 @@ function DirectCallUI({
         </div>
       )}
 
-      <div className="h-full pt-14 pb-24">
+      <div className="relative h-full pt-14 pb-24">
         {tracks.length > 0 ? (
           <GridLayout tracks={tracks} style={{ height: '100%' }}>
             <ParticipantTile />
@@ -487,6 +533,17 @@ function DirectCallUI({
           <div className="h-full flex items-center justify-center">
             <Loader2 size={20} className="text-white/40" style={{ animation: 'spin 1s linear infinite' }} />
           </div>
+        )}
+
+        {/* Live caption overlay — only renders when there are lines.
+            Positioned above the bottom control bar so subtitles don't
+            collide with the mic / cam / leave buttons. */}
+        {captionsEnabled && captionLines.length > 0 && (
+          <CaptionOverlay
+            lines={captionLines}
+            preferredLang={preferredLang}
+            className="bottom-20"
+          />
         )}
       </div>
 
@@ -497,6 +554,17 @@ function DirectCallUI({
         <IconButton variant="subtle" size="lg" onClick={toggleCam} className={!camOn ? '!bg-[var(--color-danger)] !text-white !border-[var(--color-danger)]' : ''} aria-label={camOn ? 'Stop camera' : 'Start camera'}>
           {camOn ? <VideoIcon size={18} /> : <VideoOff size={18} />}
         </IconButton>
+        {/* Live captions toggle — only renders when the browser
+            actually supports SpeechRecognition. The hook returns
+            isSupported=false on Firefox so we'd be teasing the user. */}
+        {broadcaster.isSupported && (
+          <CaptionsToggle
+            enabled={captionsEnabled}
+            onToggle={() => setCaptionsEnabled(!captionsEnabled)}
+            listening={broadcaster.listening}
+            spokenLang={spokenLang.split('-')[0]}
+          />
+        )}
         <button onClick={leave} className="h-11 px-5 rounded-md text-sm font-medium bg-[var(--color-danger)] hover:bg-[#dc2626] text-white inline-flex items-center gap-1.5 transition-colors">
           <PhoneOff size={15} />
           End call

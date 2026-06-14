@@ -98,6 +98,15 @@ export const theaterApi = {
   end: (roomName: string) => api.delete(`/theater/${roomName}`),
 }
 
+export const translateApi = {
+  /** Translate text → targetLang. Server caches in Redis for 24h. */
+  text: (text: string, targetLang: string) =>
+    api.post<{ data: { translated: string; targetLang: string; cached: boolean } }>(
+      '/translate',
+      { text, targetLang },
+    ),
+}
+
 export const dmsApi = {
   conversations: () => api.get('/dms'),
   thread: (otherUserId: string, skip = 0, limit = 50) =>
