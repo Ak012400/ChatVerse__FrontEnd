@@ -16,6 +16,7 @@ import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import LanguageSwitcher from '../../components/ui/LanguageSwitcher'
+import { BlockedUsersSection } from '../../components/users/BlockedUsersSection'
 
 const BAND_TONE: Record<string, 'neutral' | 'accent' | 'success' | 'warning' | 'danger'> = {
   new:        'neutral',
@@ -336,6 +337,11 @@ export default function ProfilePage() {
         <Card padding="lg" className="mb-5">
           <LanguageSwitcher />
         </Card>
+
+        {/* Block list — outgoing list with names + inbound count only. */}
+        <div className="mb-5">
+          <BlockedUsersSection />
+        </div>
 
         {/* Sign out */}
         <Button
