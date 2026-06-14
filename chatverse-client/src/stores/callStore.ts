@@ -1,10 +1,6 @@
 import { create } from 'zustand'
 
-/**
- * Shape of an incoming call invitation — populated by useChatHub when
- * the SignalR "IncomingCall" event arrives, cleared on accept/decline
- * or after the 60-second TTL expires.
- */
+/** One ringing invitation in the queue. */
 export interface IncomingCall {
   inviteId: string
   callerId: string
@@ -14,26 +10,71 @@ export interface IncomingCall {
   receivedAt: number // unix ms, used for the countdown
 }
 
-interface CallState {
-  /** The current ringing invite, if any. */
-  incoming: IncomingCall | null
-  setIncoming: (c: IncomingCall) => void
-  clearIncoming: () => void
+/** Notification-only event when a blocked user attempts to call. */
+export interface BlockedCallAttempt {
+  callerId: string
+  callerName: string
+  attemptedAt: number
+  message?: string
 }
 
+interface CallState {
+  /**
+   * Queue of ringing invites. Up to MAX_CONCURRENT, newest at index 0.
+   * A second invite from the same caller replaces their earlier one
+   * instead of stacking — saves space and matches the "they're trying
+   * again" intent.
+   */
+  incoming: IncomingCall[]
+  /** Notifications for calls from users you've blocked — silent log. */
+  blockedAttempts: BlockedCallAttempt[]
+
+  setIncoming: (c: IncomingCall) => void
+  /** Remove a single invite by id (after Accept / Decline / TTL). */
+  removeIncoming: (inviteId: string) => void
+  /** Mass-decline — used by "Reject all" button in the call list panel. */
+  clearAllIncoming: () => void
+  pushBlockedAttempt: (a: BlockedCallAttempt) => void
+  clearBlockedAttempts: () => void
+}
+
+const MAX_CONCURRENT = 10
+const MAX_BLOCKED_LOG = 25
+
 /**
- * Global call store. Lives outside useChatHub on purpose: the hub may
- * unmount/remount with route changes, but a ringing invite must stay
- * on screen until the user explicitly answers it.
+ * Global call store. Survives route changes (which would otherwise
+ * unmount useChatHub) so a queue of ringing invites persists until the
+ * user explicitly acts on them or the 60s TTL expires per invite.
  *
- * Used by:
- *   • useChatHub        → writes here when "IncomingCall" arrives
- *   • IncomingCallModal → reads here to render the ringing UI
- *   • DirectCallPage    → may read on mount when navigated to with an
- *                         auto-accept intent
+ * Multi-call semantics (new):
+ *   • Up to 10 concurrent ringers stored as a stack, newest first.
+ *   • Per-caller dedupe — a second invite from the same callerId
+ *     replaces the earlier one (rather than stacking) because you
+ *     don't need to see "Arun is calling" twice in the panel.
+ *   • "Reject all" + "Pick one (auto-decline others)" supported via
+ *     clearAllIncoming + removeIncoming primitives.
  */
 export const useCallStore = create<CallState>((set) => ({
-  incoming: null,
-  setIncoming: (c) => set({ incoming: c }),
-  clearIncoming: () => set({ incoming: null }),
+  incoming: [],
+  blockedAttempts: [],
+
+  setIncoming: (c) => set((s) => {
+    // Dedupe by callerId. If they already had an invite ringing, drop
+    // it and add the new one to the front.
+    const filtered = s.incoming.filter((x) => x.callerId !== c.callerId && x.inviteId !== c.inviteId)
+    const next = [c, ...filtered]
+    return { incoming: next.slice(0, MAX_CONCURRENT) }
+  }),
+
+  removeIncoming: (inviteId) => set((s) => ({
+    incoming: s.incoming.filter((x) => x.inviteId !== inviteId),
+  })),
+
+  clearAllIncoming: () => set({ incoming: [] }),
+
+  pushBlockedAttempt: (a) => set((s) => ({
+    blockedAttempts: [a, ...s.blockedAttempts].slice(0, MAX_BLOCKED_LOG),
+  })),
+
+  clearBlockedAttempts: () => set({ blockedAttempts: [] }),
 }))
