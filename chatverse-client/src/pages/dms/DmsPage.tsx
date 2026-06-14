@@ -16,7 +16,6 @@ import { BlockUserButton } from '../../components/users/BlockUserButton'
 import { SpotifyEmbed } from '../../components/chat/SpotifyEmbed'
 import { extractSpotifyEmbed } from '../../lib/spotifyExtract'
 import { useResizableWidth } from '../../hooks/useResizableWidth'
-import { usersApi } from '../../api'
 
 // 👇 FIX: Declare a constant stable reference for empty arrays to prevent infinite re-renders
 const EMPTY_ARRAY: any[] = []
