@@ -199,16 +199,21 @@ export default function GameLauncherModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
+      {/* Mobile: bottom-sheet flush to screen edge, rounded top only,
+          90vh tall so the keyboard doesn't cover the form. Desktop:
+          centred card unchanged. */}
       <div
-        className="w-full max-w-md bg-[var(--color-bg)] border border-[var(--color-line)] rounded-md shadow-xl"
+        className="w-full sm:max-w-md max-h-[90vh] flex flex-col
+                   bg-[var(--color-bg)] border border-[var(--color-line)]
+                   rounded-t-2xl sm:rounded-md shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="px-5 py-3 border-b border-[var(--color-line)] flex items-center justify-between">
+        <header className="shrink-0 px-5 py-3 border-b border-[var(--color-line)] flex items-center justify-between">
           <h2 className="text-sm font-medium">Start a game</h2>
           <button
             onClick={onClose}
@@ -219,7 +224,9 @@ export default function GameLauncherModal({
           </button>
         </header>
 
-        <div className="p-5 space-y-4">
+        {/* Scroll container — long lists of game presets + form fields
+            were overflowing the 90vh cap on small screens. */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
           <Input
             label="Room name"
             placeholder={defaultName ?? 'Friday night fun'}

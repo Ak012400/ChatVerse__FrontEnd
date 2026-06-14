@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Smile, Paperclip, Send, Hash, Users, ShieldAlert, Ban, Gamepad2, X } from 'lucide-react'
+import { Smile, Paperclip, Send, Hash, Users, ShieldAlert, Ban, Gamepad2, X, Disc3 } from 'lucide-react'
 import GameLauncherModal from '../../components/games/GameLauncherModal'
 import ActiveGamesPanel from '../../components/games/ActiveGamesPanel'
 import AmbientQuestionCard from '../../components/chat/AmbientQuestionCard'
@@ -25,6 +25,7 @@ import { SpotifyJukeboxPanel } from '../../components/chat/SpotifyJukeboxPanel'
 import { MessageActions } from '../../components/chat/MessageActions'
 import { MessageReactions } from '../../components/chat/MessageReactions'
 import { ChatConnectingLoader } from '../../components/chat/ChatConnectingLoader'
+import { useResizableWidth } from '../../hooks/useResizableWidth'
 import { extractSpotifyEmbed } from '../../lib/spotifyExtract'
 import { useTranslation, detectLanguage, preferredLanguageCode } from '../../hooks/useTranslation'
 
@@ -60,6 +61,32 @@ export default function ChatPage() {
   // thread (instead of yanking the user to a different page).
   const [showGameLauncher, setShowGameLauncher] = useState(false)
   const [embeddedGameSlug, setEmbeddedGameSlug] = useState<string | null>(null)
+  // Mobile: Music Lounge as bottom sheet. The inline side rail is
+  // hidden below `lg:` and replaced by a floating button + drawer so
+  // chat fills the full screen on phones without panel overlap.
+  const [isMusicSheetOpen, setIsMusicSheetOpen] = useState(false)
+  // Drag-to-resize for the Music Lounge inline panel (desktop only).
+  // Width persists per browser via localStorage so each user's preferred
+  // chat-vs-music ratio sticks across sessions. Hidden on mobile because
+  // the panel lives in a bottom sheet there.
+  const musicResize = useResizableWidth({
+    storageKey: 'chat-music-panel',
+    defaultWidth: 320,
+    minWidth: 260,
+    maxWidth: 560,
+    direction: 'left',
+  })
+
+  // Drag-to-resize for the chat column when an embedded game panel is
+  // visible. Default 40% of viewport (~580px on 1440px); user can pull
+  // either way to rebalance against the game canvas on the right.
+  const embedGameChatResize = useResizableWidth({
+    storageKey: 'chat-embed-game',
+    defaultWidth: 480,
+    minWidth: 320,
+    maxWidth: 720,
+    direction: 'right',
+  })
   // Whitelist of chat slugs that get the game affordance. Keeping it
   // explicit (vs an "all rooms get it" rule) means non-gaming themed
   // rooms aren't cluttered with a button that doesn't fit their vibe.
@@ -416,22 +443,47 @@ export default function ChatPage() {
       )}
 
       {/* Split layout — chat on the left, embedded game OR music
-          jukebox on the right. When neither, chat fills the full width. */}
+          jukebox on the right. Music rooms only split on lg+; below
+          that, chat fills the whole screen and the music panel lives
+          in a bottom sheet (mobile-friendly, no overlap with chat). */}
       <div className={[
         'flex-1 min-h-0 flex',
-        (embeddedGameSlug || isMusicRoom) ? 'flex-col lg:flex-row' : 'flex-col',
+        embeddedGameSlug
+          ? 'flex-col lg:flex-row'
+          : isMusicRoom
+          ? 'flex-col lg:flex-row'
+          : 'flex-col',
       ].join(' ')}>
-        {/* CHAT COLUMN (left when split, full when not) */}
+        {/* CHAT COLUMN — full width on mobile (music panel becomes a
+            sheet); shares the row with game/music panel on lg+. When an
+            embedded game is active the column width comes from the
+            embedGameChatResize hook so users can drag the splitter to
+            give the chat or the game more room. */}
         <div
           className={[
             'flex flex-col min-h-0',
             embeddedGameSlug
-              ? 'flex-1 lg:flex-[2] lg:max-w-[40%] border-b lg:border-b-0 lg:border-r border-[var(--color-line)]'
+              // Mobile: stack full-width. Desktop: explicit pixel width
+              // from the resize hook, applied via inline style below.
+              ? 'flex-1 lg:flex-initial border-b lg:border-b-0 border-[var(--color-line)]'
               : isMusicRoom
-              ? 'flex-1 lg:flex-[3] border-b lg:border-b-0 lg:border-r border-[var(--color-line)]'
+              // No lg:flex-[3]: chat naturally fills the leftover space
+              // after the resizable music panel's pixel width is honoured.
+              ? 'flex-1 min-w-0'
               : 'flex-1',
           ].join(' ')}
+          style={
+            // Only honour the dragged pixel width on lg+ when an
+            // embedded game is active. Mobile keeps `flex-1` full-width.
+            embeddedGameSlug
+              ? ({ ['--embed-chat-w' as never]: `${embedGameChatResize.width}px` })
+              : undefined
+          }
         >
+          {embeddedGameSlug && (
+            <style>{`@media (min-width: 1024px) { [data-embed-chat="${slug}"] { width: var(--embed-chat-w); flex: 0 0 var(--embed-chat-w); } }`}</style>
+          )}
+          <div data-embed-chat={embeddedGameSlug ? slug : undefined} className="flex flex-col min-h-0 h-full w-full">
       {/* Ambient question card — only shown for gameable rooms,
           when a question is live AND this viewer hasn't dismissed
           it. Dismissal is local-only so other members keep seeing it. */}
@@ -664,13 +716,42 @@ export default function ChatPage() {
       </div>
         {/* ── End of CHAT COLUMN ── */}
         </div>
+        </div>
+
+        {/* Drag handle between chat and embedded game — desktop only. */}
+        {embeddedGameSlug && (
+          <div
+            onPointerDown={embedGameChatResize.onPointerDown}
+            onDoubleClick={embedGameChatResize.resetToDefault}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize chat / game split (double-click to reset)"
+            title="Drag to resize · Double-click to reset"
+            className={[
+              'hidden lg:flex shrink-0 w-1.5 cursor-col-resize relative group transition-colors',
+              embedGameChatResize.isDragging
+                ? 'bg-[var(--color-accent)]'
+                : 'bg-[var(--color-line)] hover:bg-[var(--color-line-strong)]',
+            ].join(' ')}
+          >
+            <span
+              className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-hidden
+            >
+              {[0, 1, 2].map((i) => (
+                <span key={i} className="w-0.5 h-0.5 rounded-full bg-[var(--color-fg-mute)]" />
+              ))}
+            </span>
+          </div>
+        )}
 
         {/* GAME PANEL — only mounted when an embedded game is active.
             The QuizRoomPage is reused with explicit slug + onLeave
             props (compactMode hides its built-in chat rail since the
-            host already has chat alongside). */}
+            host already has chat alongside). flex-1 so it takes whatever
+            space the chat column's dragged width leaves. */}
         {embeddedGameSlug && (
-          <div className="flex-1 lg:flex-[3] min-h-0 flex flex-col bg-[var(--color-bg)]">
+          <div className="flex-1 min-w-0 lg:flex-1 min-h-0 flex flex-col bg-[var(--color-bg)]">
             <div className="shrink-0 h-9 px-3 border-b border-[var(--color-line)] flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-wide text-[var(--color-fg-mute)]">
                 Live game
@@ -694,20 +775,140 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* MUSIC LOUNGE — only in `music-*` rooms. Renders Now Playing
-            + Up Next queue. Mutually exclusive with the embedded game
-            panel; a single room shouldn't try to host both layouts. */}
+        {/* MUSIC LOUNGE inline (desktop ≥ lg only) — Now Playing + Up Next
+            queue as a draggable right rail. The handle on its left edge
+            lets users drag-to-resize so chat-heavy or music-heavy
+            sessions can rebalance. Width persists in localStorage.
+            Hidden below lg because phones use a bottom sheet instead. */}
         {isMusicRoom && !embeddedGameSlug && slug && (
-          <SpotifyJukeboxPanel
-            slug={slug}
-            isConnected={isConnected()}
-            onAddTrack={() => inputRef.current?.focus()}
-            onShareUrl={(url) => sendMessage(slug, url)}
-            onReact={(messageId, emoji) => reactToMessage(slug, messageId, emoji)}
-          />
+          <div className="hidden lg:flex h-full">
+            {/* Drag handle — 6px hit area with a 1px visible center
+                rule. Cursor flips to col-resize, double-click resets. */}
+            <div
+              onPointerDown={musicResize.onPointerDown}
+              onDoubleClick={musicResize.resetToDefault}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize Music Lounge panel (double-click to reset)"
+              title="Drag to resize · Double-click to reset"
+              className={[
+                'shrink-0 w-1.5 cursor-col-resize relative group transition-colors',
+                musicResize.isDragging
+                  ? 'bg-[var(--color-accent)]'
+                  : 'bg-[var(--color-line)] hover:bg-[var(--color-line-strong)]',
+              ].join(' ')}
+            >
+              <span
+                className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex flex-col items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-hidden
+              >
+                {[0, 1, 2].map((i) => (
+                  <span key={i} className="w-0.5 h-0.5 rounded-full bg-[var(--color-fg-mute)]" />
+                ))}
+              </span>
+            </div>
+            <div
+              className="h-full shrink-0"
+              style={{ width: `${musicResize.width}px` }}
+            >
+              <SpotifyJukeboxPanel
+                slug={slug}
+                isConnected={isConnected() && !isChatLoading}
+                onAddTrack={() => inputRef.current?.focus()}
+                onShareUrl={(url) => sendMessage(slug, url)}
+                onReact={(messageId, emoji) => reactToMessage(slug, messageId, emoji)}
+              />
+            </div>
+          </div>
         )}
       </div>
       {/* ── End of SPLIT LAYOUT ── */}
+
+      {/* MUSIC LOUNGE — mobile-only floating button + bottom sheet.
+          The inline side rail is `hidden lg:flex` so on phones/tablets
+          we surface the same panel through a tap-to-open drawer. */}
+      {isMusicRoom && !embeddedGameSlug && slug && (
+        <>
+          {/* Floating "Music" pill — bottom-right, just above the input.
+              Tap to slide the panel up; backdrop tap closes it. */}
+          <button
+            type="button"
+            onClick={() => setIsMusicSheetOpen(true)}
+            className="lg:hidden fixed bottom-[68px] right-3 z-30
+                       flex items-center gap-1.5 h-10 px-3 rounded-full
+                       bg-[#1DB954] text-white text-xs font-semibold shadow-lg
+                       active:scale-[0.96] transition-transform"
+            aria-label="Open Music Lounge"
+          >
+            <Disc3 size={14} />
+            Music
+          </button>
+
+          {/* Backdrop + slide-up sheet. We render the sheet at fixed
+              bottom with a translate transform so it slides in cleanly.
+              `max-h-[78vh]` leaves the chat header visible — users
+              never lose context of which room they're in. */}
+          <div
+            className={[
+              'lg:hidden fixed inset-0 z-40 transition-opacity duration-200',
+              isMusicSheetOpen
+                ? 'opacity-100 pointer-events-auto'
+                : 'opacity-0 pointer-events-none',
+            ].join(' ')}
+            aria-hidden={!isMusicSheetOpen}
+          >
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+              onClick={() => setIsMusicSheetOpen(false)}
+            />
+
+            {/* Sheet */}
+            <div
+              className={[
+                'absolute inset-x-0 bottom-0 max-h-[78vh] h-[78vh]',
+                'bg-[var(--color-surface-1)]',
+                'rounded-t-2xl border-t border-[var(--color-line)]',
+                'shadow-2xl flex flex-col',
+                'transition-transform duration-300 ease-out',
+                isMusicSheetOpen ? 'translate-y-0' : 'translate-y-full',
+              ].join(' ')}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Music Lounge"
+            >
+              {/* Grab handle + close — common bottom-sheet affordance. */}
+              <div className="shrink-0 flex flex-col items-center pt-2 pb-1">
+                <span className="w-10 h-1 rounded-full bg-[var(--color-line)]" />
+              </div>
+              <div className="shrink-0 flex items-center justify-between px-3 pb-1">
+                <span className="text-[11px] uppercase tracking-wider text-[var(--color-fg-mute)] font-semibold">
+                  Music Lounge
+                </span>
+                <button
+                  onClick={() => setIsMusicSheetOpen(false)}
+                  className="p-1.5 rounded-md text-[var(--color-fg-mute)] hover:text-[var(--color-fg)]"
+                  aria-label="Close"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <SpotifyJukeboxPanel
+                  slug={slug}
+                  isConnected={isConnected() && !isChatLoading}
+                  onAddTrack={() => {
+                    setIsMusicSheetOpen(false)
+                    inputRef.current?.focus()
+                  }}
+                  onShareUrl={(url) => sendMessage(slug, url)}
+                  onReact={(messageId, emoji) => reactToMessage(slug, messageId, emoji)}
+                />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

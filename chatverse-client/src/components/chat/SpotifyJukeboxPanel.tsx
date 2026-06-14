@@ -285,8 +285,12 @@ export function SpotifyJukeboxPanel({
   }
 
   return (
-    <aside className="w-full sm:w-[320px] shrink-0 h-full overflow-y-auto
-                      border-l border-[var(--color-line)] bg-[var(--color-surface-1)]">
+    <aside
+      // Width is controlled by the parent on desktop (so users can
+      // drag-to-resize via the ResizableSplit handle). On mobile we
+      // stay full-width inside the bottom-sheet container.
+      className="w-full h-full overflow-y-auto bg-[var(--color-surface-1)]"
+    >
       {/* Header */}
       <div className="px-4 py-3 border-b border-[var(--color-line)] flex items-center gap-2">
         <span className="w-7 h-7 rounded-full bg-[#1DB954]/15 flex items-center justify-center">

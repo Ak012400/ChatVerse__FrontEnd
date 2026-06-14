@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft, Play, Users, Eye, Crown, Brain, Loader2,
-  PhoneOff, Trophy, Copy, Check, X, Hand,
+  PhoneOff, Trophy, Copy, Check, X, Hand, MessageCircle,
 } from 'lucide-react'
+import { MobileBottomSheet } from '../../components/ui/MobileBottomSheet'
 import { gamesApi } from '../../api'
 import { useGameHub, HubNotReadyError } from '../../hooks/useGameHub'
 import { useGameStore } from '../../stores/gameStore'
@@ -823,8 +824,13 @@ function PlayingView({
     ? 'grid-cols-1 lg:grid-cols-[1fr_220px]'
     : 'grid-cols-1 lg:grid-cols-[1fr_280px_300px]'
 
+  // Mobile commentary drawer toggle — chat is hidden on phones since
+  // there's no horizontal room for a 300px rail. Open via floating
+  // button below; same UX as Music Lounge.
+  const [showMobileChat, setShowMobileChat] = useState(false)
+
   return (
-    <div className={`h-full grid ${cols} gap-4 p-4 overflow-hidden`}>
+    <div className={`h-full grid ${cols} gap-3 sm:gap-4 p-3 sm:p-4 overflow-hidden`}>
       {/* relative wrapper so the cheer overlay floats over the card */}
       <section className="overflow-y-auto relative">
         <AnsweredChips
@@ -883,6 +889,36 @@ function PlayingView({
           <CommentaryChat messages={chat} onSend={onSendChat} />
         </aside>
       )}
+
+      {/* Mobile commentary — same chat surface, opened via a floating
+          button + bottom sheet so phones aren't excluded from the
+          conversation. Hidden in compactMode (embedded ChatPage host
+          already has the real chat sidebar). */}
+      {!compactMode && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowMobileChat(true)}
+            className="lg:hidden fixed bottom-4 right-3 z-30
+                       flex items-center gap-1.5 h-10 px-3 rounded-full
+                       bg-[var(--color-accent)] text-white text-xs font-semibold shadow-lg
+                       active:scale-[0.96] transition-transform"
+            aria-label="Open commentary chat"
+          >
+            <MessageCircle size={14} />
+            Chat{chat.length > 0 ? ` · ${chat.length}` : ''}
+          </button>
+
+          <MobileBottomSheet
+            open={showMobileChat}
+            onClose={() => setShowMobileChat(false)}
+            title="Commentary"
+            heightVh={75}
+          >
+            <CommentaryChat messages={chat} onSend={onSendChat} />
+          </MobileBottomSheet>
+        </>
+      )}
     </div>
   )
 }
@@ -913,8 +949,10 @@ function JokesPlayingView({
   const cols = compactMode
     ? 'grid-cols-1'
     : 'grid-cols-1 lg:grid-cols-[1fr_300px]'
+  // Mobile commentary drawer toggle — same as PlayingView.
+  const [showMobileChat, setShowMobileChat] = useState(false)
   return (
-    <div className={`h-full grid ${cols} gap-4 p-4 overflow-hidden`}>
+    <div className={`h-full grid ${cols} gap-3 sm:gap-4 p-3 sm:p-4 overflow-hidden`}>
       <section className="overflow-y-auto">
         <JokesPanel
           joke={joke}
@@ -930,6 +968,36 @@ function JokesPlayingView({
         <aside className="overflow-hidden h-full hidden lg:block">
           <CommentaryChat messages={chat} onSend={onSendChat} />
         </aside>
+      )}
+
+      {/* Mobile commentary — same chat surface, opened via a floating
+          button + bottom sheet so phones aren't excluded from the
+          conversation. Hidden in compactMode (embedded ChatPage host
+          already has the real chat sidebar). */}
+      {!compactMode && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowMobileChat(true)}
+            className="lg:hidden fixed bottom-4 right-3 z-30
+                       flex items-center gap-1.5 h-10 px-3 rounded-full
+                       bg-[var(--color-accent)] text-white text-xs font-semibold shadow-lg
+                       active:scale-[0.96] transition-transform"
+            aria-label="Open commentary chat"
+          >
+            <MessageCircle size={14} />
+            Chat{chat.length > 0 ? ` · ${chat.length}` : ''}
+          </button>
+
+          <MobileBottomSheet
+            open={showMobileChat}
+            onClose={() => setShowMobileChat(false)}
+            title="Commentary"
+            heightVh={75}
+          >
+            <CommentaryChat messages={chat} onSend={onSendChat} />
+          </MobileBottomSheet>
+        </>
       )}
     </div>
   )
