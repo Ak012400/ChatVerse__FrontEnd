@@ -1,4 +1,4 @@
-import { Captions, Languages } from 'lucide-react'
+import { Captions, Languages, Volume2, VolumeX } from 'lucide-react'
 import type { CaptionLine } from '../../hooks/useCaptions'
 
 /**
@@ -128,6 +128,50 @@ export function CaptionsToggle({
       {enabled && spokenLang && (
         <span className="ml-0.5 text-[9px] uppercase opacity-80">{spokenLang}</span>
       )}
+    </button>
+  )
+}
+
+/**
+ * Companion toggle that reads incoming translated captions aloud via
+ * the browser's SpeechSynthesis. Renders next to <CaptionsToggle> in
+ * the call control bar. Greyed out unless captions are also on — TTS
+ * without captions makes no sense (nothing to speak).
+ */
+export function CaptionTTSToggle({
+  enabled,
+  captionsOn,
+  onToggle,
+}: {
+  enabled: boolean
+  captionsOn: boolean
+  onToggle: () => void
+}) {
+  const disabled = !captionsOn
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      className={[
+        'h-9 px-3 rounded-full inline-flex items-center gap-1.5 text-xs font-semibold transition-colors',
+        disabled
+          ? 'bg-[var(--color-surface-2)] text-[var(--color-fg-mute)] opacity-50 cursor-not-allowed'
+          : enabled
+            ? 'bg-[#1DB954] text-white hover:bg-[#17a74a]'
+            : 'bg-[var(--color-surface-2)] text-[var(--color-fg)] hover:bg-[var(--color-surface-3)]',
+      ].join(' ')}
+      title={
+        disabled
+          ? 'Turn on captions first'
+          : enabled
+            ? 'Voice translation on — turn off to silence'
+            : 'Read translations aloud'
+      }
+      aria-pressed={enabled}
+    >
+      {enabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+      <span className="hidden sm:inline">{enabled ? 'Voice on' : 'Voice'}</span>
     </button>
   )
 }

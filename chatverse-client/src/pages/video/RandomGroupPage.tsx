@@ -24,6 +24,11 @@ import '@livekit/components-styles'
 import { randomGroupApi } from '../../api'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
+import { useCaptionsStore } from '../../stores/captionsStore'
+import { useCaptionBroadcaster } from '../../hooks/useCaptionBroadcaster'
+import { useCaptions } from '../../hooks/useCaptions'
+import { useCaptionTTS } from '../../hooks/useCaptionTTS'
+import { CaptionOverlay, CaptionsToggle, CaptionTTSToggle } from '../../components/call/CaptionOverlay'
 import Button from '../../components/ui/Button'
 import IconButton from '../../components/ui/IconButton'
 import Badge from '../../components/ui/Badge'
@@ -183,6 +188,32 @@ function GroupRoomUI({
   const [camOn, setCamOn] = useState(true)
   const localVideoRef = useRef<HTMLVideoElement | null>(null)
 
+  // Live captions wire-up — same hooks as DirectCallPage. Uses the
+  // LiveKit `roomName` as the SignalR caption group key so every
+  // participant who joins the same random group also joins the same
+  // captions channel automatically.
+  const captionsEnabled = useCaptionsStore((s) => s.enabled)
+  const setCaptionsEnabled = useCaptionsStore((s) => s.setEnabled)
+  const spokenLang = useCaptionsStore((s) => s.spokenLang)
+  const preferredLang = useCaptionsStore((s) => s.preferredLang)
+  const ttsEnabled = useCaptionsStore((s) => s.ttsEnabled)
+  const setTtsEnabled = useCaptionsStore((s) => s.setTtsEnabled)
+  const broadcaster = useCaptionBroadcaster({
+    roomName,
+    enabled: captionsEnabled,
+    speakLang: spokenLang,
+    onUnsupported: () => {
+      showToast({ type: 'warning', title: 'Captions unavailable', message: 'Your browser does not support live speech recognition.', duration: 3500 })
+      setCaptionsEnabled(false)
+    },
+    onPermissionDenied: () => {
+      showToast({ type: 'warning', title: 'Mic access denied', message: 'Captions need mic permission.', duration: 4000 })
+      setCaptionsEnabled(false)
+    },
+  })
+  const { lines: captionLines } = useCaptions({ roomName, preferredLang, enabled: captionsEnabled })
+  useCaptionTTS({ lines: captionLines, preferredLang, enabled: captionsEnabled && ttsEnabled, selfId: currentUserId })
+
   const toggleMic = async () => {
     const next = !micOn
     await localParticipant.setMicrophoneEnabled(next)
@@ -327,32 +358,47 @@ function GroupRoomUI({
         <div className="text-[10px] text-white/40 font-mono tracking-tight hidden sm:inline">{roomName}</div>
       </header>
 
-      {/* Participant grid */}
-      <div className="flex-1 pt-10 pb-20 md:pt-12 md:pb-22 lg:pt-14 lg:pb-24">
+      {/* Participant grid — desktop caps tile size so portrait-mobile
+          peers don't blow up across half the viewport. Each tile is
+          aspect-video on lg+ and contained (object-contain) so portrait
+          video sits letter-boxed inside instead of overflowing. */}
+      <div className="flex-1 pt-10 pb-20 md:pt-12 md:pb-22 lg:pt-14 lg:pb-24 lg:px-6">
         {tracks.length > 0 ? (
-          <GridLayout 
-            tracks={tracks} 
-            style={{ 
-              height: '100%',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))',
-              gap: '2px',
-              padding: '4px'
-            }}>
-            <ParticipantTileWithReport
-              currentUserId={currentUserId}
-              onReport={reportPeer}
-            />
-          </GridLayout>
+          <div className="h-full w-full lg:max-w-6xl lg:mx-auto">
+            <GridLayout
+              tracks={tracks}
+              style={{
+                height: '100%',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))',
+                gap: '4px',
+                padding: '4px',
+              }}
+              className="[&_.lk-participant-tile]:lg:aspect-video [&_.lk-participant-tile]:lg:max-h-[320px] [&_.lk-participant-tile_video]:lg:!object-contain [&_.lk-participant-tile]:lg:bg-black/60 [&_.lk-participant-tile]:lg:rounded-md"
+            >
+              <ParticipantTileWithReport
+                currentUserId={currentUserId}
+                onReport={reportPeer}
+              />
+            </GridLayout>
+          </div>
         ) : (
           <div className="h-full flex items-center justify-center">
             <Loader2 size={20} className="text-white/40" style={{ animation: 'spin 1s linear infinite' }} />
           </div>
         )}
+
+        {captionsEnabled && captionLines.length > 0 && (
+          <CaptionOverlay
+            lines={captionLines}
+            preferredLang={preferredLang}
+            className="bottom-20"
+          />
+        )}
       </div>
 
       {/* Controls */}
-      <div className="absolute bottom-0 inset-x-0 z-30 px-3 md:px-5 pb-4 md:pb-5 pt-8 md:pt-12 flex items-center justify-center gap-2 bg-gradient-to-t from-black/85 to-transparent">
+      <div className="absolute bottom-0 inset-x-0 z-30 px-3 md:px-5 pb-4 md:pb-5 pt-8 md:pt-12 flex items-center justify-center gap-2 flex-wrap bg-gradient-to-t from-black/85 to-transparent">
         <IconButton
           variant="subtle"
           size="lg"
@@ -371,6 +417,21 @@ function GroupRoomUI({
         >
           {camOn ? <VideoIcon size={18} /> : <VideoOff size={18} />}
         </IconButton>
+        {broadcaster.isSupported && (
+          <>
+            <CaptionsToggle
+              enabled={captionsEnabled}
+              onToggle={() => setCaptionsEnabled(!captionsEnabled)}
+              listening={broadcaster.listening}
+              spokenLang={spokenLang.split('-')[0]}
+            />
+            <CaptionTTSToggle
+              enabled={ttsEnabled}
+              captionsOn={captionsEnabled}
+              onToggle={() => setTtsEnabled(!ttsEnabled)}
+            />
+          </>
+        )}
         <button
           onClick={leave}
           className="h-11 px-5 rounded-md text-sm font-medium bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-white inline-flex items-center gap-1.5 transition-colors"
