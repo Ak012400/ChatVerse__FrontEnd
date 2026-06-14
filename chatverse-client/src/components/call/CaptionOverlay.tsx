@@ -40,25 +40,45 @@ export function CaptionOverlay({
   //    feature feel broken even when it was working.
   if (lines.length === 0) {
     if (!enabled) return null
+    // Render TWO indicators: one at the bottom (where caption text
+    // will appear), and one at the TOP (always visible regardless of
+    // the bottom overlay clipping). The top one is a small floating
+    // pill, the bottom one is the standard listening indicator.
     return (
-      <div
-        className={[
-          'pointer-events-none absolute inset-x-0 bottom-0 px-2 sm:px-4 pb-3 sm:pb-5',
-          'flex flex-col items-center gap-1.5',
-          className ?? '',
-        ].join(' ')}
-        aria-live="polite"
-      >
-        <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full bg-black/65 text-white text-[11px] font-semibold backdrop-blur-sm">
-          <span className={`w-1.5 h-1.5 rounded-full ${listening ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-          {listening ? 'Listening…' : 'Captions starting…'}
-        </span>
-        {micMuted && (
-          <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-[var(--color-danger,#ef4444)]/85 text-white text-[10px] font-medium backdrop-blur-sm">
-            🎙 Mic is muted — unmute to caption your voice
+      <>
+        {/* TOP indicator — guarantees the user always sees that captions
+            are armed, even if the bottom overlay is positioned wrong
+            for some reason. Positioned via `fixed` so it doesn't depend
+            on the parent's positioning context. */}
+        <div className="fixed top-16 inset-x-0 z-[60] flex justify-center pointer-events-none">
+          <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full bg-black/80 text-white text-[11px] font-semibold backdrop-blur-sm shadow-xl border border-white/10">
+            <span className={`w-1.5 h-1.5 rounded-full ${listening ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+            {listening ? 'Captions: Listening…' : 'Captions: starting…'}
+            {micMuted && <span className="ml-1 px-1.5 py-0.5 rounded bg-red-500/80 text-[9px]">MIC MUTED</span>}
           </span>
-        )}
-      </div>
+        </div>
+
+        {/* BOTTOM indicator — where the actual subtitle will land. */}
+        <div
+          className={[
+            'pointer-events-none absolute inset-x-0 px-2 sm:px-4 pb-3 sm:pb-5',
+            'flex flex-col items-center gap-1.5',
+            'z-30',
+            className ?? 'bottom-0',
+          ].join(' ')}
+          aria-live="polite"
+        >
+          <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full bg-black/75 text-white text-[11px] font-semibold backdrop-blur-sm shadow-lg">
+            <span className={`w-1.5 h-1.5 rounded-full ${listening ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+            {listening ? 'Speak to caption' : 'Starting…'}
+          </span>
+          {micMuted && (
+            <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-red-500/90 text-white text-[10px] font-medium backdrop-blur-sm shadow-lg">
+              🎙 Unmute mic to caption your voice
+            </span>
+          )}
+        </div>
+      </>
     )
   }
 
@@ -68,10 +88,13 @@ export function CaptionOverlay({
   return (
     <div
       className={[
-        'pointer-events-none absolute inset-x-0 bottom-0 px-2 sm:px-4 pb-3 sm:pb-5',
+        // bottom positioning is parent-controlled — see note in empty
+        // state above.
+        'pointer-events-none absolute inset-x-0 px-2 sm:px-4 pb-3 sm:pb-5',
         'flex flex-col gap-1.5',
         'bg-gradient-to-t from-black/70 via-black/35 to-transparent',
-        className ?? '',
+        'z-30',
+        className ?? 'bottom-0',
       ].join(' ')}
       aria-live="polite"
       aria-atomic="false"

@@ -12,6 +12,7 @@ import {
   useRoomContext,
 } from '@livekit/components-react'
 import AllParticipantsGrid from '../../components/call/AllParticipantsGrid'
+import DraggableSelfTile from '../../components/call/DraggableSelfTile'
 import { groupRoomOptions } from '../../lib/livekitOptions'
 import { Track } from 'livekit-client'
 import '@livekit/components-styles'
@@ -266,6 +267,8 @@ function HostedGroupUI({
     ],
     { onlySubscribed: false },
   )
+  const selfTrack = tracks.find((t) => t.participant.isLocal)
+  const remoteTracks = tracks.filter((t) => !t.participant.isLocal)
   const [micOn, setMicOn] = useState(true)
   const [camOn, setCamOn] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -362,8 +365,9 @@ function HostedGroupUI({
           could hide tiles after a tap. */}
       <div className="h-full pt-10 pb-20 md:pt-12 md:pb-22 lg:pt-14 lg:pb-24 lg:px-6">
         {tracks.length > 0 ? (
-          <div className="h-full w-full lg:max-w-6xl lg:mx-auto">
-            <AllParticipantsGrid tracks={tracks} />
+          <div className="relative h-full w-full lg:max-w-6xl lg:mx-auto">
+            <AllParticipantsGrid tracks={remoteTracks} />
+            {selfTrack && <DraggableSelfTile track={selfTrack} />}
           </div>
         ) : (
           <div className="h-full flex items-center justify-center">

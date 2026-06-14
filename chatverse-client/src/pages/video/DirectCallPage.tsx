@@ -17,6 +17,7 @@ import {
   useRoomContext,
 } from '@livekit/components-react'
 import AllParticipantsGrid from '../../components/call/AllParticipantsGrid'
+import DraggableSelfTile from '../../components/call/DraggableSelfTile'
 // `RoomOptions` is exported as a TypeScript type only (not a runtime value),
 // so it needs the inline `type` modifier or the bundler errors out with
 // "is not exported by livekit-client". `ConnectionState` and `DisconnectReason`
@@ -446,6 +447,11 @@ function DirectCallUI({
     [{ source: Track.Source.Camera, withPlaceholder: true }],
     { onlySubscribed: false },
   )
+  // Split: self goes into a draggable PiP, remote goes in the main grid.
+  // localParticipant.identity matches the LiveKit participant identity
+  // (which the server sets to the user's chatverse user id).
+  const selfTrack = tracks.find((t) => t.participant.isLocal)
+  const remoteTracks = tracks.filter((t) => !t.participant.isLocal)
   const [micOn, setMicOn] = useState(true)
   const [camOn, setCamOn] = useState(true)
   const [callSeconds, setCallSeconds] = useState(0)
@@ -588,8 +594,14 @@ function DirectCallUI({
           // Desktop compaction: cap the tile area at ~max-w-4xl so a
           // portrait-camera peer doesn't blow up across half the screen.
           // Mobile keeps full-bleed for maximum face area.
-          <div className="h-full w-full mx-auto lg:max-w-4xl lg:px-4">
-            <AllParticipantsGrid tracks={tracks} />
+          //
+          // We split: REMOTE tracks go into the main grid, SELF goes
+          // into a draggable PiP that floats in the corner — Google
+          // Meet style. Self can be dragged anywhere inside the call
+          // area but constrained to it (never escapes the canvas).
+          <div className="relative h-full w-full mx-auto lg:max-w-4xl lg:px-4">
+            <AllParticipantsGrid tracks={remoteTracks} />
+            {selfTrack && <DraggableSelfTile track={selfTrack} />}
           </div>
         ) : (
           <div className="h-full flex items-center justify-center">
