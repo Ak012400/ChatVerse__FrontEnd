@@ -8,7 +8,6 @@ import { CaptionOverlay, CaptionsToggle } from '../../components/call/CaptionOve
 import { useCaptionBroadcaster } from '../../hooks/useCaptionBroadcaster'
 import { useCaptions } from '../../hooks/useCaptions'
 import { useCaptionsStore } from '../../stores/captionsStore'
-import { useToastStore } from '../../stores/toastStore'
 import {
   LiveKitRoom,
   GridLayout,
