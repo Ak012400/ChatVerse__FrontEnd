@@ -216,6 +216,9 @@ export function useChatHub() {
         receivedAt: Date.now(),
       })
 
+      // Multi-call beep cap — if more than 1 already ringing, don't
+      // try a second OS notification; one is enough.
+
       // Desktop notification (only if user has granted permission).
       // No-op on mobile / when permission denied.
       try {
@@ -231,6 +234,29 @@ export function useChatHub() {
           n.onclick = () => { window.focus(); n.close() }
         }
       } catch { /* notifications are best-effort */ }
+    })
+
+    // BlockedCallAttempt — fired when someone you've blocked tries to
+    // ring you. No full-screen modal, just a silent log entry surfaced
+    // as a toast so you know they tried but isn't disruptive.
+    hub.on('BlockedCallAttempt', (a: {
+      callerId: string
+      callerName: string
+      attemptedAt: string
+      message?: string
+    }) => {
+      useCallStore.getState().pushBlockedAttempt({
+        callerId: a.callerId,
+        callerName: a.callerName,
+        attemptedAt: Date.parse(a.attemptedAt) || Date.now(),
+        message: a.message,
+      })
+      showToast({
+        type: 'info',
+        title: 'Blocked caller',
+        message: `${a.callerName} tried to call you.`,
+        duration: 3500,
+      })
     })
 
     // Caller receives this when the OTHER party accepts — IncomingCallModal

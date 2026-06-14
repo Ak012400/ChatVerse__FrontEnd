@@ -83,6 +83,19 @@ export const usersApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
+  // ── Block system ────────────────────────────────────────────
+  block: (userId: string, reason?: string) =>
+    api.post(`/users/${userId}/block`, { reason: reason ?? null }),
+  unblock: (userId: string) => api.delete(`/users/${userId}/block`),
+  myBlocks: () => api.get('/users/me/blocks'),
+  blockedByCount: () => api.get<{ data: { count: number } }>('/users/me/blocked-by-count'),
+}
+
+export const theaterApi = {
+  create: (title: string) => api.post('/theater/create', { title }),
+  join: (roomName: string) => api.post('/theater/token', { roomName }),
+  active: () => api.get('/theater/active'),
+  end: (roomName: string) => api.delete(`/theater/${roomName}`),
 }
 
 export const dmsApi = {

@@ -25,6 +25,7 @@ import VideoPage           from './pages/video/VideoPage'           // random 1-
 import RandomGroupPage     from './pages/video/RandomGroupPage'
 import DirectCallPage      from './pages/video/DirectCallPage'
 import HostedGroupPage     from './pages/video/HostedGroupPage'
+import TheaterRoomPage     from './pages/video/TheaterRoomPage'
 import ProfilePage         from './pages/profile/ProfilePage'
 import AgeDeclarePage      from './pages/verify/AgeDeclarePage'
 import AiQuizPage          from './pages/verify/AiQuizPage'
@@ -118,6 +119,8 @@ export default function App() {
           <Route path="/video/random-group" element={<PrivateRoute><RandomGroupPage /></PrivateRoute>} />
           <Route path="/video/invite" element={<RegisteredRoute><DirectCallPage /></RegisteredRoute>} />
           <Route path="/video/hosted" element={<RegisteredRoute><HostedGroupPage /></RegisteredRoute>} />
+          {/* Theater (Watch Party) — shared screen + per-user cams */}
+          <Route path="/theater/:roomName" element={<RegisteredRoute><TheaterRoomPage /></RegisteredRoute>} />
 
           <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
 
