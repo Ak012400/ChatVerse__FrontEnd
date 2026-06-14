@@ -18,17 +18,66 @@ const HUB_URL = (import.meta.env.VITE_API_URL ?? 'https://localhost:7217/api').r
 
 let globalLastWarnedScore: number | null = null
 
+// ────────────────────────────────────────────────────────────────────
+// SINGLETON SignalR CONNECTION
+// ────────────────────────────────────────────────────────────────────
+// Before this, every component calling `useChatHub()` got its OWN
+// `connectionRef`, which meant the hook spun up a SEPARATE WebSocket
+// per consumer. The captions feature exposed this brutally — when
+// DirectCallPage + useCaptions + useCaptionBroadcaster + useYouTubeSync
+// all called useChatHub independently, we ended up with FOUR concurrent
+// connections to the same backend. JoinCaptionRoom fired on one
+// connection but IncomingCaption listeners were attached to another →
+// captions silently dropped. Worse, each cleanup ran `.stop()` on its
+// own connection, which often killed the one the rest of the UI was
+// still using → "site crash" symptom.
+//
+// Fix: module-level shared state. Every useChatHub instance reads from
+// the same `sharedConnectionRef`. A ref count tracks active consumers
+// so we only tear the connection down when the LAST one unmounts.
+//
+// Event handlers are still attached/detached per-instance via conn.on /
+// conn.off — that's fine, multiple handlers for the same event coexist.
+const sharedConnectionRef: { current: signalR.HubConnection | null } = { current: null }
+const sharedConnectionPromiseRef: { current: Promise<void> | null } = { current: null }
+let sharedConsumerCount = 0
+const sharedStateSubscribers = new Set<(s: signalR.HubConnectionState) => void>()
+function broadcastConnState(s: signalR.HubConnectionState) {
+  for (const fn of sharedStateSubscribers) fn(s)
+}
+
 export function useChatHub() {
-  const connectionRef = useRef<signalR.HubConnection | null>(null)
-  const connectionPromiseRef = useRef<Promise<void> | null>(null)
+  // Aliases that match the old per-instance ref names so the rest of
+  // the hook body stays readable.
+  const connectionRef = sharedConnectionRef
+  const connectionPromiseRef = sharedConnectionPromiseRef
   // React state mirror of the underlying SignalR connection. The ref
   // alone isn't enough because React doesn't re-render on ref mutation
   // — without this, consumers calling `isConnected()` get a stale
   // `false` forever and the "Connecting…" loader never goes away even
   // though the websocket is open (101 Switching Protocols).
-  const [connState, setConnState] = useState<signalR.HubConnectionState>(
-    signalR.HubConnectionState.Disconnected,
+  //
+  // With the singleton refactor: each useChatHub instance subscribes to
+  // the shared broadcast so all consumers re-render together when the
+  // connection state changes. Initial value reflects the live ref so
+  // late-mounted consumers don't get a misleading "Disconnected" flash.
+  const [connState, setLocalConnState] = useState<signalR.HubConnectionState>(
+    sharedConnectionRef.current?.state ?? signalR.HubConnectionState.Disconnected,
   )
+  // Wrapper that updates both this instance AND broadcasts to all
+  // other subscribers — so the in-flight connect() calls only need to
+  // call setConnState() once and every instance re-renders.
+  const setConnState = useCallback((s: signalR.HubConnectionState) => {
+    setLocalConnState(s)
+    broadcastConnState(s)
+  }, [])
+  // Subscribe to the broadcast so events fired from OTHER instances
+  // (or from SignalR lifecycle callbacks) reach this hook too.
+  useEffect(() => {
+    const sub = (s: signalR.HubConnectionState) => setLocalConnState(s)
+    sharedStateSubscribers.add(sub)
+    return () => { sharedStateSubscribers.delete(sub) }
+  }, [])
 
   const token = useAuthStore((s) => s.token)
   const {
@@ -305,12 +354,26 @@ export function useChatHub() {
       connectionRef.current = null
     }
     setConnState(signalR.HubConnectionState.Disconnected)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Ref-counted mount/unmount. ONLY the last consumer to leave actually
+  // tears the connection down. Without this, mounting a feature hook
+  // (captions, YT sync) and then unmounting it would kill the main
+  // app's connection too — even though many other components still
+  // hold a useChatHub.
   useEffect(() => {
+    sharedConsumerCount += 1
     connect()
-    return () => { disconnect() }
-  }, [connect, disconnect])
+    return () => {
+      sharedConsumerCount -= 1
+      if (sharedConsumerCount <= 0) {
+        sharedConsumerCount = 0
+        disconnect()
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   /* Smart + silent auto-reconnect — quiet for ambient calls */
   const safeInvoke = async (method: string, ...args: any[]) => {
