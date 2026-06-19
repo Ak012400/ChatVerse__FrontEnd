@@ -73,7 +73,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/verify') ||
     pathname.startsWith('/pricing') ||
     pathname.startsWith('/rooms/new') ||
-    pathname.startsWith('/time-capsule')
+    pathname.startsWith('/time-capsule') ||
+    pathname.startsWith('/about')
 
   const showSecondary = !skipSecondary
 
