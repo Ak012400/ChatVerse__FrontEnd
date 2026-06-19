@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2 } from 'lucide-react'
+import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2, Hourglass } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { useUiStore } from '../../../stores/uiStore'
+import { useTimeCapsuleStore } from '../../../stores/timeCapsuleStore'
 import { authApi } from '../../../api/auth'
 import { adminApi } from '../../../api'
 import IconButton from '../../ui/IconButton'
@@ -32,9 +33,14 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
   const onVideo   = pathname.startsWith('/video')
   const onGames   = pathname.startsWith('/games')
   const onDms     = pathname.startsWith('/dms')
+  const onCapsule = pathname.startsWith('/time-capsule')
   const onPricing = pathname.startsWith('/pricing')
   const onAdmin   = pathname.startsWith('/admin')
   const onProfile = pathname.startsWith('/profile')
+
+  // Unread time-capsule badge — bumped by the hub when a new capsule
+  // lands, cleared the moment the user opens /time-capsule.
+  const capsuleUnread = useTimeCapsuleStore((s) => s.unread)
 
   /* Probe admin status once on mount. Skip for guests — admin allow-list
    * is server-side and only enforces for registered users. */
@@ -94,6 +100,32 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
           <IconButton variant="ghost" active={onDms} onClick={() => navigate('/dms')} aria-label="Direct messages" title="Direct messages">
             <Mail size={18} />
           </IconButton>
+        )}
+        {/* Time Capsule — registered users only. Guests can't be
+            a stable recipient pool so the feature would orphan
+            their incoming capsules at 24h expiry. */}
+        {!user?.isGuest && (
+          <div className="relative">
+            <IconButton
+              variant="ghost"
+              active={onCapsule}
+              onClick={() => navigate('/time-capsule')}
+              aria-label="Time Capsule"
+              title="Time Capsule"
+            >
+              <Hourglass size={18} />
+            </IconButton>
+            {capsuleUnread > 0 && (
+              <span
+                className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full
+                  bg-[var(--color-accent)] text-[10px] font-semibold text-white
+                  inline-flex items-center justify-center pointer-events-none"
+                aria-label={`${capsuleUnread} new time capsules`}
+              >
+                {capsuleUnread > 9 ? '9+' : capsuleUnread}
+              </span>
+            )}
+          </div>
         )}
       </nav>
 
