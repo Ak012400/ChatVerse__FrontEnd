@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2, Hourglass, HelpCircle } from 'lucide-react'
+import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2, Hourglass, HelpCircle, Sparkles } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { useUiStore } from '../../../stores/uiStore'
 import { useTimeCapsuleStore } from '../../../stores/timeCapsuleStore'
@@ -34,6 +34,7 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
   const onGames   = pathname.startsWith('/games')
   const onDms     = pathname.startsWith('/dms')
   const onCapsule = pathname.startsWith('/time-capsule')
+  const onPersona = pathname.startsWith('/persona')
   const onAbout   = pathname.startsWith('/about')
   const onPricing = pathname.startsWith('/pricing')
   const onAdmin   = pathname.startsWith('/admin')
@@ -100,6 +101,19 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
         {!user?.isGuest && (
           <IconButton variant="ghost" active={onDms} onClick={() => navigate('/dms')} aria-label="Direct messages" title="Direct messages">
             <Mail size={18} />
+          </IconButton>
+        )}
+        {/* Persona Roulette — registered users only. Same recipient-
+            pool argument as Time Capsule. */}
+        {!user?.isGuest && (
+          <IconButton
+            variant="ghost"
+            active={onPersona}
+            onClick={() => navigate('/persona')}
+            aria-label="Persona Roulette"
+            title="Persona Roulette"
+          >
+            <Sparkles size={18} />
           </IconButton>
         )}
         {/* Time Capsule — registered users only. Guests can't be

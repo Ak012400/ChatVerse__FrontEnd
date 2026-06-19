@@ -119,7 +119,7 @@ export const FEATURE_GUIDES: FeatureGuide[] = [
     title:   'Persona Roulette',
     tagline: 'Every midnight UTC you become someone new. 24 hours of being a stranger to everyone — including the people you talk to most.',
     icon:    'masks',
-    status:  'soon',
+    status:  'live',
     sections: [
       {
         heading: 'The promise',
