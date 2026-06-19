@@ -40,6 +40,7 @@ import QuizRoomPage         from './pages/games/QuizRoomPage'
 import PlayRoomPage         from './pages/games/PlayRoomPage'
 import LudoRoomPage         from './pages/games/LudoRoomPage'
 import TimeCapsulePage      from './pages/timeCapsule/TimeCapsulePage'
+import AboutFeaturesPage    from './pages/about/AboutFeaturesPage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -154,6 +155,10 @@ export default function App() {
 
           {/* Admin — page itself checks /admin/whoami */}
           <Route path="/admin" element={<RegisteredRoute><AdminDashboardPage /></RegisteredRoute>} />
+
+          {/* Feature rules / how-it-works — open to everyone logged in,
+              including guests, so they can learn what they\'re missing. */}
+          <Route path="/about" element={<PrivateRoute><AboutFeaturesPage /></PrivateRoute>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

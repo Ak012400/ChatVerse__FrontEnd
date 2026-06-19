@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Hourglass, Send, Inbox, Mail, Eye, EyeOff, MessageCircleReply } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Hourglass, Send, Inbox, Mail, Eye, EyeOff, MessageCircleReply, BookOpen } from 'lucide-react'
 
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
@@ -108,12 +109,19 @@ function Header() {
       >
         <Hourglass size={20} />
       </div>
-      <div>
+      <div className="flex-1 min-w-0">
         <h1 className="text-xl sm:text-2xl font-semibold leading-tight">Time Capsule</h1>
         <p className="text-sm text-[var(--color-fg-dim)] mt-1">
           Write a note now, delivered to a random stranger in 7, 14 or 30 days.
           One reply allowed — it comes back to you three days later.
         </p>
+        <Link
+          to="/about#time-capsule"
+          className="inline-flex items-center gap-1.5 mt-2 text-xs text-[var(--color-accent-fg)] hover:text-[var(--color-accent)] transition-colors"
+        >
+          <BookOpen size={12} />
+          <span>Read the full rules</span>
+        </Link>
       </div>
     </div>
   )

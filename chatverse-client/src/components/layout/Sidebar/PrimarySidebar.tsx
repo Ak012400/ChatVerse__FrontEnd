@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2, Hourglass } from 'lucide-react'
+import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2, Hourglass, HelpCircle } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { useUiStore } from '../../../stores/uiStore'
 import { useTimeCapsuleStore } from '../../../stores/timeCapsuleStore'
@@ -34,6 +34,7 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
   const onGames   = pathname.startsWith('/games')
   const onDms     = pathname.startsWith('/dms')
   const onCapsule = pathname.startsWith('/time-capsule')
+  const onAbout   = pathname.startsWith('/about')
   const onPricing = pathname.startsWith('/pricing')
   const onAdmin   = pathname.startsWith('/admin')
   const onProfile = pathname.startsWith('/profile')
@@ -134,6 +135,18 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
             the unread badge is one of the first things users see. The
             bell renders its own dropdown anchored to its position. */}
         {!user?.isGuest && <NotificationBell />}
+        {/* "How it works" — full feature rules page. Available to
+            everyone logged in, including guests, so they can learn
+            what they\'d unlock by registering. */}
+        <IconButton
+          variant="ghost"
+          active={onAbout}
+          onClick={() => navigate('/about')}
+          aria-label="How it works"
+          title="How it works"
+        >
+          <HelpCircle size={18} />
+        </IconButton>
         {!user?.isGuest && (
           <IconButton variant="ghost" active={onPricing} onClick={() => navigate('/pricing')} aria-label="Upgrade" title="Upgrade">
             <CreditCard size={18} />
