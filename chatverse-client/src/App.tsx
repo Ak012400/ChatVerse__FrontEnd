@@ -41,6 +41,7 @@ import PlayRoomPage         from './pages/games/PlayRoomPage'
 import LudoRoomPage         from './pages/games/LudoRoomPage'
 import TimeCapsulePage      from './pages/timeCapsule/TimeCapsulePage'
 import AboutFeaturesPage    from './pages/about/AboutFeaturesPage'
+import PersonaPage          from './pages/persona/PersonaPage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -117,6 +118,10 @@ export default function App() {
               recipient pool (24h auto-expire) so the feature would
               orphan capsules if guests could write/receive. */}
           <Route path="/time-capsule" element={<RegisteredRoute><TimeCapsulePage /></RegisteredRoute>} />
+
+          {/* Persona Roulette — registered only. Same recipient-pool
+              reasoning as Time Capsule. */}
+          <Route path="/persona" element={<RegisteredRoute><PersonaPage /></RegisteredRoute>} />
 
           {/* Create-room — registered only */}
           <Route path="/rooms/new" element={<RegisteredRoute><CreateRoomPage /></RegisteredRoute>} />

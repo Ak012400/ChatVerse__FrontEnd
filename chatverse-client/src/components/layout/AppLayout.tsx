@@ -14,13 +14,18 @@ import MobileBottomNav from './MobileBottomNav'
 import { useUiStore } from '../../stores/uiStore'
 import { useChatHub } from '../../hooks/useChatHub'
 import { useTimeCapsuleHub } from '../../hooks/useTimeCapsuleHub'
+import { usePersonaHub } from '../../hooks/usePersonaHub'
 import { useAuthStore } from '../../stores/authStore'
 import { useActiveCallStore } from '../../stores/activeCallStore'
 
-// Tiny helper so guests don't open a SignalR connection they can't use.
-// AppLayout itself can't call a hook conditionally, so we wrap.
+// Tiny helpers so guests don't open SignalR connections they can't
+// use. AppLayout itself can't call a hook conditionally, so we wrap.
 function TimeCapsuleHubMount() {
   useTimeCapsuleHub()
+  return null
+}
+function PersonaHubMount() {
+  usePersonaHub()
   return null
 }
 
@@ -74,6 +79,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/pricing') ||
     pathname.startsWith('/rooms/new') ||
     pathname.startsWith('/time-capsule') ||
+    pathname.startsWith('/persona') ||
     pathname.startsWith('/about')
 
   const showSecondary = !skipSecondary
@@ -141,6 +147,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           TimeCapsuleDelivered listener which fires the inbox toast,
           so we don't need any visible UI here. Guests skipped. */}
       {!isGuest && <TimeCapsuleHubMount />}
+
+      {/* Persona Roulette hub — same silent-mount pattern. Owns the
+          PersonaMessageReceived + StreakUnmasked listeners which
+          surface toasts and keep the store fresh. */}
+      {!isGuest && <PersonaHubMount />}
 
       {/* Mobile bottom nav — replaces the vertical PrimarySidebar on
           phones. Hidden on sm and above. */}
