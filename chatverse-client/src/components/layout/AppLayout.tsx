@@ -80,6 +80,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/rooms/new') ||
     pathname.startsWith('/time-capsule') ||
     pathname.startsWith('/persona') ||
+    pathname.startsWith('/story-chain') ||
     pathname.startsWith('/about')
 
   const showSecondary = !skipSecondary

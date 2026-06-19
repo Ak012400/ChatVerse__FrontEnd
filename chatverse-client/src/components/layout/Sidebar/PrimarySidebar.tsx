@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2, Hourglass, HelpCircle, Sparkles } from 'lucide-react'
+import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2, Hourglass, HelpCircle, Sparkles, Feather } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { useUiStore } from '../../../stores/uiStore'
 import { useTimeCapsuleStore } from '../../../stores/timeCapsuleStore'
@@ -35,6 +35,7 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
   const onDms     = pathname.startsWith('/dms')
   const onCapsule = pathname.startsWith('/time-capsule')
   const onPersona = pathname.startsWith('/persona')
+  const onStory   = pathname.startsWith('/story-chain')
   const onAbout   = pathname.startsWith('/about')
   const onPricing = pathname.startsWith('/pricing')
   const onAdmin   = pathname.startsWith('/admin')
@@ -114,6 +115,19 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
             title="Persona Roulette"
           >
             <Sparkles size={18} />
+          </IconButton>
+        )}
+        {/* Story Chain — daily collaborative writing. Registered only
+            so the one-sentence-per-user guard isn't trivial to bypass. */}
+        {!user?.isGuest && (
+          <IconButton
+            variant="ghost"
+            active={onStory}
+            onClick={() => navigate('/story-chain')}
+            aria-label="Story Chain"
+            title="Story Chain"
+          >
+            <Feather size={18} />
           </IconButton>
         )}
         {/* Time Capsule — registered users only. Guests can't be
