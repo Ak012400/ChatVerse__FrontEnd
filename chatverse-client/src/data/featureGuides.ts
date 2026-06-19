@@ -160,4 +160,62 @@ export const FEATURE_GUIDES: FeatureGuide[] = [
       },
     ],
   },
+
+  // ────────────────────────────────────────────────────────────
+  // STORY CHAIN — daily collaborative writing
+  // ────────────────────────────────────────────────────────────
+  {
+    slug:    'story-chain',
+    title:   'Story Chain',
+    tagline: 'A new prompt drops at 3pm IST. Each person adds one sentence. After 50 voices, the story locks and joins the archive.',
+    icon:    'feather',
+    status:  'live',
+    sections: [
+      {
+        heading: 'The promise',
+        icon:    'info',
+        body:
+          'Every day at 3pm IST, a fresh opening line lands. You take a turn, write a single sentence that picks the story up where the last person left it, and pass the pen. ' +
+          'After 50 voices the chain seals and gets published forever in the archive. If midnight IST comes first, whatever\'s there at that moment seals — partial stories ship too.',
+      },
+      {
+        heading: 'How taking a turn works',
+        icon:    'clock',
+        body: [
+          'Open the page and tap "Join the queue".',
+          'You get a position number. When you reach the front, the system gives you 10 minutes to write your sentence.',
+          'If you don\'t submit in 10 minutes, your turn passes to the next person automatically. You can rejoin the queue.',
+          'Once you\'ve added your sentence, you\'re done for THIS chain. Come back tomorrow for a fresh one.',
+        ],
+      },
+      {
+        heading: 'The sentence',
+        icon:    'sparkles',
+        body: [
+          'One sentence, up to 280 characters — about a tweet\'s worth.',
+          'Pick up the last sentence\'s thread. Don\'t reset the scene from scratch.',
+          'Use the author\'s name nobody else has used? Fine. Kill a character somebody introduced two sentences ago? Also fine. The story\'s alive.',
+          'AI moderation runs on every sentence before it commits. Slurs, harassment, off-platform contact info all get rejected.',
+        ],
+      },
+      {
+        heading: 'The archive',
+        icon:    'rules',
+        body: [
+          'Sealed stories sit in the Archive tab forever, ordered newest first.',
+          'Every contributor\'s username is shown next to their line — it\'s a public record of the writing, not anonymous.',
+          'Top stories may be highlighted on the home screen as featured reads. (Coming.)',
+        ],
+      },
+      {
+        heading: 'House rules',
+        icon:    'rules',
+        body: [
+          'One sentence per user per chain. Multiple accounts trying to game this get trust-score docked.',
+          'No metafictional escape hatches ("…and then they all turned out to be in a simulation"). Take the story somewhere.',
+          'Reports route through the same moderation queue as DMs.',
+        ],
+      },
+    ],
+  },
 ]
