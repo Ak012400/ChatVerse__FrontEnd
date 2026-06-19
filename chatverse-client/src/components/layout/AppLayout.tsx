@@ -13,7 +13,16 @@ import GameInviteListener from '../games/GameInviteListener'
 import MobileBottomNav from './MobileBottomNav'
 import { useUiStore } from '../../stores/uiStore'
 import { useChatHub } from '../../hooks/useChatHub'
+import { useTimeCapsuleHub } from '../../hooks/useTimeCapsuleHub'
+import { useAuthStore } from '../../stores/authStore'
 import { useActiveCallStore } from '../../stores/activeCallStore'
+
+// Tiny helper so guests don't open a SignalR connection they can't use.
+// AppLayout itself can't call a hook conditionally, so we wrap.
+function TimeCapsuleHubMount() {
+  useTimeCapsuleHub()
+  return null
+}
 
 type Tab = 'chat' | 'video'
 
@@ -29,6 +38,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // without this hook call, the connection never opens and no incoming
   // call ever fires.
   useChatHub()
+
+  // Guests aren't eligible recipients (24h expiry → orphans), so don't
+  // even open the websocket for them.
+  const isGuest = useAuthStore((s) => !!s.user?.isGuest)
 
   // Best-effort: ask for desktop-notification permission once the user
   // is past auth. If they decline, calls still ring inside the app —
@@ -59,7 +72,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/admin') ||
     pathname.startsWith('/verify') ||
     pathname.startsWith('/pricing') ||
-    pathname.startsWith('/rooms/new')
+    pathname.startsWith('/rooms/new') ||
+    pathname.startsWith('/time-capsule')
 
   const showSecondary = !skipSecondary
 
@@ -121,6 +135,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           a per-user GameRoomInvite. Renders a toast banner with Accept/
           Dismiss. Mounted here so invites appear on any logged-in page. */}
       <GameInviteListener />
+
+      {/* Time-capsule hub — silent mount. The hook itself owns the
+          TimeCapsuleDelivered listener which fires the inbox toast,
+          so we don't need any visible UI here. Guests skipped. */}
+      {!isGuest && <TimeCapsuleHubMount />}
 
       {/* Mobile bottom nav — replaces the vertical PrimarySidebar on
           phones. Hidden on sm and above. */}

@@ -39,6 +39,7 @@ import GamingHallPage      from './pages/games/GamingHallPage'
 import QuizRoomPage         from './pages/games/QuizRoomPage'
 import PlayRoomPage         from './pages/games/PlayRoomPage'
 import LudoRoomPage         from './pages/games/LudoRoomPage'
+import TimeCapsulePage      from './pages/timeCapsule/TimeCapsulePage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -110,6 +111,11 @@ export default function App() {
           {/* DMs — registered only */}
           <Route path="/dms" element={<RegisteredRoute><DmsPage /></RegisteredRoute>} />
           <Route path="/dms/:otherUserId" element={<RegisteredRoute><DmsPage /></RegisteredRoute>} />
+
+          {/* Time Capsule — registered only. Guests aren't a stable
+              recipient pool (24h auto-expire) so the feature would
+              orphan capsules if guests could write/receive. */}
+          <Route path="/time-capsule" element={<RegisteredRoute><TimeCapsulePage /></RegisteredRoute>} />
 
           {/* Create-room — registered only */}
           <Route path="/rooms/new" element={<RegisteredRoute><CreateRoomPage /></RegisteredRoute>} />
