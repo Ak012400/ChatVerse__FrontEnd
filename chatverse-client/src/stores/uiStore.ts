@@ -17,6 +17,8 @@ export type FeatureIconId =
   | 'ghost-date'
   | 'love-triangle'
   | 'cipher'
+  | 'pyaar-live'
+  | 'mehfil'
 
 /** Default order — also acts as the source-of-truth list for "what
  *  features exist". The sidebar uses this to seed brand-new users
@@ -32,6 +34,8 @@ export const DEFAULT_FEATURE_ORDER: FeatureIconId[] = [
   'ghost-date',
   'love-triangle',
   'cipher',
+  'pyaar-live',
+  'mehfil',
 ]
 
 interface UiState {

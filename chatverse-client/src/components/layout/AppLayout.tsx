@@ -19,6 +19,8 @@ import { useConfessionHub } from '../../hooks/useConfessionHub'
 import { useGhostDateHub } from '../../hooks/useGhostDateHub'
 import { useLoveTriangleHub } from '../../hooks/useLoveTriangleHub'
 import { useCipherHub } from '../../hooks/useCipherHub'
+import { usePyaarLiveHub } from '../../hooks/usePyaarLiveHub'
+import { useMehfilHub } from '../../hooks/useMehfilHub'
 import { useAuthStore } from '../../stores/authStore'
 import { useActiveCallStore } from '../../stores/activeCallStore'
 
@@ -46,6 +48,14 @@ function LoveTriangleHubMount() {
 }
 function CipherHubMount() {
   useCipherHub()
+  return null
+}
+function PyaarLiveHubMount() {
+  usePyaarLiveHub()
+  return null
+}
+function MehfilHubMount() {
+  useMehfilHub()
   return null
 }
 
@@ -105,6 +115,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/ghost-date') ||
     pathname.startsWith('/love-triangle') ||
     pathname.startsWith('/cipher') ||
+    pathname.startsWith('/pyaar-live') ||
+    pathname.startsWith('/mehfil') ||
     pathname.startsWith('/about')
 
   const showSecondary = !skipSecondary
@@ -194,6 +206,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* The Cipher hub — silent mount so CipherRoundStarted +
           FragmentAssigned + RoundClosed surface app-wide. */}
       {!isGuest && <CipherHubMount />}
+
+      {/* PYAAR LIVE hub — silent mount so ShowStarted +
+          RoundAdvanced + EliminationAnnounced + ShowEnded
+          push events surface anywhere in the app. */}
+      {!isGuest && <PyaarLiveHubMount />}
+
+      {/* MEHFIL hub — silent mount so RoomStarted / RoomEnded /
+          RoomTip toasts fire app-wide. */}
+      {!isGuest && <MehfilHubMount />}
 
       {/* Mobile bottom nav — replaces the vertical PrimarySidebar on
           phones. Hidden on sm and above. */}
