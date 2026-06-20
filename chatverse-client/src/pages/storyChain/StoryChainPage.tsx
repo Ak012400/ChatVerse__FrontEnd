@@ -120,7 +120,7 @@ export default function StoryChainPage() {
 
   return (
     <div className="h-full overflow-y-auto px-4 sm:px-8 py-6 sm:py-10">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-2xl mx-auto cv-fade-up">
         <Header />
         <Tabs tab={tab} setTab={setTab} />
 

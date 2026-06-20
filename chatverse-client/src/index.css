@@ -317,6 +317,188 @@ html[data-theme="light"] {
       transition-duration: 0.001s !important;
     }
   }
+
+  /* ─────────────────────────────────────────────────────────────
+     Fluid motion pack — spring entrances, hover lifts, glass,
+     aurora gradients. Apply via class on any element. Designed
+     so retrofitting an existing page just means adding 1-3
+     classes per surface.
+  ───────────────────────────────────────────────────────────── */
+
+  /* Spring-flavoured easings. Default ease-out reads as mechanical;
+     these curves have a small overshoot which makes UI "feel alive". */
+  :root, html[data-theme="light"] {
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes cv-fade-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes cv-pop {
+    from { opacity: 0; transform: scale(0.94); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes cv-sheet-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes cv-tab-slide {
+    from { opacity: 0; transform: translateX(8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes cv-shine-sweep {
+    from { background-position: -180% 0; }
+    to   { background-position: 180% 0; }
+  }
+  @keyframes cv-aurora-drift {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    50%      { transform: translate3d(6%, -4%, 0) scale(1.08); }
+  }
+  @keyframes cv-orbit {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
+  .cv-fade-up   { animation: cv-fade-up 420ms var(--ease-out-soft) both; }
+  .cv-pop       { animation: cv-pop 280ms var(--ease-spring) both; }
+  .cv-sheet-up  { animation: cv-sheet-up 320ms var(--ease-out-soft) both; }
+  .cv-tab-slide { animation: cv-tab-slide 220ms var(--ease-out-soft) both; }
+
+  /* Stagger — apply to a parent, children fade up in sequence.
+     Capped at 9 — beyond that they share the final delay. */
+  .cv-stagger > *               { animation: cv-fade-up 420ms var(--ease-out-soft) both; }
+  .cv-stagger > *:nth-child(1)  { animation-delay: 0ms; }
+  .cv-stagger > *:nth-child(2)  { animation-delay: 55ms; }
+  .cv-stagger > *:nth-child(3)  { animation-delay: 110ms; }
+  .cv-stagger > *:nth-child(4)  { animation-delay: 165ms; }
+  .cv-stagger > *:nth-child(5)  { animation-delay: 220ms; }
+  .cv-stagger > *:nth-child(6)  { animation-delay: 275ms; }
+  .cv-stagger > *:nth-child(7)  { animation-delay: 330ms; }
+  .cv-stagger > *:nth-child(8)  { animation-delay: 385ms; }
+  .cv-stagger > *:nth-child(n+9) { animation-delay: 440ms; }
+
+  /* Hover lift — subtle translate + shadow + accent border. Avoid
+     Tailwind's default transition so we can use spring easing. */
+  .cv-hover-lift {
+    transition:
+      transform 280ms var(--ease-out-soft),
+      box-shadow 280ms var(--ease-out-soft),
+      border-color 220ms ease-out;
+  }
+  .cv-hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--color-line-strong);
+  }
+
+  /* Press — buttons + tappable cards feel responsive on click. */
+  .cv-press {
+    transition: transform 140ms var(--ease-spring);
+  }
+  .cv-press:active {
+    transform: scale(0.97);
+  }
+
+  /* Glass — moderate blur, semi-opaque surface fill. Used for
+     modals, sheets, popovers, command palettes. 12px blur is the
+     sweet spot — higher tanks scroll perf on mobile Safari. */
+  .cv-glass {
+    background: color-mix(in srgb, var(--color-surface-1) 78%, transparent);
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+  }
+
+  /* Aurora — gentle moving gradient haze for hero headers + tile
+     backgrounds. Two layered radials with slow drift. Wrapper must
+     be positioned + overflow-hidden. */
+  .cv-aurora {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .cv-aurora::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background:
+      radial-gradient(closest-side at 30% 30%, var(--color-accent), transparent 60%),
+      radial-gradient(closest-side at 70% 70%, #8b5cf6, transparent 65%);
+    opacity: 0.35;
+    filter: blur(34px);
+    animation: cv-aurora-drift 16s ease-in-out infinite;
+    z-index: -1;
+  }
+  .cv-aurora > * { position: relative; }
+
+  /* Soft halo — small radial glow behind hero-level icons.
+     Use as wrapper around the icon container. */
+  .cv-halo {
+    position: relative;
+  }
+  .cv-halo::after {
+    content: "";
+    position: absolute;
+    inset: -28%;
+    border-radius: inherit;
+    background: radial-gradient(closest-side, var(--color-accent-soft), transparent 70%);
+    z-index: -1;
+    filter: blur(8px);
+  }
+
+  /* Shine sweep — diagonal highlight for "new" badges or just-
+     unlocked CTAs. Wraps text/element with a moving gradient mask. */
+  .cv-shine {
+    background-image: linear-gradient(
+      110deg,
+      transparent 30%,
+      color-mix(in srgb, var(--color-fg) 22%, transparent) 50%,
+      transparent 70%
+    );
+    background-size: 200% 100%;
+    animation: cv-shine-sweep 1.8s ease-in-out;
+  }
+
+  /* Soft gradient text — accent gradient on important headings. */
+  .cv-text-gradient {
+    background: linear-gradient(120deg, var(--color-accent-fg), #c4b5fd 60%, #f0abfc);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+  html[data-theme="light"] .cv-text-gradient {
+    background: linear-gradient(120deg, var(--color-accent), #7c3aed 60%, #c026d3);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Skeleton shimmer — modern loading state, drop-in replacement
+     for spinners on content surfaces. */
+  .cv-skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-surface-2) 0%,
+      var(--color-surface-3) 50%,
+      var(--color-surface-2) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+    border-radius: var(--radius-md);
+  }
+
+  /* Reduced-motion — kill the heavy stuff, keep the basics. */
+  @media (prefers-reduced-motion: reduce) {
+    .cv-fade-up, .cv-pop, .cv-sheet-up, .cv-tab-slide,
+    .cv-stagger > *, .cv-shine, .cv-aurora::before, .cv-skeleton {
+      animation: none !important;
+    }
+    .cv-hover-lift, .cv-press {
+      transition: none !important;
+    }
+  }
 }
 
 

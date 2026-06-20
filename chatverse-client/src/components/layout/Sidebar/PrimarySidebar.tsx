@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2, Hourglass, HelpCircle, Sparkles, Feather } from 'lucide-react'
+import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2, Hourglass, HelpCircle, Sparkles, Feather, MessageSquare } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { useUiStore } from '../../../stores/uiStore'
 import { useTimeCapsuleStore } from '../../../stores/timeCapsuleStore'
@@ -36,6 +36,7 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
   const onCapsule = pathname.startsWith('/time-capsule')
   const onPersona = pathname.startsWith('/persona')
   const onStory   = pathname.startsWith('/story-chain')
+  const onConfess = pathname.startsWith('/confessions')
   const onAbout   = pathname.startsWith('/about')
   const onPricing = pathname.startsWith('/pricing')
   const onAdmin   = pathname.startsWith('/admin')
@@ -128,6 +129,18 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
             title="Story Chain"
           >
             <Feather size={18} />
+          </IconButton>
+        )}
+        {/* Confession Box — anonymous daily confessions + reveal mechanic. */}
+        {!user?.isGuest && (
+          <IconButton
+            variant="ghost"
+            active={onConfess}
+            onClick={() => navigate('/confessions')}
+            aria-label="Confession Box"
+            title="Confession Box"
+          >
+            <MessageSquare size={18} />
           </IconButton>
         )}
         {/* Time Capsule — registered users only. Guests can't be

@@ -12,14 +12,19 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean
 }
 
+// `cv-press` adds the spring-scale on :active so every button feels
+// responsive — single source of truth, applied via the base class.
 const base =
-  'inline-flex items-center justify-center gap-2 font-medium rounded-md transition-colors duration-150 ' +
+  'inline-flex items-center justify-center gap-2 font-medium rounded-md transition-colors duration-150 cv-press ' +
   'select-none focus-ring disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap'
 
 const variants: Record<Variant, string> = {
+  // Primary now ships a soft accent → violet gradient + tiny shadow
+  // so the most important CTA on any page reads as "alive".
   primary:
-    'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] ' +
-    'border border-[var(--color-accent)]',
+    'text-white border border-[var(--color-accent)] shadow-[0_4px_14px_rgba(99,102,241,0.28)] ' +
+    'bg-gradient-to-br from-[var(--color-accent)] to-[#8b5cf6] ' +
+    'hover:from-[var(--color-accent-hover)] hover:to-[#a78bfa]',
   secondary:
     'bg-[var(--color-surface-2)] text-[var(--color-fg)] hover:bg-[var(--color-surface-3)] ' +
     'border border-[var(--color-line)]',

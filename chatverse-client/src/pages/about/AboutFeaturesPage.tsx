@@ -70,7 +70,7 @@ export default function AboutFeaturesPage() {
 
   return (
     <div className="h-full overflow-y-auto px-4 sm:px-8 py-6 sm:py-10">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-3xl mx-auto cv-fade-up">
         <Header />
 
         {/* TOC — quick jump strip. Lives at the top so users on a deep
