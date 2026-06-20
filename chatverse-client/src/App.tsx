@@ -44,6 +44,7 @@ import AboutFeaturesPage    from './pages/about/AboutFeaturesPage'
 import PersonaPage          from './pages/persona/PersonaPage'
 import StoryChainPage       from './pages/storyChain/StoryChainPage'
 import ConfessionsPage      from './pages/confessions/ConfessionsPage'
+import GhostDatePage        from './pages/ghostDate/GhostDatePage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -133,6 +134,10 @@ export default function App() {
           {/* Confession Box — registered only. The reveal-or-ghost
               choice needs a persistent identity to anchor against. */}
           <Route path="/confessions" element={<RegisteredRoute><ConfessionsPage /></RegisteredRoute>} />
+
+          {/* Ghost Date — registered only. The 30-min anonymous date +
+              re-pair memory mechanic both need a stable user identity. */}
+          <Route path="/ghost-date" element={<RegisteredRoute><GhostDatePage /></RegisteredRoute>} />
 
           {/* Create-room — registered only */}
           <Route path="/rooms/new" element={<RegisteredRoute><CreateRoomPage /></RegisteredRoute>} />
