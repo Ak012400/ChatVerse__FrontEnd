@@ -127,13 +127,45 @@ html[data-theme="light"] {
     transition: background-color 0.18s ease, color 0.18s ease;
   }
 
+  /* ── Body: subtle aurora gradient instead of flat near-black.
+        Reason: when the splash fades, the brief window before a route
+        commits its first paint used to show a flat #08080a — the user
+        reported this as "black flash". A radial aurora keeps the void
+        looking intentional (loading != broken).
+        Light theme variant uses an inverted, very soft tint. */
   body {
     font-family: var(--font-sans);
-    background: var(--color-bg);
     color: var(--color-fg);
+    background:
+      radial-gradient(1100px 600px at 18% -10%, rgba(99,102,241,0.16), transparent 60%),
+      radial-gradient(900px 540px  at 88% 110%, rgba(139,92,246,0.14), transparent 60%),
+      radial-gradient(1200px 700px at 50%  50%, rgba(15,15,25,0.20), transparent 70%),
+      var(--color-bg);
+    background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     font-feature-settings: "cv11", "ss01";
+  }
+
+  html[data-theme="light"] body {
+    background:
+      radial-gradient(1100px 600px at 18% -10%, rgba(79,70,229,0.08), transparent 60%),
+      radial-gradient(900px 540px  at 88% 110%, rgba(192,38,211,0.06), transparent 60%),
+      radial-gradient(1200px 700px at 50%  50%, rgba(15,23,42,0.04), transparent 70%),
+      var(--color-bg);
+    background-attachment: fixed;
+  }
+
+  /* Route content entrance — the <main> in AppLayout adds .cv-route-in
+     on mount, which softens the route-content "pop" right after the
+     splash fades. 220ms is just long enough to read as intentional but
+     short enough to never delay perceived load. */
+  .cv-route-in {
+    animation: cv-route-in 260ms var(--ease-out-soft, ease-out) both;
+  }
+  @keyframes cv-route-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
 
   *, *::before, *::after {
@@ -489,14 +521,111 @@ html[data-theme="light"] {
     border-radius: var(--radius-md);
   }
 
+  /* ─────────────────────────────────────────────────────────────
+     Mehfil room — premium room theming
+     A theme-able aurora wrapper that pulls colours from CSS vars
+     set by the React component (one var per template). Plus a
+     one-shot "gift burst" animation when a RoomTip lands.
+  ───────────────────────────────────────────────────────────── */
+
+  /* The room canvas. Apply via class on the outer wrapper; React
+     supplies --mehfil-accent-1 / --mehfil-accent-2 from a per-
+     template map. */
+  .cv-mehfil-stage {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: var(--radius-xl);
+  }
+  .cv-mehfil-stage::before {
+    content: "";
+    position: absolute;
+    inset: -30%;
+    background:
+      radial-gradient(closest-side at 22% 22%,
+        var(--mehfil-accent-1, var(--color-accent)), transparent 62%),
+      radial-gradient(closest-side at 78% 80%,
+        var(--mehfil-accent-2, #8b5cf6), transparent 65%);
+    opacity: 0.32;
+    filter: blur(40px);
+    z-index: -1;
+    animation: cv-aurora-drift 18s ease-in-out infinite;
+  }
+  .cv-mehfil-stage > * { position: relative; }
+
+  /* Soft glow pulse on the live audience number. */
+  @keyframes cv-audience-pulse {
+    0%, 100% { box-shadow: 0 0 0 0   var(--mehfil-accent-1, var(--color-accent)); }
+    50%      { box-shadow: 0 0 0 6px transparent; }
+  }
+  .cv-audience-dot {
+    width: 7px; height: 7px; border-radius: 999px;
+    background: var(--mehfil-accent-1, var(--color-accent));
+    animation: cv-audience-pulse 2.2s ease-out infinite;
+    filter: drop-shadow(0 0 4px var(--mehfil-accent-1, var(--color-accent)));
+  }
+
+  /* Gift burst — short scale + float + fade. Trigger by adding the
+     class for one render cycle (React clears it on animation end). */
+  @keyframes cv-gift-burst {
+    0%   { transform: translate(-50%, 0)    scale(0.4); opacity: 0; }
+    20%  { transform: translate(-50%, -10px) scale(1.18); opacity: 1; }
+    60%  { transform: translate(-50%, -28px) scale(1);    opacity: 1; }
+    100% { transform: translate(-50%, -64px) scale(0.9);  opacity: 0; }
+  }
+  .cv-gift-burst {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    pointer-events: none;
+    z-index: 5;
+    animation: cv-gift-burst 1500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    font-size: 26px;
+    filter: drop-shadow(0 4px 14px var(--mehfil-accent-1, rgba(245,158,11,0.55)));
+  }
+
+  /* Stage-mode chat bubble: a touch larger radius, soft shadow,
+     theme-tinted accent for the host. */
+  .cv-mehfil-bubble {
+    transition: transform 220ms var(--ease-out-soft, ease);
+  }
+  .cv-mehfil-bubble.is-mine {
+    background: linear-gradient(135deg,
+      var(--mehfil-accent-1, var(--color-accent)),
+      var(--mehfil-accent-2, #8b5cf6));
+    color: #fff;
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--mehfil-accent-1, var(--color-accent)) 35%, transparent);
+  }
+  .cv-mehfil-bubble.is-host {
+    border: 1px solid color-mix(in srgb, var(--mehfil-accent-1, var(--color-accent)) 55%, transparent);
+    background: color-mix(in srgb, var(--mehfil-accent-1, var(--color-accent)) 14%, var(--color-surface-2) 86%);
+    color: var(--color-fg);
+  }
+
+  /* Gift rail buttons — gentle lift + accent border on hover. */
+  .cv-gift-btn {
+    transition:
+      transform 220ms var(--ease-out-soft, ease),
+      border-color 200ms ease,
+      box-shadow 220ms var(--ease-out-soft, ease);
+  }
+  .cv-gift-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: var(--mehfil-accent-1, var(--color-line-strong));
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--mehfil-accent-1, rgba(0,0,0,0)) 32%, transparent);
+  }
+
   /* Reduced-motion — kill the heavy stuff, keep the basics. */
   @media (prefers-reduced-motion: reduce) {
     .cv-fade-up, .cv-pop, .cv-sheet-up, .cv-tab-slide,
-    .cv-stagger > *, .cv-shine, .cv-aurora::before, .cv-skeleton {
+    .cv-stagger > *, .cv-shine, .cv-aurora::before, .cv-skeleton,
+    .cv-mehfil-stage::before, .cv-audience-dot, .cv-gift-burst {
       animation: none !important;
     }
-    .cv-hover-lift, .cv-press {
+    .cv-hover-lift, .cv-press, .cv-mehfil-bubble, .cv-gift-btn,
+    .cv-route-in {
       transition: none !important;
+      animation: none !important;
     }
   }
 }
