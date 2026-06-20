@@ -21,6 +21,7 @@ import { useLoveTriangleHub } from '../../hooks/useLoveTriangleHub'
 import { useCipherHub } from '../../hooks/useCipherHub'
 import { usePyaarLiveHub } from '../../hooks/usePyaarLiveHub'
 import { useMehfilHub } from '../../hooks/useMehfilHub'
+import { useTokensHub } from '../../hooks/useTokensHub'
 import { useAuthStore } from '../../stores/authStore'
 import { useActiveCallStore } from '../../stores/activeCallStore'
 
@@ -56,6 +57,10 @@ function PyaarLiveHubMount() {
 }
 function MehfilHubMount() {
   useMehfilHub()
+  return null
+}
+function TokensHubMount() {
+  useTokensHub()
   return null
 }
 
@@ -117,6 +122,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/cipher') ||
     pathname.startsWith('/pyaar-live') ||
     pathname.startsWith('/mehfil') ||
+    pathname.startsWith('/tokens') ||
     pathname.startsWith('/about')
 
   const showSecondary = !skipSecondary
@@ -215,6 +221,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* MEHFIL hub — silent mount so RoomStarted / RoomEnded /
           RoomTip toasts fire app-wide. */}
       {!isGuest && <MehfilHubMount />}
+
+      {/* Tokens hub — silent mount. On first connect this triggers
+          EnsureSignupBonus (idempotent +100 grant for new users) and
+          subscribes to BalanceChanged so the wallet badge stays live. */}
+      {!isGuest && <TokensHubMount />}
 
       {/* Mobile bottom nav — replaces the vertical PrimarySidebar on
           phones. Hidden on sm and above. */}

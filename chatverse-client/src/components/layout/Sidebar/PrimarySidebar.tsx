@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import {
   MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail,
   Sun, Moon, Hourglass, HelpCircle, Sparkles, Feather, MessageSquare,
-  Heart, Users, Key, Theater, Mic, type LucideIcon,
+  Heart, Users, Key, Theater, Mic, Wallet, type LucideIcon,
 } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { useUiStore, type FeatureIconId } from '../../../stores/uiStore'
@@ -111,6 +111,7 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
 
   // Non-feature route highlights (settings/admin/profile/etc.).
   const onAbout   = pathname.startsWith('/about')
+  const onTokens  = pathname.startsWith('/tokens')
   const onPricing = pathname.startsWith('/pricing')
   const onAdmin   = pathname.startsWith('/admin')
   const onProfile = pathname.startsWith('/profile')
@@ -231,6 +232,20 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
           <HelpCircle size={18} />
         </IconButton>
 
+        {/* Token wallet — sits in the utility group rather than the
+            feature catalogue because it's a piggy-bank, not a daily
+            activity. Wallet balance pushes live via TokensHub. */}
+        {!user?.isGuest && (
+          <IconButton
+            variant="ghost"
+            active={onTokens}
+            onClick={() => navigate('/tokens')}
+            aria-label="Token wallet"
+            title="Token wallet"
+          >
+            <Wallet size={18} />
+          </IconButton>
+        )}
         {!user?.isGuest && (
           <IconButton variant="ghost" active={onPricing} onClick={() => navigate('/pricing')} aria-label="Upgrade" title="Upgrade">
             <CreditCard size={18} />
