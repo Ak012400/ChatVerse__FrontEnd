@@ -218,4 +218,71 @@ export const FEATURE_GUIDES: FeatureGuide[] = [
       },
     ],
   },
+
+  // ────────────────────────────────────────────────────────────
+  // CONFESSION BOX — anonymous daily confessions + reveal mechanic
+  // ────────────────────────────────────────────────────────────
+  {
+    slug:    'confession-box',
+    title:   'Confession Box',
+    tagline: 'Say it anonymously. If your confession lands at the top, you choose: step into the light, or become a Ghost Voice forever.',
+    icon:    'message-circle',
+    status:  'live',
+    sections: [
+      {
+        heading: 'The promise',
+        icon:    'info',
+        body:
+          'Every day is a fresh anonymous wall. You write something you couldn\'t say out loud — the kind of thing that has to be said but doesn\'t have your name on it — and it joins the feed. ' +
+          'Other voyagers react with one of six emojis. At midnight UTC the most-reacted confession of the day gets crowned. The author of that confession gets a private offer: reveal yourself for a public banner, or claim a permanent Ghost Voice badge.',
+      },
+      {
+        heading: 'Reactions — six emojis, one per voyager',
+        icon:    'sparkles',
+        body: [
+          'Six emojis: 🔥 (relatable hit), 😭 (felt this), 🫂 (sending love), 💀 (dark relatable humour), 👀 (saw something), 🙏 (solidarity).',
+          'One reaction per confession per voyager. Picking a different emoji silently swaps your previous one.',
+          'You can\'t react to your own confession — it would skew rankings.',
+          'Counts are live: when someone reacts, the card updates without a refresh.',
+        ],
+      },
+      {
+        heading: 'The crowning + reveal offer',
+        icon:    'eye',
+        body: [
+          'Daily at 00:00 UTC the ranking service picks the confession with the most distinct reactors. Ties break by who posted first.',
+          'A push notification + in-app modal lands on the author\'s next visit: "You wrote yesterday\'s top confession. Reveal yourself, or claim Ghost Voice?"',
+          '**Reveal yourself**: your username appears on the confession, public to everyone forever. A featured-author banner goes on your profile.',
+          '**Stay a ghost**: a permanent "Ghost Voice" badge goes on your profile. Other users see you as the kind of person who could\'ve been famous and chose silence.',
+          'The choice is per-confession. Future confessions are still anonymous.',
+        ],
+      },
+      {
+        heading: 'Lore Wall — the archive',
+        icon:    'rules',
+        body: [
+          'The Lore Wall holds the top 5 confessions of each past week. Browseable week-by-week.',
+          'Confessions normally auto-delete after 30 days; top-ranked ones stay on the Lore Wall forever (revealed or not).',
+        ],
+      },
+      {
+        heading: 'Privacy guarantees',
+        icon:    'shield',
+        body: [
+          'Author identity is server-only. The client API NEVER returns your real user id alongside a confession DTO.',
+          'The only identity bit returned is a "mine" boolean — so you can find your own card in the feed without other users learning whose is whose.',
+          'AI text moderation runs on every confession before it joins the feed. Slurs, harassment, off-platform contact info, suicidal ideation triggers — all caught.',
+        ],
+      },
+      {
+        heading: 'House rules',
+        icon:    'rules',
+        body: [
+          'No outing real people — including by hint. ("My boss with the red car at <street>" = removed.)',
+          'Mental-health crisis disclosures get auto-routed to in-app helpline info, then the confession itself stays anonymous in the feed.',
+          'Multiple-account vote-stacking dings trust score for both accounts.',
+        ],
+      },
+    ],
+  },
 ]

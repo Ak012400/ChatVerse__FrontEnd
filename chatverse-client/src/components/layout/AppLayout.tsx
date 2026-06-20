@@ -15,6 +15,7 @@ import { useUiStore } from '../../stores/uiStore'
 import { useChatHub } from '../../hooks/useChatHub'
 import { useTimeCapsuleHub } from '../../hooks/useTimeCapsuleHub'
 import { usePersonaHub } from '../../hooks/usePersonaHub'
+import { useConfessionHub } from '../../hooks/useConfessionHub'
 import { useAuthStore } from '../../stores/authStore'
 import { useActiveCallStore } from '../../stores/activeCallStore'
 
@@ -26,6 +27,10 @@ function TimeCapsuleHubMount() {
 }
 function PersonaHubMount() {
   usePersonaHub()
+  return null
+}
+function ConfessionHubMount() {
+  useConfessionHub()
   return null
 }
 
@@ -81,6 +86,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/time-capsule') ||
     pathname.startsWith('/persona') ||
     pathname.startsWith('/story-chain') ||
+    pathname.startsWith('/confessions') ||
     pathname.startsWith('/about')
 
   const showSecondary = !skipSecondary
@@ -153,6 +159,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           PersonaMessageReceived + StreakUnmasked listeners which
           surface toasts and keep the store fresh. */}
       {!isGuest && <PersonaHubMount />}
+
+      {/* Confession Box hub — silent mount so TopConfessionOffered
+          (reveal prompt for yesterday's top author) fires anywhere
+          in the app, not just /confessions. */}
+      {!isGuest && <ConfessionHubMount />}
 
       {/* Mobile bottom nav — replaces the vertical PrimarySidebar on
           phones. Hidden on sm and above. */}

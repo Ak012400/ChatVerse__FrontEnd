@@ -43,6 +43,7 @@ import TimeCapsulePage      from './pages/timeCapsule/TimeCapsulePage'
 import AboutFeaturesPage    from './pages/about/AboutFeaturesPage'
 import PersonaPage          from './pages/persona/PersonaPage'
 import StoryChainPage       from './pages/storyChain/StoryChainPage'
+import ConfessionsPage      from './pages/confessions/ConfessionsPage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -128,6 +129,10 @@ export default function App() {
               identity (the "one sentence per user" guard would otherwise
               be cheap to bypass with guest re-signups). */}
           <Route path="/story-chain" element={<RegisteredRoute><StoryChainPage /></RegisteredRoute>} />
+
+          {/* Confession Box — registered only. The reveal-or-ghost
+              choice needs a persistent identity to anchor against. */}
+          <Route path="/confessions" element={<RegisteredRoute><ConfessionsPage /></RegisteredRoute>} />
 
           {/* Create-room — registered only */}
           <Route path="/rooms/new" element={<RegisteredRoute><CreateRoomPage /></RegisteredRoute>} />
