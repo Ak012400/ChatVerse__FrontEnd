@@ -31,7 +31,7 @@ export interface FeatureGuide {
   /** One-line elevator pitch shown under the title. */
   tagline:  string
   /** Lucide icon name for the feature tile. */
-  icon:     'hourglass' | 'masks' | 'feather' | 'sparkles' | 'heart' | 'message-circle' | 'ghost' | 'cipher' | 'mic' | 'theater' | 'pyaar-live'
+  icon:     'hourglass' | 'masks' | 'feather' | 'sparkles' | 'heart' | 'message-circle' | 'ghost' | 'cipher' | 'mic' | 'theater' | 'pyaar-live' | 'wallet'
   status:   GuideStatus
   /** Ordered list of explanation sections. */
   sections: GuideSection[]
@@ -632,6 +632,63 @@ export const FEATURE_GUIDES: FeatureGuide[] = [
           'AI moderation applies to every message as it does everywhere else.',
           'Tip-stacking via alts dings every involved account.',
           'Phase 5 brings real money in — host verification + ID becomes mandatory then.',
+        ],
+      },
+    ],
+  },
+
+  // ────────────────────────────────────────────────────────────
+  // TOKENS — Phase 5 wallet
+  // ────────────────────────────────────────────────────────────
+  {
+    slug:    'tokens',
+    title:   'Token wallet',
+    tagline: 'Every voyager starts with 100 tokens. Tip Mehfil hosts, fund prize pools, more coming. Top-ups via a sandbox payment gateway for now — no real money moves yet.',
+    icon:    'wallet',
+    status:  'live',
+    sections: [
+      {
+        heading: 'The signup bonus',
+        icon:    'sparkles',
+        body:
+          'New voyagers get +100 tokens credited the very first time the Tokens hub connects. ' +
+          'It\'s idempotent on the server — even if you log in across multiple devices the grant runs exactly once. ' +
+          'You can spend the bonus on Mehfil tips today; more sinks land alongside the other features (PYAAR LIVE prize pool entry, Cipher prize claim, etc.).',
+      },
+      {
+        heading: 'How balances + ledger work',
+        icon:    'info',
+        body: [
+          'Every credit or debit writes a single ledger row with the post-balance snapshotted, so disputes can be replayed at any past moment.',
+          'The current spendable balance lives in a separate per-user row and is updated atomically with the ledger insert — no double-spend.',
+          'Server pushes BalanceChanged over SignalR whenever your balance moves, so the wallet stays live without re-fetching.',
+        ],
+      },
+      {
+        heading: 'Top-up flow (today: sandbox)',
+        icon:    'rules',
+        body: [
+          'Pick a pack (Starter ₹49 / Plus ₹99 / Mega ₹299 / Whale ₹499).',
+          'Server creates a TopupOrder row in "created" state, asks the gateway to set up its side, then redirects you to the gateway\'s checkout page.',
+          'Today the gateway is "Mock Gateway" — a faux checkout that looks like a real payment page but doesn\'t take real money. Click Pay → 1.5 sec simulated processing → success.',
+          'On success the server flips the order to "succeeded" and credits the tokens through the ledger. Cancel any time.',
+        ],
+      },
+      {
+        heading: 'When real Razorpay lands',
+        icon:    'shield',
+        body: [
+          'The IPaymentGateway interface already abstracts everything. Swapping from MockPaymentGateway → RazorpayPaymentGateway is a one-class change + a webhook controller.',
+          'No domain entity, hub, or feature code changes are needed — the ledger, balance push, order lifecycle, and audit chain are all real-gateway-ready today.',
+        ],
+      },
+      {
+        heading: 'House rules',
+        icon:    'rules',
+        body: [
+          'Tipping for engagement is fair game; tipping to extract goods/services off-platform is not.',
+          'Insufficient-balance debits fail server-side — the order never settles unless tokens actually move.',
+          'Refunds (server-triggered, e.g. when a Mehfil tip transfer half-fails) get their own "refund" ledger reason for clean audit.',
         ],
       },
     ],

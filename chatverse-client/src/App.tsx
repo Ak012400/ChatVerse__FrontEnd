@@ -49,6 +49,8 @@ import LoveTrianglePage     from './pages/loveTriangle/LoveTrianglePage'
 import CipherPage           from './pages/cipher/CipherPage'
 import PyaarLivePage        from './pages/pyaarLive/PyaarLivePage'
 import MehfilPage           from './pages/mehfil/MehfilPage'
+import TokensPage           from './pages/tokens/TokensPage'
+import MockGatewayPage      from './pages/tokens/MockGatewayPage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -158,6 +160,12 @@ export default function App() {
           {/* MEHFIL — registered only. Hosting + tipping both need
               a stable identity to anchor against. */}
           <Route path="/mehfil" element={<RegisteredRoute><MehfilPage /></RegisteredRoute>} />
+
+          {/* Token wallet — registered only. Mock gateway page is
+              its own route so the topup redirect URL works exactly
+              like a real PSP redirect. */}
+          <Route path="/tokens" element={<RegisteredRoute><TokensPage /></RegisteredRoute>} />
+          <Route path="/tokens/mock-gateway" element={<RegisteredRoute><MockGatewayPage /></RegisteredRoute>} />
 
           {/* Create-room — registered only */}
           <Route path="/rooms/new" element={<RegisteredRoute><CreateRoomPage /></RegisteredRoute>} />
