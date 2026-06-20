@@ -37,6 +37,30 @@ const TEMPLATE_LABEL: Record<MehfilTemplate, string> = {
   custom:      'Custom',
 }
 
+// ── Template palettes — each Mehfil template gets its own colour
+//   pair. Wired into the room stage via CSS vars; aurora + bubbles +
+//   gift rail all pull from these. Picked so every theme reads as
+//   distinct at a glance without leaving the brand-purple universe.
+const TEMPLATE_PALETTE: Record<MehfilTemplate, { accent1: string; accent2: string; emoji: string }> = {
+  dating_show: { accent1: '#f43f5e', accent2: '#ec4899', emoji: '💞' },
+  open_mic:    { accent1: '#f59e0b', accent2: '#fbbf24', emoji: '🎤' },
+  debate:      { accent1: '#f97316', accent2: '#ef4444', emoji: '🔥' },
+  watch_party: { accent1: '#6366f1', accent2: '#8b5cf6', emoji: '🎬' },
+  game_night:  { accent1: '#10b981', accent2: '#06b6d4', emoji: '🎮' },
+  podcast:     { accent1: '#3b82f6', accent2: '#8b5cf6', emoji: '🎙' },
+  story_circle:{ accent1: '#8b5cf6', accent2: '#a78bfa', emoji: '📖' },
+  trivia:      { accent1: '#eab308', accent2: '#f59e0b', emoji: '🧠' },
+  talent_show: { accent1: '#d946ef', accent2: '#c026d3', emoji: '✨' },
+  networking:  { accent1: '#14b8a6', accent2: '#06b6d4', emoji: '🤝' },
+  custom:      { accent1: '#6366f1', accent2: '#8b5cf6', emoji: '🌌' },
+}
+
+const GIFT_EMOJI: Record<string, string> = {
+  rose:    '🌹',
+  bouquet: '💐',
+  crown:   '👑',
+}
+
 type Tab = 'discover' | 'mine'
 
 export default function MehfilPage() {
@@ -567,33 +591,84 @@ function RoomDetailView({
   onEnd: () => void
 }) {
   const isLive = room.status === 'live'
+  const palette = TEMPLATE_PALETTE[room.templateKind] ?? TEMPLATE_PALETTE.custom
+
+  // Auto-scroll the chat to the latest message when the count grows.
+  const [chatRef, setChatRef] = useState<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!chatRef) return
+    chatRef.scrollTop = chatRef.scrollHeight
+  }, [messages.length, chatRef])
+
+  // Gift-burst animation — when the tip stream grows, render a brief
+  // emoji that floats up from the gift rail and fades. Keyed by tip-id
+  // so React unmounts the prior burst as a new one mounts.
+  const lastTip = tips[0]
+  const [burstKey, setBurstKey] = useState<string | null>(null)
+  useEffect(() => {
+    if (!lastTip) return
+    const id = (lastTip.senderUsername + ':' + lastTip.createdAt)
+    setBurstKey(id)
+    const t = setTimeout(() => setBurstKey(null), 1600)
+    return () => clearTimeout(t)
+  }, [lastTip?.senderUsername, lastTip?.createdAt])
+
+  // The CSS vars drive the .cv-mehfil-stage aurora + bubble + gift-btn
+  // theming. Cast through React.CSSProperties so custom props pass TS.
+  const stageStyle = {
+    ['--mehfil-accent-1' as any]: palette.accent1,
+    ['--mehfil-accent-2' as any]: palette.accent2,
+  } as React.CSSProperties
+
   return (
-    <Card padding="md" className="flex flex-col gap-3">
+    <div className="cv-mehfil-stage cv-pop p-4 sm:p-5 border border-[var(--color-line)]" style={stageStyle}>
+      {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <div className="text-[10px] uppercase tracking-wider text-[var(--color-fg-faint)]">
-            {TEMPLATE_LABEL[room.templateKind] ?? room.templateKind} · hosted by {room.hostUsername}
-            {' '}<BadgeCheck size={10} className="inline" />
+        <div className="flex items-start gap-3 min-w-0">
+          <div
+            className="w-12 h-12 rounded-2xl shrink-0 text-white inline-flex items-center justify-center text-2xl cv-halo shadow-lg"
+            style={{
+              background: `linear-gradient(135deg, ${palette.accent1} 0%, ${palette.accent2} 100%)`,
+            }}
+            aria-hidden="true"
+          >
+            <span>{palette.emoji}</span>
           </div>
-          <div className="text-lg font-semibold text-[var(--color-fg)] mt-0.5">{room.title}</div>
-          {room.description && <p className="text-xs text-[var(--color-fg-dim)] mt-1 max-w-md">{room.description}</p>}
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-wider text-[var(--color-fg-faint)] inline-flex items-center gap-1.5">
+              <span>{TEMPLATE_LABEL[room.templateKind] ?? room.templateKind}</span>
+              <span>·</span>
+              <span>hosted by {room.hostUsername}</span>
+              <BadgeCheck size={10} className="inline" />
+            </div>
+            <div className="text-lg sm:text-xl font-semibold cv-text-gradient mt-0.5 leading-tight">{room.title}</div>
+            {room.description && (
+              <p className="text-xs text-[var(--color-fg-dim)] mt-1 max-w-md leading-relaxed">{room.description}</p>
+            )}
+          </div>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-1.5">
           <StatusChip status={room.status} audience={room.currentAudienceCount} />
-          <div className="text-[10px] text-[var(--color-fg-faint)]">
-            {room.totalTipsTokens} tip tokens · {room.totalAttendeesCount} total attendees
+          {isLive && (
+            <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--color-fg-dim)] tabular-nums">
+              <span className="cv-audience-dot" />
+              {room.currentAudienceCount}/{room.maxAudience} listening
+            </span>
+          )}
+          <div className="text-[10px] text-[var(--color-fg-faint)] tabular-nums inline-flex items-center gap-1">
+            <Gift size={10} /> {room.totalTipsTokens} tokens · {room.totalAttendeesCount} total
           </div>
         </div>
       </div>
 
-      {/* Host lifecycle controls */}
-      <HostBar room={room} onStart={onStart} onEnd={onEnd} />
+      {/* Host lifecycle */}
+      <div className="mt-3"><HostBar room={room} onStart={onStart} onEnd={onEnd} /></div>
 
       {/* Audience join/leave */}
       {isLive && room.hostUsername !== '' && (
-        <div className="flex items-center justify-between gap-3 pt-2 border-t border-[var(--color-line)]">
+        <div className="flex items-center justify-between gap-3 pt-3 mt-3 border-t border-[var(--color-line)]">
           <span className="text-xs text-[var(--color-fg-dim)] inline-flex items-center gap-1.5">
-            <Users size={12} /> {room.currentAudienceCount} / {room.maxAudience}
+            <Users size={12} /> in the room
           </span>
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" onClick={onLeave}>Leave</Button>
@@ -604,29 +679,25 @@ function RoomDetailView({
 
       {/* Chat */}
       {isLive && (
-        <div className="flex flex-col gap-2 max-h-[50vh] overflow-y-auto py-2">
-          {messages.length === 0 && <div className="text-xs text-[var(--color-fg-faint)] text-center py-3">No messages yet.</div>}
-          {messages.map((m) => (
-            <div key={m.id} className={`flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] px-3 py-1.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words
-                ${m.mine
-                  ? 'bg-[var(--color-accent)] text-white rounded-br-sm'
-                  : 'bg-[var(--color-surface-2)] text-[var(--color-fg)] rounded-bl-sm border border-[var(--color-line)]'}`}>
-                {!m.mine && (
-                  <div className="text-[10px] uppercase tracking-wider opacity-70 mb-0.5">
-                    {m.senderUsername}{m.isHost && <span className="ml-1 text-amber-300/85">HOST</span>}
-                  </div>
-                )}
-                {m.content}
-              </div>
+        <div
+          ref={setChatRef}
+          className="flex flex-col gap-2 mt-3 py-2 overflow-y-auto"
+          style={{ maxHeight: '50vh' }}
+        >
+          {messages.length === 0 && (
+            <div className="text-xs text-[var(--color-fg-faint)] text-center py-6 italic">
+              No messages yet. Be the first voice.
             </div>
+          )}
+          {messages.map((m) => (
+            <ChatRow key={m.id} m={m} />
           ))}
         </div>
       )}
 
-      {/* Composer + tip rail */}
+      {/* Composer + themed gift rail with burst */}
       {isLive && (
-        <div className="pt-3 border-t border-[var(--color-line)] flex flex-col gap-2">
+        <div className="relative pt-3 mt-3 border-t border-[var(--color-line)] flex flex-col gap-2">
           <div className="flex gap-2 items-end">
             <textarea
               value={draft}
@@ -634,20 +705,26 @@ function RoomDetailView({
               rows={2}
               maxLength={MAX_MSG + 64}
               placeholder="Say something…"
-              className="flex-1 resize-none rounded-md bg-[var(--color-surface-2)] text-[var(--color-fg)] text-sm leading-relaxed p-2 border border-[var(--color-line)] focus:outline-none focus:border-[var(--color-accent)]"
+              className="flex-1 resize-none rounded-lg cv-glass text-[var(--color-fg)] text-sm leading-relaxed p-2 border border-[var(--color-line)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)]"
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend() } }}
             />
             <Button variant="primary" size="sm" loading={sending} disabled={!draft.trim()} onClick={onSend} leftIcon={<Send size={12} />}>Send</Button>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="relative flex gap-2 flex-wrap">
+            {burstKey && lastTip && (
+              <div className="cv-gift-burst" key={burstKey}>
+                <span>{GIFT_EMOJI[lastTip.giftType] ?? '🎁'}</span>
+              </div>
+            )}
             {Object.entries(gifts).map(([key, tokens]) => (
               <button
                 key={key}
                 onClick={() => onTip(key)}
-                className="cv-press inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-xs bg-[var(--color-surface-2)] border border-[var(--color-line)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] hover:border-[var(--color-line-strong)]"
+                className="cv-gift-btn cv-press inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs bg-[var(--color-surface-2)] border border-[var(--color-line)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)]"
+                title={`${key} · ${tokens} tokens`}
               >
-                <Gift size={12} />
-                <span className="capitalize">{key}</span>
+                <span className="text-base leading-none">{GIFT_EMOJI[key] ?? '🎁'}</span>
+                <span className="capitalize font-medium">{key}</span>
                 <span className="text-[var(--color-fg-faint)] tabular-nums">{tokens}</span>
               </button>
             ))}
@@ -657,13 +734,16 @@ function RoomDetailView({
 
       {/* Audience list (collapsed) */}
       {isLive && attendees.length > 0 && (
-        <details className="pt-2 border-t border-[var(--color-line)]">
-          <summary className="text-[11px] uppercase tracking-wider text-[var(--color-fg-faint)] cursor-pointer">
+        <details className="pt-3 mt-3 border-t border-[var(--color-line)]">
+          <summary className="text-[11px] uppercase tracking-wider text-[var(--color-fg-faint)] cursor-pointer hover:text-[var(--color-fg-dim)]">
             In the room ({attendees.length})
           </summary>
           <div className="flex flex-wrap gap-1 mt-2">
             {attendees.map((a) => (
-              <span key={a.username} className="text-[10px] px-1.5 h-5 inline-flex items-center rounded bg-[var(--color-surface-2)] text-[var(--color-fg-dim)] border border-[var(--color-line)]">
+              <span
+                key={a.username}
+                className="text-[10px] px-2 h-5 inline-flex items-center rounded-full bg-[var(--color-surface-1)] text-[var(--color-fg-dim)] border border-[var(--color-line)]"
+              >
                 {a.username}
               </span>
             ))}
@@ -673,23 +753,56 @@ function RoomDetailView({
 
       {/* Recent tips ticker */}
       {tips.length > 0 && (
-        <details className="pt-2 border-t border-[var(--color-line)]">
-          <summary className="text-[11px] uppercase tracking-wider text-[var(--color-fg-faint)] cursor-pointer">
-            Recent tips
+        <details className="pt-3 mt-3 border-t border-[var(--color-line)]">
+          <summary className="text-[11px] uppercase tracking-wider text-[var(--color-fg-faint)] cursor-pointer hover:text-[var(--color-fg-dim)]">
+            Recent tips ({tips.length})
           </summary>
-          <div className="flex flex-col gap-1 mt-2">
+          <div className="flex flex-col gap-1.5 mt-2">
             {tips.slice(0, 10).map((t, i) => (
               <div key={i} className="text-xs text-[var(--color-fg-dim)] inline-flex items-center gap-1.5">
-                <Gift size={11} className="text-amber-300/85" />
-                <span className="text-[var(--color-fg)]">{t.senderUsername}</span>
+                <span className="text-sm leading-none">{GIFT_EMOJI[t.giftType] ?? '🎁'}</span>
+                <span className="text-[var(--color-fg)] font-medium">{t.senderUsername}</span>
                 <span>sent a <span className="capitalize">{t.giftType}</span></span>
-                <span className="text-[var(--color-fg-faint)] tabular-nums">+{t.tokenAmount}</span>
+                <span className="ml-auto text-amber-300/85 tabular-nums">+{t.tokenAmount}</span>
               </div>
             ))}
           </div>
         </details>
       )}
-    </Card>
+    </div>
+  )
+}
+
+/** Themed chat row — host messages get accent border, my messages
+ *  get the template gradient, everyone else gets a neutral bubble. */
+function ChatRow({
+  m,
+}: { m: { id: string; senderUsername: string; isHost: boolean; mine: boolean; content: string; createdAt: string } }) {
+  const tone = m.mine ? 'is-mine' : m.isHost ? 'is-host' : ''
+  return (
+    <div className={`flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
+      {!m.mine && (
+        <div className="w-7 h-7 rounded-full mr-2 mt-auto mb-0.5 inline-flex items-center justify-center text-[10px] font-semibold text-[var(--color-fg-dim)] bg-[var(--color-surface-2)] border border-[var(--color-line)] shrink-0">
+          {m.senderUsername.slice(0, 1).toUpperCase()}
+        </div>
+      )}
+      <div
+        className={`cv-mehfil-bubble ${tone} max-w-[80%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words
+          ${m.mine ? 'rounded-br-sm' : 'rounded-bl-sm bg-[var(--color-surface-2)] text-[var(--color-fg)] border border-[var(--color-line)]'}`}
+      >
+        {!m.mine && (
+          <div className="text-[10px] uppercase tracking-wider opacity-75 mb-0.5 inline-flex items-center gap-1">
+            <span>{m.senderUsername}</span>
+            {m.isHost && (
+              <span className="px-1 rounded font-semibold text-amber-300/95 bg-amber-500/15 border border-amber-500/30">
+                HOST
+              </span>
+            )}
+          </div>
+        )}
+        {m.content}
+      </div>
+    </div>
   )
 }
 

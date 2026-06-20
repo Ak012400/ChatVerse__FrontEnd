@@ -172,7 +172,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </button>
       )}
 
-      <main className="flex-1 min-w-0 overflow-hidden relative pb-14 sm:pb-0">
+      {/* `key={pathname}` forces the entrance animation to re-run on
+          every route change. `cv-route-in` is defined in index.css —
+          short fade + tiny upward translate so route content slides
+          in instead of popping out of black. */}
+      <main key={pathname} className="cv-route-in flex-1 min-w-0 overflow-hidden relative pb-14 sm:pb-0">
         {/* Global presence pill — floats in the top-right corner of the
             main canvas without taking layout space. Self-hides until
             the first /presence/stats response. */}
