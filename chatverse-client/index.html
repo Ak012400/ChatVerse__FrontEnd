@@ -13,7 +13,17 @@
       (see main.tsx — it removes #cv-splash from the DOM).
     -->
     <style>
-      html, body { background:#0b0a14; margin:0; padding:0; }
+      /* Pre-React body background — matches the React app\'s body
+         radial-aurora so the moment the splash fades, the void behind
+         it is the same continuous gradient rather than a flat black. */
+      html, body {
+        margin:0; padding:0;
+        background:
+          radial-gradient(1100px 600px at 18% -10%, rgba(99,102,241,0.16), transparent 60%),
+          radial-gradient(900px 540px  at 88% 110%, rgba(139,92,246,0.14), transparent 60%),
+          #08080a;
+        background-attachment: fixed;
+      }
       #cv-splash {
         position: fixed; inset: 0; z-index: 99999;
         display: flex; align-items: center; justify-content: center;
