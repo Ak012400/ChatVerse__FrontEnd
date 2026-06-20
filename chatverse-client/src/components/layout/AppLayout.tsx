@@ -18,6 +18,7 @@ import { usePersonaHub } from '../../hooks/usePersonaHub'
 import { useConfessionHub } from '../../hooks/useConfessionHub'
 import { useGhostDateHub } from '../../hooks/useGhostDateHub'
 import { useLoveTriangleHub } from '../../hooks/useLoveTriangleHub'
+import { useCipherHub } from '../../hooks/useCipherHub'
 import { useAuthStore } from '../../stores/authStore'
 import { useActiveCallStore } from '../../stores/activeCallStore'
 
@@ -41,6 +42,10 @@ function GhostDateHubMount() {
 }
 function LoveTriangleHubMount() {
   useLoveTriangleHub()
+  return null
+}
+function CipherHubMount() {
+  useCipherHub()
   return null
 }
 
@@ -99,6 +104,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/confessions') ||
     pathname.startsWith('/ghost-date') ||
     pathname.startsWith('/love-triangle') ||
+    pathname.startsWith('/cipher') ||
     pathname.startsWith('/about')
 
   const showSecondary = !skipSecondary
@@ -184,6 +190,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Love Triangle hub — silent mount so TriangleFormed +
           VotingOpened + Completed events fire as toasts app-wide. */}
       {!isGuest && <LoveTriangleHubMount />}
+
+      {/* The Cipher hub — silent mount so CipherRoundStarted +
+          FragmentAssigned + RoundClosed surface app-wide. */}
+      {!isGuest && <CipherHubMount />}
 
       {/* Mobile bottom nav — replaces the vertical PrimarySidebar on
           phones. Hidden on sm and above. */}
