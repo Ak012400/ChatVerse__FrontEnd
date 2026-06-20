@@ -285,4 +285,84 @@ export const FEATURE_GUIDES: FeatureGuide[] = [
       },
     ],
   },
+
+  // ────────────────────────────────────────────────────────────
+  // GHOST DATE — weekly Thursday 9pm IST anonymous text date
+  // ────────────────────────────────────────────────────────────
+  {
+    slug:    'ghost-date',
+    title:   'Ghost Date',
+    tagline: 'Thursdays at 9pm IST. 30 minutes of anonymous chat with one stranger. Then you both choose: step into the light, or vanish.',
+    icon:    'heart',
+    status:  'live',
+    sections: [
+      {
+        heading: 'The promise',
+        icon:    'info',
+        body:
+          'Every Thursday night at 9pm IST, anyone who opted in gets paired with a stranger. ' +
+          '30 minutes of anonymous text — neither side sees the other\'s name, avatar, age, anything. ' +
+          'When the timer hits zero, you each independently choose: would you want to know this person? ' +
+          'Both say yes → identities reveal, conversation continues as DMs. ' +
+          'One yes + one pass → a bittersweet ending, no reveal either way. ' +
+          'Both pass → a "ghost pair" memory is stored. Months from now, if you both opt in again, the system may pair you a second time.',
+      },
+      {
+        heading: 'How to opt in',
+        icon:    'clock',
+        body: [
+          'Tap "I\'m in" any time during the week leading up to Thursday.',
+          'You can withdraw any time before 9pm IST Thursday — after pairing it\'s locked.',
+          'If the pool is odd, one person gets the "no match" status that week (you can come back next Thursday).',
+        ],
+      },
+      {
+        heading: 'During the 30 minutes',
+        icon:    'sparkles',
+        body: [
+          'You see the other side as "Voyager". No avatar, no profile link.',
+          'A live countdown ticks at the top of the chat.',
+          '1000-character cap per message — keep it conversational, not essays.',
+          'AI text moderation runs on every line. Slurs, harassment, off-platform contact info all get rejected.',
+        ],
+      },
+      {
+        heading: 'After 30 minutes — the choice',
+        icon:    'eye',
+        body: [
+          'Chat window closes. You both get 5 minutes to choose: Reveal or Pass.',
+          'You can\'t change your mind once submitted.',
+          'If either side misses the 5-min window, the outcome is "expired" — no reveal.',
+          'Decisions are private until both are in. Neither side learns what the other chose unless it\'s a mutual reveal.',
+        ],
+      },
+      {
+        heading: 'The re-pair memory',
+        icon:    'shield',
+        body: [
+          'If you both passed, the system stores the pair with a 60-day cooldown.',
+          'After 60 days, if you both opt in for some future Thursday, the matching algorithm preferentially pairs you again. (Coming — basic registration today is fully random.)',
+          'No one knows this is happening to them; it just feels like luck.',
+        ],
+      },
+      {
+        heading: 'Privacy guarantees',
+        icon:    'shield',
+        body: [
+          'Real user IDs never leave the server during a live date or pre-decision phase.',
+          'Bittersweet endings: neither side learns who the other was — even if one of them was you.',
+          'Past dates show up in your history rail as "Voyager" forever, unless they were mutual reveals.',
+        ],
+      },
+      {
+        heading: 'House rules',
+        icon:    'rules',
+        body: [
+          'Don\'t ask for or share contact info during the 30 minutes — wait for mutual reveal.',
+          'No sexual escalation in the first 5 minutes. Slow weather, not a sprint.',
+          'Reports route through the same moderation queue as DMs. Repeat offenders get banned from Ghost Date.',
+        ],
+      },
+    ],
+  },
 ]

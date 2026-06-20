@@ -16,6 +16,7 @@ import { useChatHub } from '../../hooks/useChatHub'
 import { useTimeCapsuleHub } from '../../hooks/useTimeCapsuleHub'
 import { usePersonaHub } from '../../hooks/usePersonaHub'
 import { useConfessionHub } from '../../hooks/useConfessionHub'
+import { useGhostDateHub } from '../../hooks/useGhostDateHub'
 import { useAuthStore } from '../../stores/authStore'
 import { useActiveCallStore } from '../../stores/activeCallStore'
 
@@ -31,6 +32,10 @@ function PersonaHubMount() {
 }
 function ConfessionHubMount() {
   useConfessionHub()
+  return null
+}
+function GhostDateHubMount() {
+  useGhostDateHub()
   return null
 }
 
@@ -87,6 +92,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/persona') ||
     pathname.startsWith('/story-chain') ||
     pathname.startsWith('/confessions') ||
+    pathname.startsWith('/ghost-date') ||
     pathname.startsWith('/about')
 
   const showSecondary = !skipSecondary
@@ -164,6 +170,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           (reveal prompt for yesterday's top author) fires anywhere
           in the app, not just /confessions. */}
       {!isGuest && <ConfessionHubMount />}
+
+      {/* Ghost Date hub — silent mount so GhostDateMatched + Ended +
+          Outcome push events surface as toasts anywhere in the app. */}
+      {!isGuest && <GhostDateHubMount />}
 
       {/* Mobile bottom nav — replaces the vertical PrimarySidebar on
           phones. Hidden on sm and above. */}

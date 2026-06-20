@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2, Hourglass, HelpCircle, Sparkles, Feather, MessageSquare } from 'lucide-react'
+import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2, Hourglass, HelpCircle, Sparkles, Feather, MessageSquare, Heart } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { useUiStore } from '../../../stores/uiStore'
 import { useTimeCapsuleStore } from '../../../stores/timeCapsuleStore'
@@ -37,6 +37,7 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
   const onPersona = pathname.startsWith('/persona')
   const onStory   = pathname.startsWith('/story-chain')
   const onConfess = pathname.startsWith('/confessions')
+  const onGhostD  = pathname.startsWith('/ghost-date')
   const onAbout   = pathname.startsWith('/about')
   const onPricing = pathname.startsWith('/pricing')
   const onAdmin   = pathname.startsWith('/admin')
@@ -141,6 +142,18 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
             title="Confession Box"
           >
             <MessageSquare size={18} />
+          </IconButton>
+        )}
+        {/* Ghost Date — Thursday 9pm IST anonymous text date. */}
+        {!user?.isGuest && (
+          <IconButton
+            variant="ghost"
+            active={onGhostD}
+            onClick={() => navigate('/ghost-date')}
+            aria-label="Ghost Date"
+            title="Ghost Date"
+          >
+            <Heart size={18} />
           </IconButton>
         )}
         {/* Time Capsule — registered users only. Guests can't be
