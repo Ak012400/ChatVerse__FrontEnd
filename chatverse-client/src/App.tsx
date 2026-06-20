@@ -45,6 +45,7 @@ import PersonaPage          from './pages/persona/PersonaPage'
 import StoryChainPage       from './pages/storyChain/StoryChainPage'
 import ConfessionsPage      from './pages/confessions/ConfessionsPage'
 import GhostDatePage        from './pages/ghostDate/GhostDatePage'
+import LoveTrianglePage     from './pages/loveTriangle/LoveTrianglePage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -138,6 +139,10 @@ export default function App() {
           {/* Ghost Date — registered only. The 30-min anonymous date +
               re-pair memory mechanic both need a stable user identity. */}
           <Route path="/ghost-date" element={<RegisteredRoute><GhostDatePage /></RegisteredRoute>} />
+
+          {/* Love Triangle — registered only. 7-day cross-pair drama
+              needs the same stable identity guarantees. */}
+          <Route path="/love-triangle" element={<RegisteredRoute><LoveTrianglePage /></RegisteredRoute>} />
 
           {/* Create-room — registered only */}
           <Route path="/rooms/new" element={<RegisteredRoute><CreateRoomPage /></RegisteredRoute>} />
