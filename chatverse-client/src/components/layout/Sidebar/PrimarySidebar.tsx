@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import {
   MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail,
   Sun, Moon, Hourglass, HelpCircle, Sparkles, Feather, MessageSquare,
-  Heart, Users, Key, type LucideIcon,
+  Heart, Users, Key, Theater, Mic, type LucideIcon,
 } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { useUiStore, type FeatureIconId } from '../../../stores/uiStore'
@@ -80,6 +80,14 @@ const FEATURE_CATALOGUE: Record<FeatureIconId, FeatureIconDef> = {
   cipher: {
     id: 'cipher', icon: Key,             label: 'The Cipher', path: '/cipher',
     matches: (p) => p.startsWith('/cipher'), guest: false,
+  },
+  'pyaar-live': {
+    id: 'pyaar-live', icon: Theater,     label: 'PYAAR LIVE', path: '/pyaar-live',
+    matches: (p) => p.startsWith('/pyaar-live'), guest: false,
+  },
+  mehfil: {
+    id: 'mehfil',     icon: Mic,         label: 'Mehfil', path: '/mehfil',
+    matches: (p) => p.startsWith('/mehfil'), guest: false,
   },
 }
 

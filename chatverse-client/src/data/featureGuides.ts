@@ -31,7 +31,7 @@ export interface FeatureGuide {
   /** One-line elevator pitch shown under the title. */
   tagline:  string
   /** Lucide icon name for the feature tile. */
-  icon:     'hourglass' | 'masks' | 'feather' | 'sparkles' | 'heart' | 'message-circle' | 'ghost' | 'cipher' | 'mic' | 'theater'
+  icon:     'hourglass' | 'masks' | 'feather' | 'sparkles' | 'heart' | 'message-circle' | 'ghost' | 'cipher' | 'mic' | 'theater' | 'pyaar-live'
   status:   GuideStatus
   /** Ordered list of explanation sections. */
   sections: GuideSection[]
@@ -491,6 +491,147 @@ export const FEATURE_GUIDES: FeatureGuide[] = [
           'Members: don\'t collude with other Members to spell out the phrase together — defeats the puzzle.',
           'Hunters: vote-stacking via alts gets the alts banned and dings your trust score.',
           'No naming-and-shaming Hunters who guessed wrong — the chase is the point.',
+        ],
+      },
+    ],
+  },
+
+  // ────────────────────────────────────────────────────────────
+  // PYAAR LIVE — Phase 3 flagship Saturday mass dating show
+  // ────────────────────────────────────────────────────────────
+  {
+    slug:    'pyaar-live',
+    title:   'PYAAR LIVE',
+    tagline: 'Saturdays at 8pm IST. Ten random couples, four rounds, mid-show elimination, audience crowns the top three. The flagship spectacle.',
+    icon:    'theater',
+    status:  'live',
+    sections: [
+      {
+        heading: 'The promise',
+        icon:    'info',
+        body:
+          'Every Saturday at 8pm IST the system picks 20 voyagers who opted in that week and pairs them into 10 random couples — "Couple 1" through "Couple 10". ' +
+          'Each couple gets a private chat thread. Everyone else watches as the spectator audience, sees all 10 couples\' threads in a live grid, and votes for the one they\'re rooting for. ' +
+          'The show runs for 2 hours across 4 rounds with one brutal mid-show elimination — bottom 3 by votes get kicked after Round 2. Top 3 by final votes share the crown.',
+      },
+      {
+        heading: 'The four rounds',
+        icon:    'clock',
+        body: [
+          'Round 1 · **Icebreaker** (30 min) — get to know each other.',
+          'Round 2 · **Free chat** (45 min) — go anywhere with it.',
+          '⚡ ELIMINATION — bottom 3 couples by spectator votes are out.',
+          'Round 3 · **Deeper questions** (30 min) — the surviving 7 go further.',
+          'Round 4 · **Final pitch** (15 min) — sell yourselves to the audience.',
+          '🏆 The top 3 couples by final vote count are crowned.',
+        ],
+      },
+      {
+        heading: 'How to opt in',
+        icon:    'sparkles',
+        body: [
+          'Tap "I\'m in" any time during the week leading up to Saturday.',
+          'Withdraw allowed any time before 8pm IST Saturday — after pairing, you\'re locked in.',
+          'If the pool exceeds 20 people, 20 are randomly picked and the rest sit it out (try again next week).',
+          'If the pool is under 20 but at least 2 people opted in, the show still runs with however many couples can form.',
+        ],
+      },
+      {
+        heading: 'Inside a couple chat',
+        icon:    'users',
+        body: [
+          'You and your partner see each other\'s real usernames from message one — PYAAR LIVE is reveal-first, not anonymous.',
+          'Your thread is private to the two of you DURING the round — but spectators can read EVERYONE\'S threads in real time as part of the show format. Treat every line as on-air.',
+          '1000-character cap per message.',
+          'AI moderation applies to every message as it does in regular chat.',
+        ],
+      },
+      {
+        heading: 'For spectators',
+        icon:    'eye',
+        body: [
+          'You see a grid of 10 couple cards — each with last 5-6 messages, usernames, and a vote button.',
+          'One vote per spectator per show. Switching couples silently retracts the previous vote.',
+          'You can NOT vote on a couple if you\'re a participant in the show.',
+          'Voting matters BEFORE Round 2 ends (drives elimination) AND through Round 4 (drives final ranking).',
+        ],
+      },
+      {
+        heading: 'House rules',
+        icon:    'rules',
+        body: [
+          'Don\'t share off-platform contact info in your couple thread — it\'s live to the audience.',
+          'Vote-stacking via alts dings the trust score of every involved account.',
+          'No targeted harassment of eliminated couples in DMs after the show. The chase is the chase.',
+        ],
+      },
+      {
+        heading: 'Coming in v2',
+        icon:    'info',
+        body: [
+          'Multi-region: USA (8pm EST), Europe (8pm CET), APAC (8pm SGT). Cross-region viewing via live caption translation (we already have the caption + translation pipeline from regular chat).',
+          'Prize pool wiring once token economy ships (Phase 5).',
+          'Spectator Q&A round (Round 3 currently runs as "Deeper questions" auto-prompts — v2 lets audience submit questions live).',
+        ],
+      },
+    ],
+  },
+
+  // ────────────────────────────────────────────────────────────
+  // MEHFIL — Phase 4 creator-room platform
+  // ────────────────────────────────────────────────────────────
+  {
+    slug:    'mehfil',
+    title:   'Mehfil',
+    tagline: 'Host your own room. Eleven templates from open mic to dating show to debate to watch party. Audience tips with virtual gifts.',
+    icon:    'mic',
+    status:  'live',
+    sections: [
+      {
+        heading: 'The promise',
+        icon:    'info',
+        body:
+          'Mehfil is your stage. Pick a template (Open Mic, Dating Show, Debate, Watch Party, Game Night, Podcast, Story Circle, Trivia, Talent Show, Networking, or Custom), schedule it, and invite the world. ' +
+          'When you go live, audience joins, chats, and tips you with virtual gifts. ' +
+          'MVP scope: anyone registered can host. Host verification (ID + ₹100 deposit), revenue share, and payout settlement all ship with Phase 5 (token economy).',
+      },
+      {
+        heading: 'Hosting a Mehfil',
+        icon:    'mic',
+        body: [
+          'Tap "Host a Mehfil" → pick a template, give it a title + description, schedule a start time, set the audience cap (2-5000).',
+          'You can cancel any room that hasn\'t started yet.',
+          'When you\'re ready, tap "Start now" — the room flips to LIVE and the audience can join.',
+          'Tap "End Mehfil" when you\'re done. Closed rooms are read-only forever (no replay yet).',
+        ],
+      },
+      {
+        heading: 'Joining as audience',
+        icon:    'users',
+        body: [
+          'Live rooms show a pulsing LIVE chip with current audience count.',
+          'Tap Join to enter; you can leave any time.',
+          '1000-character cap on messages. The host\'s lines show a HOST badge.',
+          'Send virtual gifts (Rose, Bouquet, Crown) — MVP records intent; settlement lands in Phase 5.',
+        ],
+      },
+      {
+        heading: 'Gifts + revenue split (preview)',
+        icon:    'sparkles',
+        body: [
+          'Rose = 10 tokens · Bouquet = 50 tokens · Crown = 500 tokens',
+          'Phase 5 split: 60-70% to host · 20-25% to platform · 10-15% to prize pool (for tournament-style hosted events).',
+          'Tipping leaderboards land alongside the token ledger.',
+        ],
+      },
+      {
+        heading: 'House rules',
+        icon:    'rules',
+        body: [
+          'You\'re responsible for your room — no harassment, no spam-tip-soliciting.',
+          'AI moderation applies to every message as it does everywhere else.',
+          'Tip-stacking via alts dings every involved account.',
+          'Phase 5 brings real money in — host verification + ID becomes mandatory then.',
         ],
       },
     ],

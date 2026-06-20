@@ -47,6 +47,8 @@ import ConfessionsPage      from './pages/confessions/ConfessionsPage'
 import GhostDatePage        from './pages/ghostDate/GhostDatePage'
 import LoveTrianglePage     from './pages/loveTriangle/LoveTrianglePage'
 import CipherPage           from './pages/cipher/CipherPage'
+import PyaarLivePage        from './pages/pyaarLive/PyaarLivePage'
+import MehfilPage           from './pages/mehfil/MehfilPage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -148,6 +150,14 @@ export default function App() {
           {/* The Cipher — registered only. Members need a stable
               identity for the assigned-fragment claim. */}
           <Route path="/cipher" element={<RegisteredRoute><CipherPage /></RegisteredRoute>} />
+
+          {/* PYAAR LIVE — registered only. Couple participation +
+              vote auditing both anchor on stable identity. */}
+          <Route path="/pyaar-live" element={<RegisteredRoute><PyaarLivePage /></RegisteredRoute>} />
+
+          {/* MEHFIL — registered only. Hosting + tipping both need
+              a stable identity to anchor against. */}
+          <Route path="/mehfil" element={<RegisteredRoute><MehfilPage /></RegisteredRoute>} />
 
           {/* Create-room — registered only */}
           <Route path="/rooms/new" element={<RegisteredRoute><CreateRoomPage /></RegisteredRoute>} />
