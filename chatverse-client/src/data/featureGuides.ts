@@ -18,7 +18,7 @@ export interface GuideSection {
   heading: string
   /** Lucide icon name as a render hint. Keep it optional — the
    *  page resolves a default if not provided. */
-  icon?: 'info' | 'shield' | 'clock' | 'sparkles' | 'users' | 'reply' | 'eye' | 'rules'
+  icon?: 'info' | 'shield' | 'clock' | 'sparkles' | 'users' | 'reply' | 'eye' | 'rules' | 'vote'
   /** A paragraph (string) OR an unordered list (string[]). */
   body: string | string[]
 }
@@ -361,6 +361,75 @@ export const FEATURE_GUIDES: FeatureGuide[] = [
           'Don\'t ask for or share contact info during the 30 minutes — wait for mutual reveal.',
           'No sexual escalation in the first 5 minutes. Slow weather, not a sprint.',
           'Reports route through the same moderation queue as DMs. Repeat offenders get banned from Ghost Date.',
+        ],
+      },
+    ],
+  },
+
+  // ────────────────────────────────────────────────────────────
+  // LOVE TRIANGLE — weekly Sunday 10pm IST 3-person drama
+  // ────────────────────────────────────────────────────────────
+  {
+    slug:    'love-triangle',
+    title:   'Love Triangle',
+    tagline: 'Three strangers. Three pair-chats. One winning duo. Sundays at 10pm IST. The audience watches anonymous excerpts and votes.',
+    icon:    'heart',
+    status:  'live',
+    sections: [
+      {
+        heading: 'The promise',
+        icon:    'info',
+        body:
+          'Every Sunday at 10pm IST, anyone who opted in gets placed into a triangle with two other voyagers. ' +
+          'For the next 7 days, the three of you DM each other in PAIRS — three separate threads, one per pair (A↔B, B↔C, A↔C). ' +
+          'Either side of a pair can choose to "share" any message as an anonymous excerpt on the public Triangle feed where the wider audience watches the drama unfold. ' +
+          'On day 7, chat closes. The audience has 24 hours to vote: which pair has the best chemistry? The winning pair takes the crown.',
+      },
+      {
+        heading: 'Inside your triangle',
+        icon:    'users',
+        body: [
+          'You see all three members by their real usernames — this isn\'t anonymous between you.',
+          'You can only message in the TWO pairs that include you. The third pair (the other two members) is hidden from you — that\'s part of the drama.',
+          '1000-character cap per message.',
+          'Either side of a pair can tap "share" on a message to publish it as an anonymous excerpt. The author can untoggle if they regret it; the sharer can also untoggle their own share.',
+        ],
+      },
+      {
+        heading: 'The public excerpts',
+        icon:    'eye',
+        body: [
+          'Shared excerpts surface on the audience feed labelled as "Member A / B / C" — never your real names.',
+          'The pair-key (A↔B, B↔C, A↔C) is shown so the audience can track each storyline.',
+          'You CAN unshare — but the audience may have already seen it.',
+        ],
+      },
+      {
+        heading: 'Voting + winning',
+        icon:    'sparkles',
+        body: [
+          'On day 7 the chat phase closes. The audience has 24 hours to vote for one of the three pairs.',
+          'Triangle members can\'t vote on their own triangle.',
+          'One vote per spectator. Switching pairs silently retracts the previous vote.',
+          'Highest-vote pair wins. Ties resolve as "tie" (no winner declared).',
+        ],
+      },
+      {
+        heading: 'Privacy guarantees',
+        icon:    'shield',
+        body: [
+          'Public excerpts NEVER carry real usernames — only "Member A/B/C".',
+          'Voter identities are stored server-side but never surfaced; only counts are public.',
+          'After the triangle wraps, it stays in the archive forever; member usernames remain visible only to the three members themselves.',
+        ],
+      },
+      {
+        heading: 'House rules',
+        icon:    'rules',
+        body: [
+          'Don\'t share off-platform contact info inside the pair-chats — keep it on ChatVerse.',
+          'Don\'t share excerpts of someone else\'s message TO embarrass them — share-to-impress, not share-to-shame.',
+          'Reports route through the moderation queue. Trust-score penalties apply.',
         ],
       },
     ],

@@ -17,6 +17,7 @@ import { useTimeCapsuleHub } from '../../hooks/useTimeCapsuleHub'
 import { usePersonaHub } from '../../hooks/usePersonaHub'
 import { useConfessionHub } from '../../hooks/useConfessionHub'
 import { useGhostDateHub } from '../../hooks/useGhostDateHub'
+import { useLoveTriangleHub } from '../../hooks/useLoveTriangleHub'
 import { useAuthStore } from '../../stores/authStore'
 import { useActiveCallStore } from '../../stores/activeCallStore'
 
@@ -36,6 +37,10 @@ function ConfessionHubMount() {
 }
 function GhostDateHubMount() {
   useGhostDateHub()
+  return null
+}
+function LoveTriangleHubMount() {
+  useLoveTriangleHub()
   return null
 }
 
@@ -93,6 +98,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/story-chain') ||
     pathname.startsWith('/confessions') ||
     pathname.startsWith('/ghost-date') ||
+    pathname.startsWith('/love-triangle') ||
     pathname.startsWith('/about')
 
   const showSecondary = !skipSecondary
@@ -174,6 +180,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Ghost Date hub — silent mount so GhostDateMatched + Ended +
           Outcome push events surface as toasts anywhere in the app. */}
       {!isGuest && <GhostDateHubMount />}
+
+      {/* Love Triangle hub — silent mount so TriangleFormed +
+          VotingOpened + Completed events fire as toasts app-wide. */}
+      {!isGuest && <LoveTriangleHubMount />}
 
       {/* Mobile bottom nav — replaces the vertical PrimarySidebar on
           phones. Hidden on sm and above. */}

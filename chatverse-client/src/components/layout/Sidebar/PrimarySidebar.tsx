@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2, Hourglass, HelpCircle, Sparkles, Feather, MessageSquare, Heart } from 'lucide-react'
+import { MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail, Sun, Moon, Gamepad2, Hourglass, HelpCircle, Sparkles, Feather, MessageSquare, Heart, Users } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { useUiStore } from '../../../stores/uiStore'
 import { useTimeCapsuleStore } from '../../../stores/timeCapsuleStore'
@@ -38,6 +38,7 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
   const onStory   = pathname.startsWith('/story-chain')
   const onConfess = pathname.startsWith('/confessions')
   const onGhostD  = pathname.startsWith('/ghost-date')
+  const onLoveT   = pathname.startsWith('/love-triangle')
   const onAbout   = pathname.startsWith('/about')
   const onPricing = pathname.startsWith('/pricing')
   const onAdmin   = pathname.startsWith('/admin')
@@ -154,6 +155,18 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
             title="Ghost Date"
           >
             <Heart size={18} />
+          </IconButton>
+        )}
+        {/* Love Triangle — Sunday 10pm IST 3-person weekly drama. */}
+        {!user?.isGuest && (
+          <IconButton
+            variant="ghost"
+            active={onLoveT}
+            onClick={() => navigate('/love-triangle')}
+            aria-label="Love Triangle"
+            title="Love Triangle"
+          >
+            <Users size={18} />
           </IconButton>
         )}
         {/* Time Capsule — registered users only. Guests can't be
