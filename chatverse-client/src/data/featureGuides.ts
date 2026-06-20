@@ -434,4 +434,65 @@ export const FEATURE_GUIDES: FeatureGuide[] = [
       },
     ],
   },
+
+  // ────────────────────────────────────────────────────────────
+  // THE CIPHER — weekly community ARG
+  // ────────────────────────────────────────────────────────────
+  {
+    slug:    'the-cipher',
+    title:   'The Cipher',
+    tagline: 'Every Monday, a hidden phrase is split into single-word fragments and slipped to a handful of Cipher Members. The rest of you have one week to find them, name them, and reconstruct the line.',
+    icon:    'cipher',
+    status:  'live',
+    sections: [
+      {
+        heading: 'The promise',
+        icon:    'info',
+        body:
+          'Every Monday at 9am IST, the system picks a curated poetic phrase and splits it into single words. ' +
+          'A handful of users get one word each — they\'re Cipher Members for that week. Their job: weave their secret word into conversations naturally, without giving themselves away. ' +
+          'Everyone else is a Hunter. Hunters have until Sunday 11pm IST to (a) name the Members and (b) submit the full phrase. Hunters with ≥ 50% accuracy win a share of the prize pool (tokens land in Phase 5; for now it\'s leaderboard glory).',
+      },
+      {
+        heading: 'If you\'re a Member',
+        icon:    'sparkles',
+        body: [
+          'You\'ll get a private push notification when you\'re picked.',
+          'Your Cipher page shows ONE word. That\'s your fragment for the week.',
+          'Weave it into chats over the week — three different conversations is a good baseline.',
+          'Don\'t announce it, don\'t paste it verbatim into Confessions or Persona DMs as a stunt — the point is for Hunters to NOTICE you using it organically.',
+          'After the round closes, your Member status is public on the archive (revealed or not).',
+        ],
+      },
+      {
+        heading: 'If you\'re a Hunter',
+        icon:    'eye',
+        body: [
+          'You can submit your guess any time before Sunday 11pm IST.',
+          'Last write wins — resubmit as often as you like as you discover new clues.',
+          'A submission has two parts: the phrase guess + the list of suspected Member user-ids.',
+          'Accuracy = (phrase similarity × 0.6) + (member-id recall × 0.4). 50% or higher wins.',
+        ],
+      },
+      {
+        heading: 'After the round',
+        icon:    'rules',
+        body: [
+          'Sunday 11pm IST the round closes. The canonical phrase is revealed publicly.',
+          'Every Member\'s identity surfaces on the archive page — there\'s no opt-out for the round you played.',
+          'Winning Hunters appear on the leaderboard with their accuracy score.',
+          'Token prizes go live in Phase 5; until then it\'s leaderboard + Decoder badge for ≥50% scorers.',
+        ],
+      },
+      {
+        heading: 'House rules',
+        icon:    'rules',
+        body: [
+          'Members: don\'t collude with other Members to spell out the phrase together — defeats the puzzle.',
+          'Hunters: vote-stacking via alts gets the alts banned and dings your trust score.',
+          'No naming-and-shaming Hunters who guessed wrong — the chase is the point.',
+        ],
+      },
+    ],
+  },
 ]

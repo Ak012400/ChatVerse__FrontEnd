@@ -46,6 +46,7 @@ import StoryChainPage       from './pages/storyChain/StoryChainPage'
 import ConfessionsPage      from './pages/confessions/ConfessionsPage'
 import GhostDatePage        from './pages/ghostDate/GhostDatePage'
 import LoveTrianglePage     from './pages/loveTriangle/LoveTrianglePage'
+import CipherPage           from './pages/cipher/CipherPage'
 
 // Guards
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -143,6 +144,10 @@ export default function App() {
           {/* Love Triangle — registered only. 7-day cross-pair drama
               needs the same stable identity guarantees. */}
           <Route path="/love-triangle" element={<RegisteredRoute><LoveTrianglePage /></RegisteredRoute>} />
+
+          {/* The Cipher — registered only. Members need a stable
+              identity for the assigned-fragment claim. */}
+          <Route path="/cipher" element={<RegisteredRoute><CipherPage /></RegisteredRoute>} />
 
           {/* Create-room — registered only */}
           <Route path="/rooms/new" element={<RegisteredRoute><CreateRoomPage /></RegisteredRoute>} />
