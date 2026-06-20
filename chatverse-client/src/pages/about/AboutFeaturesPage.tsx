@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Hourglass, Sparkles, Heart, MessageCircle, Ghost, Mic, Theater, Feather,
-  Info, Shield, Clock, Users, Reply, Eye, BookOpen, ChevronRight,
+  Info, Shield, Clock, Users, Reply, Eye, BookOpen, ChevronRight, Wallet,
 } from 'lucide-react'
 
 import Card from '../../components/ui/Card'
@@ -30,6 +30,8 @@ const featureIconMap: Record<FeatureGuide['icon'], typeof Hourglass> = {
   cipher:           Sparkles,        // (placeholder)
   mic:              Mic,
   theater:          Theater,
+  'pyaar-live':     Theater,
+  wallet:           Wallet,
 }
 
 const sectionIconMap: Record<NonNullable<GuideSection['icon']>, typeof Info> = {
@@ -201,7 +203,10 @@ function GuideBlock({ guide }: { guide: FeatureGuide }) {
 }
 
 function SectionCard({ section }: { section: GuideSection }) {
-  const Icon = section.icon ? sectionIconMap[section.icon] : Info
+  // Fallback to Info if the section's icon isn't in the map — silently
+  // recover from "the type allows it but no glyph mapped" combos. Used
+  // to throw an undefined-component error here (React #130).
+  const Icon = (section.icon && sectionIconMap[section.icon]) || Info
   const isList = Array.isArray(section.body)
   return (
     <Card padding="md">

@@ -597,7 +597,7 @@ export const FEATURE_GUIDES: FeatureGuide[] = [
       },
       {
         heading: 'Hosting a Mehfil',
-        icon:    'mic',
+        icon:    'sparkles',
         body: [
           'Tap "Host a Mehfil" → pick a template, give it a title + description, schedule a start time, set the audience cap (2-5000).',
           'You can cancel any room that hasn\'t started yet.',
