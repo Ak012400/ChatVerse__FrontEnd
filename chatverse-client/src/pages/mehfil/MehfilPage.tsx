@@ -8,6 +8,11 @@ import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import Loader from '../../components/ui/Loader'
 import SoundboardTray from '../../components/sound/SoundboardTray'
+// Per-template specialisations (per-feature isolation policy).
+// Each templateKind that has its own first-class UX gets imported
+// here and dispatched below. Generic `RoomDetailView` is the
+// fallback for templates without a specialised page.
+import DebateRoomPage from './DebateRoomPage'
 import { useToastStore } from '../../stores/toastStore'
 import { useMehfilStore } from '../../stores/mehfilStore'
 import { useMehfilHub } from '../../hooks/useMehfilHub'
@@ -150,7 +155,28 @@ export default function MehfilPage() {
           </button>
           {!openRoom
             ? <div className="flex justify-center py-12"><Loader /></div>
-            : <RoomDetailView
+            // ── Per-template dispatch ──────────────────────────────
+            // Debate rooms land on DebateRoomPage which connects to
+            // its own /hubs/debate. Generic flow (RoomDetailView) is
+            // untouched for all other templates per isolation policy.
+            : openRoom.templateKind === 'debate'
+              ? <DebateRoomPage
+                  room={openRoom}
+                  iAmHost={openRoomIAmHost}
+                  onLeave={async () => {
+                    try {
+                      await leaveRoom(openRoom.id)
+                      setOpenRoomId(null)
+                    } catch (err: any) {
+                      showToast({ type: 'error', title: 'Leave failed', message: err?.message ?? 'Try again.', duration: 4000 })
+                    }
+                  }}
+                  onEndRoom={async () => {
+                    try { const r = await endRoom(openRoom.id); setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost) }
+                    catch (err: any) { showToast({ type: 'error', title: 'End failed', message: err?.message ?? 'Try again.', duration: 4000 }) }
+                  }}
+                />
+              : <RoomDetailView
                 room={openRoom}
                 iAmHost={openRoomIAmHost}
                 messages={openRoomMessages}

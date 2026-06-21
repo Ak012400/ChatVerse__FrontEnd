@@ -693,6 +693,101 @@ html[data-theme="light"] {
   }
 
   /* ─────────────────────────────────────────────────────────────
+     🔥 Debate (per-template Mehfil specialisation)
+
+     Per the per-feature isolation policy, every selector here is
+     prefixed `cv-debate-*` so a tweak NEVER bleeds into another
+     template's CSS. Only DebateRoomPage references these classes.
+  ───────────────────────────────────────────────────────────── */
+
+  /* Stage container — gives the page a warm Pro/Con duel ambience.
+     Uses the same `cv-pop` entrance vocabulary as other room stages,
+     plus a Debate-specific aurora using the orange/red brand pair. */
+  .cv-debate-stage {
+    position: relative;
+    isolation: isolate;
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-1);
+    overflow: hidden;
+  }
+  .cv-debate-stage::before {
+    content: "";
+    position: absolute;
+    inset: -25%;
+    background:
+      radial-gradient(closest-side at 12% 18%, rgba(249, 115, 22, 0.16), transparent 55%),
+      radial-gradient(closest-side at 88% 82%, rgba(239, 68, 68, 0.14), transparent 55%);
+    filter: blur(40px);
+    z-index: -1;
+    animation: cv-aurora-drift 22s ease-in-out infinite;
+  }
+  .cv-debate-stage > * { position: relative; }
+
+  /* Seat tile — hover lift + filled-seat glow. Empty seats stay flat. */
+  .cv-debate-seat {
+    transition:
+      transform 200ms var(--ease-out-soft, ease),
+      border-color 200ms ease,
+      box-shadow 200ms ease;
+  }
+  .cv-debate-seat:hover {
+    transform: translateY(-1px);
+  }
+
+  /* Live-round LED pulse on the round status pill. Same vocabulary
+     as cv-audience-pulse but Debate-coloured (red for "live"). */
+  @keyframes cv-debate-mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); }
+    50%      { box-shadow: 0 0 0 6px transparent; }
+  }
+  .cv-debate-mic-pulse {
+    animation: cv-debate-mic-pulse 2s ease-out infinite;
+  }
+
+  /* Good-question celebration — fires when monitor highlights a chat
+     bubble OR a seat occupant. Soft amber ring + scale pulse so the
+     viewer's eye snaps to the highlighted element. Single-shot
+     (keyframe-driven), no `both` fill so the post-burst state is
+     identical to the resting state (no transform-context leak). */
+  @keyframes cv-debate-highlight-burst {
+    0%   { box-shadow: 0 0 0 0   rgba(252, 211, 77, 0.0); transform: scale(1); }
+    20%  { box-shadow: 0 0 0 6px rgba(252, 211, 77, 0.55); transform: scale(1.03); }
+    60%  { box-shadow: 0 0 0 12px rgba(252, 211, 77, 0.0); transform: scale(1.01); }
+    100% { box-shadow: 0 0 0 0   rgba(252, 211, 77, 0); transform: scale(1); }
+  }
+  .cv-debate-highlight-burst {
+    animation: cv-debate-highlight-burst 1.6s var(--ease-out-soft, ease-out);
+  }
+
+  /* Monitor rail — a subtle accent line on top so the privileged
+     band is visually distinct from audience chrome. */
+  .cv-debate-monitor-rail {
+    position: relative;
+    overflow: hidden;
+  }
+  .cv-debate-monitor-rail::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--color-accent), transparent);
+    opacity: 0.6;
+  }
+
+  /* Reduced-motion — kill the heavy pulses + bursts. Border accent
+     stays because it's static. */
+  @media (prefers-reduced-motion: reduce) {
+    .cv-debate-stage::before,
+    .cv-debate-mic-pulse,
+    .cv-debate-highlight-burst {
+      animation: none !important;
+    }
+    .cv-debate-seat {
+      transition: none !important;
+    }
+  }
+
+  /* ─────────────────────────────────────────────────────────────
      Push-to-talk pulse — radio icon throbs while user holds the key.
      Used on the PttControl button when `holding` is true.
   ───────────────────────────────────────────────────────────── */
