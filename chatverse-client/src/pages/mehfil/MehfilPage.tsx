@@ -13,6 +13,7 @@ import SoundboardTray from '../../components/sound/SoundboardTray'
 // here and dispatched below. Generic `RoomDetailView` is the
 // fallback for templates without a specialised page.
 import DebateRoomPage from './DebateRoomPage'
+import GhostRoomPage from './GhostRoomPage'
 import { useToastStore } from '../../stores/toastStore'
 import { useMehfilStore } from '../../stores/mehfilStore'
 import { useMehfilHub } from '../../hooks/useMehfilHub'
@@ -161,6 +162,23 @@ export default function MehfilPage() {
             // untouched for all other templates per isolation policy.
             : openRoom.templateKind === 'debate'
               ? <DebateRoomPage
+                  room={openRoom}
+                  iAmHost={openRoomIAmHost}
+                  onLeave={async () => {
+                    try {
+                      await leaveRoom(openRoom.id)
+                      setOpenRoomId(null)
+                    } catch (err: any) {
+                      showToast({ type: 'error', title: 'Leave failed', message: err?.message ?? 'Try again.', duration: 4000 })
+                    }
+                  }}
+                  onEndRoom={async () => {
+                    try { const r = await endRoom(openRoom.id); setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost) }
+                    catch (err: any) { showToast({ type: 'error', title: 'End failed', message: err?.message ?? 'Try again.', duration: 4000 }) }
+                  }}
+                />
+            : openRoom.templateKind === 'ghost_date'
+              ? <GhostRoomPage
                   room={openRoom}
                   iAmHost={openRoomIAmHost}
                   onLeave={async () => {

@@ -788,6 +788,91 @@ html[data-theme="light"] {
   }
 
   /* ─────────────────────────────────────────────────────────────
+     🌙 Ghost Room (second per-template Mehfil specialisation)
+
+     Per the per-feature isolation policy, every selector here is
+     prefixed `cv-ghost-*` so a tweak NEVER bleeds into another
+     template's CSS. Only GhostRoomPage references these classes.
+     Visual language: deep violet → rose gradient (anonymous-but-intimate).
+  ───────────────────────────────────────────────────────────── */
+
+  .cv-ghost-stage {
+    position: relative;
+    isolation: isolate;
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-1);
+    overflow: hidden;
+  }
+  .cv-ghost-stage::before {
+    content: "";
+    position: absolute;
+    inset: -25%;
+    background:
+      radial-gradient(closest-side at 15% 20%, rgba(139, 92, 246, 0.18), transparent 55%),
+      radial-gradient(closest-side at 85% 80%, rgba(236, 72, 153, 0.16), transparent 55%);
+    filter: blur(42px);
+    z-index: -1;
+    animation: cv-aurora-drift 24s ease-in-out infinite;
+  }
+  .cv-ghost-stage > * { position: relative; }
+
+  /* Voyager card — anonymous identity tile with hover lift. */
+  .cv-ghost-voyager-card {
+    transition:
+      transform 220ms var(--ease-out-soft, ease),
+      border-color 200ms ease,
+      box-shadow 220ms ease;
+  }
+  .cv-ghost-voyager-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(139, 92, 246, 0.18);
+  }
+
+  /* Pair sheet entrance — same vocab as cv-sheet-up but with a
+     touch of rose glow on first render. The .cv-sheet-up parent
+     handles the actual slide; this just paints the accent. */
+  .cv-ghost-pair-sheet {
+    box-shadow: 0 -8px 48px rgba(236, 72, 153, 0.22);
+  }
+
+  /* Reveal burst — fires on mutual_reveal outcome modal AND on
+     "vibe highlight" from matchmaker. Soft rose ring + scale pulse.
+     No `both` fill-mode → no persistent transform leak. */
+  @keyframes cv-ghost-reveal-burst {
+    0%   { box-shadow: 0 0 0 0   rgba(236, 72, 153, 0.0); transform: scale(1); }
+    18%  { box-shadow: 0 0 0 8px rgba(236, 72, 153, 0.55); transform: scale(1.03); }
+    65%  { box-shadow: 0 0 0 16px rgba(236, 72, 153, 0.0); transform: scale(1.01); }
+    100% { box-shadow: 0 0 0 0   rgba(236, 72, 153, 0); transform: scale(1); }
+  }
+  .cv-ghost-reveal-burst {
+    animation: cv-ghost-reveal-burst 1.8s var(--ease-out-soft, ease-out);
+  }
+
+  /* Matchmaker rail — privileged band accent. */
+  .cv-ghost-monitor-rail {
+    position: relative;
+    overflow: hidden;
+  }
+  .cv-ghost-monitor-rail::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #ec4899, transparent);
+    opacity: 0.6;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cv-ghost-stage::before,
+    .cv-ghost-reveal-burst {
+      animation: none !important;
+    }
+    .cv-ghost-voyager-card {
+      transition: none !important;
+    }
+  }
+
+  /* ─────────────────────────────────────────────────────────────
      Push-to-talk pulse — radio icon throbs while user holds the key.
      Used on the PttControl button when `holding` is true.
   ───────────────────────────────────────────────────────────── */
