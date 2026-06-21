@@ -717,25 +717,31 @@ function RoomDetailView({
             />
             <Button variant="primary" size="sm" loading={sending} disabled={!draft.trim()} onClick={onSend} leftIcon={<Send size={12} />}>Send</Button>
           </div>
-          <div className="relative flex gap-2 flex-wrap">
-            {burstKey && lastTip && (
-              <div className="cv-gift-burst" key={burstKey}>
-                <span>{GIFT_EMOJI[lastTip.giftType] ?? '🎁'}</span>
-              </div>
-            )}
-            {Object.entries(gifts).map(([key, tokens]) => (
-              <button
-                key={key}
-                onClick={() => onTip(key)}
-                className="cv-gift-btn cv-press inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs bg-[var(--color-surface-2)] border border-[var(--color-line)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)]"
-                title={`${key} · ${tokens} tokens`}
-              >
-                <span className="text-base leading-none">{GIFT_EMOJI[key] ?? '🎁'}</span>
-                <span className="capitalize font-medium">{key}</span>
-                <span className="text-[var(--color-fg-faint)] tabular-nums">{tokens}</span>
-              </button>
-            ))}
-          </div>
+          {/* Gift rail — hidden for the host. The backend rejects self-
+              tips ("Host can't tip themselves"), so showing the rail to
+              the host produces a confusing error toast when they tap
+              Rose / Bouquet / Crown out of curiosity. Audience only. */}
+          {!iAmHost && (
+            <div className="relative flex gap-2 flex-wrap">
+              {burstKey && lastTip && (
+                <div className="cv-gift-burst" key={burstKey}>
+                  <span>{GIFT_EMOJI[lastTip.giftType] ?? '🎁'}</span>
+                </div>
+              )}
+              {Object.entries(gifts).map(([key, tokens]) => (
+                <button
+                  key={key}
+                  onClick={() => onTip(key)}
+                  className="cv-gift-btn cv-press inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs bg-[var(--color-surface-2)] border border-[var(--color-line)] text-[var(--color-fg-dim)] hover:text-[var(--color-fg)]"
+                  title={`${key} · ${tokens} tokens`}
+                >
+                  <span className="text-base leading-none">{GIFT_EMOJI[key] ?? '🎁'}</span>
+                  <span className="capitalize font-medium">{key}</span>
+                  <span className="text-[var(--color-fg-faint)] tabular-nums">{tokens}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -778,8 +784,12 @@ function RoomDetailView({
       )}
 
       {/* Drama-flavoured soundboard for the stage — host can drop
-          drumrolls, audience can clap, gasp on big reveals. */}
-      <SoundboardTray scope="mehfil" scopeId={room.id} className="bottom-6 right-4" />
+          drumrolls, audience can clap, gasp on big reveals.
+          Gated on `isLive` so the floating tray doesn't overlap the
+          Start button on scheduled / ended rooms. */}
+      {isLive && (
+        <SoundboardTray scope="mehfil" scopeId={room.id} className="bottom-6 right-4" />
+      )}
     </div>
   )
 }
