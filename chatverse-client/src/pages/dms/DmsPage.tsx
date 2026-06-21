@@ -80,6 +80,13 @@ export default function DmsPage() {
   const [threadLoading, setThreadLoading] = useState(false)
   const [input, setInput] = useState('')
   const [showSearch, setShowSearch] = useState(false)
+  // Optimistic username for a freshly-picked search result. The
+  // conversation list won't include this user yet (no prior thread),
+  // so without this fallback the header shows the generic "Conversation"
+  // placeholder — which reads as "chat didn't open". We hydrate the
+  // header with the picked username immediately, then let `activeConv`
+  // take over once the real conversation lands.
+  const [pendingPickedUsername, setPendingPickedUsername] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
   /* Load conversation list once on mount */
@@ -129,6 +136,23 @@ export default function DmsPage() {
     [conversations, otherUserId],
   )
 
+  // Clear the optimistic picked-name once the real conversation lands
+  // OR the user navigates away to a different thread. Without this we'd
+  // hold a stale name when the user keeps clicking different search
+  // results.
+  useEffect(() => {
+    if (!otherUserId) {
+      setPendingPickedUsername(null)
+      return
+    }
+    if (activeConv) setPendingPickedUsername(null)
+  }, [otherUserId, activeConv])
+
+  /** Best display name for the open thread — prefers the real
+   *  conversation row, falls back to the just-picked search result. */
+  const displayUsername =
+    activeConv?.otherUsername ?? pendingPickedUsername ?? 'Conversation'
+
   // Mobile layout switch — narrow screens can't fit conv-list + thread
   // side by side. When a thread is open, the list hides; when no thread
   // is picked, the list takes the full canvas. Desktop (sm+) keeps the
@@ -163,9 +187,14 @@ export default function DmsPage() {
 
         {showSearch && (
           <NewDmSearch
-            onPick={(uid) => {
-              setShowSearch(false)
+            onPick={(uid, username) => {
+              // Navigate FIRST — this is the user-visible side effect we
+              // care about most. setShowSearch and the optimistic username
+              // are batched after so a same-tick unmount of NewDmSearch
+              // can't race with the route push.
               navigate(`/dms/${uid}`)
+              setPendingPickedUsername(username)
+              setShowSearch(false)
             }}
           />
         )}
@@ -252,10 +281,10 @@ export default function DmsPage() {
             >
               <ArrowLeft size={14} />
             </button>
-            <Avatar name={activeConv?.otherUsername ?? otherUserId} size="sm" />
+            <Avatar name={displayUsername} size="sm" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">
-                {activeConv?.otherUsername ?? 'Conversation'}
+                {displayUsername}
               </p>
               {typingIn.length > 0 && (
                 <p className="text-[11px] text-[var(--color-accent-fg)]">typing…</p>
@@ -327,7 +356,7 @@ export default function DmsPage() {
                 setInput(e.target.value)
                 if (otherUserId) sendDmTyping(otherUserId)
               }}
-              placeholder={`Message ${activeConv?.otherUsername ?? ''}`}
+              placeholder={`Message ${displayUsername === 'Conversation' ? '' : displayUsername}`}
               className="flex-1 h-9 px-3 rounded-md bg-[var(--color-surface-1)] border border-[var(--color-line)]
                 text-sm text-[var(--color-fg)] placeholder:text-[var(--color-fg-mute)]
                 focus:outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)]
@@ -366,7 +395,7 @@ export default function DmsPage() {
 /* ─────────────────────────────────────────────────────────────
    Inline username search (used by the "+" button at the top).
 ───────────────────────────────────────────────────────────── */
-function NewDmSearch({ onPick }: { onPick: (userId: string) => void }) {
+function NewDmSearch({ onPick }: { onPick: (userId: string, username: string) => void }) {
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<{ userId: string; username: string }[]>([])
   const [searching, setSearching] = useState(false)
@@ -409,7 +438,16 @@ function NewDmSearch({ onPick }: { onPick: (userId: string) => void }) {
             hits.map((h) => (
               <button
                 key={h.userId}
-                onClick={() => onPick(h.userId)}
+                type="button"
+                onClick={(e) => {
+                  // Stop the click from bubbling to any parent that
+                  // might intercept (e.g. an outside-click dismisser on
+                  // the search panel) — that race was eating the click
+                  // and the navigation never fired.
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onPick(h.userId, h.username)
+                }}
                 className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-[var(--color-surface-3)] text-left transition-colors"
               >
                 <Avatar name={h.username} size="sm" />

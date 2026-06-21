@@ -31,6 +31,16 @@ import { ChatConnectingLoader } from '../../components/chat/ChatConnectingLoader
 import { useResizableWidth } from '../../hooks/useResizableWidth'
 import { extractSpotifyEmbed } from '../../lib/spotifyExtract'
 import { useTranslation, detectLanguage, preferredLanguageCode } from '../../hooks/useTranslation'
+import type { PollDto } from '../../types/polls'
+
+// Stable empty-array references for Zustand selectors. Without these,
+// `s.byRoom[slug] ?? []` returns a FRESH `[]` every render — Zustand's
+// `Object.is` equality check sees a new reference, schedules another
+// render, selector runs again with another fresh `[]`, infinite loop
+// → React error #185 ("Maximum update depth exceeded"). DmsPage hit
+// the exact same bug earlier and fixed it the same way; see line ~21
+// of DmsPage.tsx for the parallel pattern.
+const EMPTY_POLLS: PollDto[] = []
 
 export default function ChatPage() {
   const { slug } = useParams()
@@ -55,8 +65,12 @@ export default function ChatPage() {
   // listener in useChatHub keeps it fresh). myPicksByPoll persists
   // my own anonymous votes locally so the UI can highlight my pick
   // even though the server won't reveal voter ids back.
-  const activePolls = usePollsStore((s) => (slug ? s.byRoom[slug] ?? [] : []))
-  const closedPolls = usePollsStore((s) => (slug ? s.recentlyClosedByRoom[slug] ?? [] : []))
+  //
+  // IMPORTANT: fall back to the module-level EMPTY_POLLS constant
+  // (NOT inline `[]`). Inline `[]` creates a new reference every
+  // render → Zustand sees "changed" → re-render → infinite loop.
+  const activePolls = usePollsStore((s) => (slug ? s.byRoom[slug] ?? EMPTY_POLLS : EMPTY_POLLS))
+  const closedPolls = usePollsStore((s) => (slug ? s.recentlyClosedByRoom[slug] ?? EMPTY_POLLS : EMPTY_POLLS))
   const hydratePollsRoom = usePollsStore((s) => s.hydrateRoom)
   const [showPollComposer, setShowPollComposer] = useState(false)
   const [myPicksByPoll, setMyPicksByPoll] = useState<Record<string, Set<number>>>({})
