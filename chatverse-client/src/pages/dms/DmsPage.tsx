@@ -163,8 +163,20 @@ export default function DmsPage() {
   return (
     <div className="flex h-full bg-[var(--color-bg)] text-[var(--color-fg)]">
       {/* Conversation list — width draggable on desktop via the
-          DragHandle rendered between this aside and the thread main. */}
+          DragHandle rendered between this aside and the thread main.
+
+          CRITICAL LAYOUT FIX (2026-06-21): the OUTER `<aside>` used to
+          be `w-full shrink-0` unconditionally, so on desktop it stole
+          100% of the parent flex row and the thread `<main>` collapsed
+          to 0 width — chat looked completely empty after picking a
+          conversation. The data-dms-aside style block applied only to
+          the INNER div, which constrained the visible content but NOT
+          the aside's flex item width. Fix: target the OUTER aside with
+          the media-query style block AND use `flex: 0 0 ...` so the
+          flex item itself takes exactly --dms-list-w on desktop, freeing
+          the rest of the row for `<main>`. Mobile still gets w-full. */}
       <aside
+        data-dms-aside-outer
         className={`${onMobileShowList ? 'flex' : 'hidden'} sm:flex
           w-full shrink-0 border-r-0 lg:border-r border-[var(--color-line)] flex-col`}
         style={{
@@ -172,8 +184,13 @@ export default function DmsPage() {
           ['--dms-list-w' as never]: `${listResize.width}px`,
         }}
       >
-        <style>{`@media (min-width: 640px) { [data-dms-aside] { width: var(--dms-list-w); } }`}</style>
-        <div data-dms-aside className="flex flex-col h-full w-full">
+        <style>{`@media (min-width: 640px) {
+          [data-dms-aside-outer] {
+            width: var(--dms-list-w);
+            flex: 0 0 var(--dms-list-w);
+          }
+        }`}</style>
+        <div className="flex flex-col h-full w-full">
         <div className="h-14 px-4 flex items-center justify-between border-b border-[var(--color-line)]">
           <h2 className="text-sm font-semibold tracking-tight">Direct messages</h2>
           <button
