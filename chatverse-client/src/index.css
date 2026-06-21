@@ -158,10 +158,18 @@ html[data-theme="light"] {
 
   /* Route content entrance — the <main> in AppLayout adds .cv-route-in
      on mount, which softens the route-content "pop" right after the
-     splash fades. 220ms is just long enough to read as intentional but
-     short enough to never delay perceived load. */
+     splash fades. 260ms is just long enough to read as intentional but
+     short enough to never delay perceived load.
+
+     IMPORTANT: NO `animation-fill-mode: both` here. Keeping a transform
+     (even translateY(0)) on the route container creates a persistent
+     transform context, which breaks HTML5 drag-and-drop offset math —
+     react-chessboard's drag preview ends up floating off the board.
+     The default fill-mode (`none`) makes the element revert to its
+     natural (no-transform) styles once the animation completes, so
+     drag math is correct. */
   .cv-route-in {
-    animation: cv-route-in 260ms var(--ease-out-soft, ease-out) both;
+    animation: cv-route-in 260ms var(--ease-out-soft, ease-out);
   }
   @keyframes cv-route-in {
     from { opacity: 0; transform: translateY(6px); }
@@ -393,14 +401,20 @@ html[data-theme="light"] {
     to   { transform: rotate(360deg); }
   }
 
-  .cv-fade-up   { animation: cv-fade-up 420ms var(--ease-out-soft) both; }
-  .cv-pop       { animation: cv-pop 280ms var(--ease-spring) both; }
-  .cv-sheet-up  { animation: cv-sheet-up 320ms var(--ease-out-soft) both; }
-  .cv-tab-slide { animation: cv-tab-slide 220ms var(--ease-out-soft) both; }
+  /* fill-mode: backwards — keep the initial (from) state visible
+     BEFORE the animation begins (no flash-of-final-state), but DON'T
+     persist the final (to) transform afterwards. Persistent transforms
+     break HTML5 drag offset math (react-chessboard drag preview floats
+     off the board) and create stacking contexts that affect fixed-
+     position descendants. Native styles (no transform) resume after. */
+  .cv-fade-up   { animation: cv-fade-up 420ms var(--ease-out-soft) backwards; }
+  .cv-pop       { animation: cv-pop 280ms var(--ease-spring) backwards; }
+  .cv-sheet-up  { animation: cv-sheet-up 320ms var(--ease-out-soft) backwards; }
+  .cv-tab-slide { animation: cv-tab-slide 220ms var(--ease-out-soft) backwards; }
 
   /* Stagger — apply to a parent, children fade up in sequence.
      Capped at 9 — beyond that they share the final delay. */
-  .cv-stagger > *               { animation: cv-fade-up 420ms var(--ease-out-soft) both; }
+  .cv-stagger > *               { animation: cv-fade-up 420ms var(--ease-out-soft) backwards; }
   .cv-stagger > *:nth-child(1)  { animation-delay: 0ms; }
   .cv-stagger > *:nth-child(2)  { animation-delay: 55ms; }
   .cv-stagger > *:nth-child(3)  { animation-delay: 110ms; }
