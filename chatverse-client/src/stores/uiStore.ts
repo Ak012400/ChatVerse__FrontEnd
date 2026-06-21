@@ -56,6 +56,16 @@ interface UiState {
   featureOrder: FeatureIconId[]
   moveFeature: (id: FeatureIconId, toIndex: number) => void
   resetFeatureOrder: () => void
+
+  /** Push-to-talk preference for group video calls. When `pttEnabled`
+   *  is true, the mic stays muted by default and only unmutes while
+   *  the user holds `pttKey` (KeyboardEvent.code, e.g. 'Space'). When
+   *  false, mic behaves as always-on with manual mute button.
+   *  Used by `usePushToTalk` hook in HostedGroupPage + RandomGroupPage. */
+  pttEnabled: boolean
+  pttKey: string
+  setPttEnabled: (v: boolean) => void
+  setPttKey: (key: string) => void
 }
 
 /**
@@ -90,6 +100,15 @@ export const useUiStore = create<UiState>()(
           return { featureOrder: current }
         }),
       resetFeatureOrder: () => set(() => ({ featureOrder: DEFAULT_FEATURE_ORDER })),
+
+      // Push-to-talk defaults to OFF — always-on mic is friendlier for
+      // first-time users. Power users in noisy 6+ person calls flip it
+      // on once they realise it's there. Spacebar is the universal
+      // walkie-talkie key (Discord/Steam-trained muscle memory).
+      pttEnabled: false,
+      pttKey: 'Space',
+      setPttEnabled: (v) => set({ pttEnabled: v }),
+      setPttKey: (key) => set({ pttKey: key }),
     }),
     {
       name: 'cv_ui',

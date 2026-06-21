@@ -18,6 +18,7 @@ import { useToastStore } from '../../stores/toastStore'
 import { useAuthStore } from '../../stores/authStore'
 import { useChatHub } from '../../hooks/useChatHub'
 import { useYouTubeSync, youtubeVideoIdFromEmbedUrl } from '../../hooks/useYouTubeSync'
+import SoundboardTray from '../../components/sound/SoundboardTray'
 import * as signalR from '@microsoft/signalr'
 
 /**
@@ -753,6 +754,10 @@ function TheaterUI({ roomName }: { roomName: string }) {
         isMyScreenSharing={isMyScreenSharing}
         onToggleScreenShare={toggleScreenShare}
       />
+
+      {/* Drama-flavoured soundboard for everyone in the watch party.
+          Drumroll on reveals, applause on big moments, etc. */}
+      <SoundboardTray scope="theater" scopeId={roomName} className="bottom-24 right-4" />
 
       {/* ── Manage drawer (creator-only) ──────────────────────────
             Right-side slide-in panel listing every participant with a

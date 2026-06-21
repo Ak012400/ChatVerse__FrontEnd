@@ -8,6 +8,7 @@ import {
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import Loader from '../../components/ui/Loader'
+import SoundboardTray from '../../components/sound/SoundboardTray'
 import { useToastStore } from '../../stores/toastStore'
 import { usePyaarLiveStore } from '../../stores/pyaarLiveStore'
 import { usePyaarLiveHub } from '../../hooks/usePyaarLiveHub'
@@ -528,6 +529,10 @@ function SpectatorViewBlock({
           onReaction={(emoji) => handleReaction(emoji, drilled.couple.id)}
         />
       )}
+
+      {/* Spectator-only soundboard — drumroll on a couple reveal,
+          applause when a fav couple climbs the vote count, etc. */}
+      <SoundboardTray scope="pyaar-live" scopeId={show.id} className="bottom-6 right-4" />
     </div>
   )
 }

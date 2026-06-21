@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
 import { useDmStore, type DmMessage } from '../stores/dmStore'
 import { useCallStore } from '../stores/callStore'
+import { usePollsStore } from '../stores/pollsStore'
 import type { Message } from '../types'
 import type {
   AmbientQuestion,
@@ -13,6 +14,7 @@ import type {
   RollingQuizLeaderboard,
   RollingQuizScored,
 } from '../types/games'
+import type { PollDto } from '../types/polls'
 
 const HUB_URL = (import.meta.env.VITE_API_URL ?? 'https://localhost:7217/api').replace('/api', '') + '/hubs/chat'
 
@@ -328,6 +330,23 @@ export function useChatHub() {
       showToast({ type: 'error', title: 'Call error', message: msg, duration: 4000 })
     })
 
+    // ── In-room polls (parity polish) ───────────────────────────
+    // ChatHub fans all three lifecycle events to the room SignalR
+    // group. We mirror them into pollsStore so any open ChatPage
+    // re-renders without polling.
+    hub.on('PollCreated', (p: PollDto) => {
+      if (!p?.id || !p?.roomSlug) return
+      usePollsStore.getState().upsertPoll(p)
+    })
+    hub.on('PollUpdated', (p: PollDto) => {
+      if (!p?.id || !p?.roomSlug) return
+      usePollsStore.getState().upsertPoll(p)
+    })
+    hub.on('PollClosed', (p: PollDto) => {
+      if (!p?.id || !p?.roomSlug) return
+      usePollsStore.getState().closePoll(p)
+    })
+
     const startPromise = hub.start()
       .then(() => {
         connectionRef.current = hub
@@ -426,6 +445,46 @@ export function useChatHub() {
       return safeInvoke('SubmitRollingQuizAnswer', questionId, choiceIndex)
     },
     getRollingQuizState: () => safeInvoke('GetRollingQuizState'),
+
+    // ── In-room polls (parity polish) ───────────────────────────
+    // CreatePoll returns the new pollId; GetActivePollsForRoom returns
+    // a fresh array. Both bypass safeInvoke because we want the result.
+    createPoll: async (
+      slug: string, question: string, options: string[],
+      durationSeconds: number, multiSelect: boolean, anonymous: boolean,
+    ): Promise<string | null> => {
+      if (connectionRef.current?.state !== signalR.HubConnectionState.Connected) {
+        await connect()
+      }
+      if (connectionRef.current?.state !== signalR.HubConnectionState.Connected) return null
+      try {
+        const id = await connectionRef.current.invoke<string | null>(
+          'CreatePoll', slug, question, options, durationSeconds, multiSelect, anonymous,
+        )
+        return id
+      } catch (err: any) {
+        const msg = String(err?.message ?? '')
+        showToast({
+          type: 'error',
+          title: 'Poll failed',
+          message: msg.length > 0 && msg.length < 120 ? msg : 'Could not create the poll.',
+          duration: 3000,
+        })
+        return null
+      }
+    },
+    votePoll: (pollId: string, optionIndex: number) =>
+      safeInvoke('Vote', pollId, optionIndex),
+    closePoll: (pollId: string) => safeInvoke('ClosePoll', pollId),
+    getActivePollsForRoom: async (slug: string): Promise<PollDto[]> => {
+      if (connectionRef.current?.state !== signalR.HubConnectionState.Connected) return []
+      try {
+        const rows = await connectionRef.current.invoke<PollDto[]>('GetActivePollsForRoom', slug)
+        return Array.isArray(rows) ? rows : []
+      } catch {
+        return []
+      }
+    },
 
     // Read from React state — calling consumers re-render when this
     // flips. The ref check (`connectionRef.current?.state`) was the

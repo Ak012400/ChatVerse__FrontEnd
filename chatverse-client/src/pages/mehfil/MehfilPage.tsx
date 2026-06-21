@@ -7,6 +7,7 @@ import {
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import Loader from '../../components/ui/Loader'
+import SoundboardTray from '../../components/sound/SoundboardTray'
 import { useToastStore } from '../../stores/toastStore'
 import { useMehfilStore } from '../../stores/mehfilStore'
 import { useMehfilHub } from '../../hooks/useMehfilHub'
@@ -775,6 +776,10 @@ function RoomDetailView({
           </div>
         </details>
       )}
+
+      {/* Drama-flavoured soundboard for the stage — host can drop
+          drumrolls, audience can clap, gasp on big reveals. */}
+      <SoundboardTray scope="mehfil" scopeId={room.id} className="bottom-6 right-4" />
     </div>
   )
 }
