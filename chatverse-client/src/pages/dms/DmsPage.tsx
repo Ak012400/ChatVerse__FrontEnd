@@ -188,10 +188,16 @@ export default function DmsPage() {
         {showSearch && (
           <NewDmSearch
             onPick={(uid, username) => {
-              // Navigate FIRST — this is the user-visible side effect we
-              // care about most. setShowSearch and the optimistic username
-              // are batched after so a same-tick unmount of NewDmSearch
-              // can't race with the route push.
+              // Pre-populate the conversation in dmStore BEFORE navigate.
+              // The AppLayout `key={pathname}` remount destroys DmsPage's
+              // local state on route change, so any optimistic data has
+              // to live in the store to survive. This guarantees the new
+              // DmsPage mount sees the picked user already in the
+              // conversation list + `activeConv` lookup succeeds → header
+              // shows real username + the list row is visually selected.
+              useDmStore.getState().upsertOptimisticConversation(uid, username, me?.userId ?? '')
+              // Now navigate. The route change triggers the remount;
+              // the new instance reads the store and renders correctly.
               navigate(`/dms/${uid}`)
               setPendingPickedUsername(username)
               setShowSearch(false)
