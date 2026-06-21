@@ -28,6 +28,8 @@ import { useCaptionBroadcaster } from '../../hooks/useCaptionBroadcaster'
 import { useCaptions, type CaptionLine } from '../../hooks/useCaptions'
 import { useCaptionTTS } from '../../hooks/useCaptionTTS'
 import { CaptionOverlay, CaptionsToggle, CaptionTTSToggle } from '../../components/call/CaptionOverlay'
+import PttControl from '../../components/call/PttControl'
+import { usePushToTalk } from '../../hooks/usePushToTalk'
 import Button from '../../components/ui/Button'
 import IconButton from '../../components/ui/IconButton'
 import Badge from '../../components/ui/Badge'
@@ -293,6 +295,12 @@ function GroupRoomUI({
     setMicOn(next)
   }
 
+  // Push-to-talk — when the user has flipped on PTT in CallSettings, the
+  // hook owns the mic: starts muted, holds-on-key. onMicChange keeps the
+  // visual mic button accurate. `enabled=true` because we're already
+  // inside the in-call sub-component (localParticipant always present).
+  const ptt = usePushToTalk({ enabled: true, onMicChange: setMicOn })
+
   const toggleCam = async () => {
     const next = !camOn
     await localParticipant.setCameraEnabled(next)
@@ -503,6 +511,7 @@ function GroupRoomUI({
             />
           </>
         )}
+        <PttControl enabled={true} holding={ptt.isHolding} />
         <button
           onClick={leave}
           className="h-11 px-5 rounded-md text-sm font-medium bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-white inline-flex items-center gap-1.5 transition-colors"

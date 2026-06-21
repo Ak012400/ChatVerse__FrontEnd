@@ -678,12 +678,24 @@ html[data-theme="light"] {
     animation: cv-pyaar-video-pulse 1.6s ease-out infinite;
   }
 
+  /* ─────────────────────────────────────────────────────────────
+     Push-to-talk pulse — radio icon throbs while user holds the key.
+     Used on the PttControl button when `holding` is true.
+  ───────────────────────────────────────────────────────────── */
+  @keyframes cv-ptt-pulse {
+    0%, 100% { transform: scale(1);    opacity: 1; }
+    50%      { transform: scale(1.18); opacity: 0.7; }
+  }
+  .cv-ptt-pulse {
+    animation: cv-ptt-pulse 700ms ease-in-out infinite;
+  }
+
   /* Reduced-motion — kill the heavy stuff, keep the basics. */
   @media (prefers-reduced-motion: reduce) {
     .cv-fade-up, .cv-pop, .cv-sheet-up, .cv-tab-slide,
     .cv-stagger > *, .cv-shine, .cv-aurora::before, .cv-skeleton,
     .cv-mehfil-stage::before, .cv-audience-dot, .cv-gift-burst,
-    .cv-pyaar-float, .cv-pyaar-video-dot {
+    .cv-pyaar-float, .cv-pyaar-video-dot, .cv-ptt-pulse {
       animation: none !important;
     }
     .cv-hover-lift, .cv-press, .cv-mehfil-bubble, .cv-gift-btn,

@@ -1,11 +1,13 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Smile, Paperclip, Send, Hash, Users, ShieldAlert, Ban, Gamepad2, X, Disc3 } from 'lucide-react'
+import { Smile, Paperclip, Send, Hash, Users, ShieldAlert, Ban, Gamepad2, X, Disc3, BarChart3 } from 'lucide-react'
 import GameLauncherModal from '../../components/games/GameLauncherModal'
 import ActiveGamesPanel from '../../components/games/ActiveGamesPanel'
 import AmbientQuestionCard from '../../components/chat/AmbientQuestionCard'
 import TechNewsPanel from '../../components/chat/TechNewsPanel'
 import RollingQuizPanel from '../../components/chat/RollingQuizPanel'
+import PollComposerSheet from '../../components/polls/PollComposerSheet'
+import PollCard from '../../components/polls/PollCard'
 import QuizRoomPage from '../games/QuizRoomPage'
 import EmojiPicker, { Theme } from 'emoji-picker-react'
 import * as nsfwjs from 'nsfwjs'
@@ -15,6 +17,7 @@ import { useChatStore } from '../../stores/chatStore'
 import { useAuthStore } from '../../stores/authStore'
 import { useChatHub } from '../../hooks/useChatHub'
 import { useToastStore } from '../../stores/toastStore'
+import { usePollsStore } from '../../stores/pollsStore'
 
 import Loader from '../../components/ui/Loader'
 import Avatar from '../../components/ui/Avatar'
@@ -44,7 +47,19 @@ export default function ChatPage() {
   const {
     joinRoom, leaveRoom, sendTyping, sendMessage, isConnected,
     submitRollingQuizAnswer, getRollingQuizState, reactToMessage,
+    createPoll, votePoll, closePoll, getActivePollsForRoom,
   } = useChatHub()
+
+  // ── In-room polls (parity polish) ───────────────────────────────
+  // The active list comes straight from pollsStore (singleton hub
+  // listener in useChatHub keeps it fresh). myPicksByPoll persists
+  // my own anonymous votes locally so the UI can highlight my pick
+  // even though the server won't reveal voter ids back.
+  const activePolls = usePollsStore((s) => (slug ? s.byRoom[slug] ?? [] : []))
+  const closedPolls = usePollsStore((s) => (slug ? s.recentlyClosedByRoom[slug] ?? [] : []))
+  const hydratePollsRoom = usePollsStore((s) => s.hydrateRoom)
+  const [showPollComposer, setShowPollComposer] = useState(false)
+  const [myPicksByPoll, setMyPicksByPoll] = useState<Record<string, Set<number>>>({})
 
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -177,6 +192,12 @@ export default function ChatPage() {
         .finally(() => {
           if (isMounted) setIsChatLoading(false)
         })
+      // Parity polish: pull any in-flight polls for this room so a
+      // late-joiner sees the active vote without waiting for the next
+      // PollUpdated push. Fire-and-forget.
+      getActivePollsForRoom(slug).then((rows) => {
+        if (isMounted) hydratePollsRoom(slug, rows)
+      }).catch(() => {})
     }, 300)
 
     return () => {
@@ -347,6 +368,18 @@ export default function ChatPage() {
               {embeddedGameSlug ? 'Game running' : 'Start a game'}
             </button>
           )}
+          {/* Parity polish: in-room poll trigger. Visible everywhere
+              there's a slug — every lounge can host a poll. */}
+          {slug && (
+            <button
+              onClick={() => setShowPollComposer(true)}
+              className="hidden sm:inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium bg-[var(--color-surface-2)] hover:bg-[var(--color-accent-soft)] text-[var(--color-fg-dim)] hover:text-[var(--color-accent-fg)] border border-[var(--color-line)] transition-colors"
+              title="Start a poll"
+            >
+              <BarChart3 size={12} />
+              Poll
+            </button>
+          )}
           {liveCount > 0 && (
             <div className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--color-fg-faint)]">
               <Users size={13} />
@@ -373,6 +406,18 @@ export default function ChatPage() {
           becomes the embedded panel's slug. The sourceChatSlug
           arg tags the resulting game so OTHER members of this chat
           see it in their Active Games panel (when Public). */}
+      {/* In-room poll composer — opens via the "Poll" header button.
+          createPoll returns the new id (or null on error); the server's
+          PollCreated push will fan back into pollsStore for everyone. */}
+      <PollComposerSheet
+        open={showPollComposer}
+        onClose={() => setShowPollComposer(false)}
+        onCreate={async ({ question, options, durationSeconds, multiSelect, anonymous }) => {
+          if (!slug) return
+          await createPoll(slug, question, options, durationSeconds, multiSelect, anonymous)
+        }}
+      />
+
       <GameLauncherModal
         open={showGameLauncher}
         onClose={() => setShowGameLauncher(false)}
@@ -493,6 +538,48 @@ export default function ChatPage() {
           onSeedReply={(text) => { sendMessage(slug, text) }}
           onDismiss={() => dismissAmbient(slug, ambientQuestion.id)}
         />
+      )}
+
+      {/* Live polls + recently-closed reveal cards — pin above the
+          message stream so vote bars stay visible while voters chat. */}
+      {slug && (activePolls.length > 0 || closedPolls.length > 0) && (
+        <div className="px-5 pt-2 space-y-2">
+          {activePolls.map((p) => (
+            <PollCard
+              key={p.id}
+              poll={p}
+              myUserId={user?.userId}
+              myPicks={myPicksByPoll[p.id] ?? new Set<number>()}
+              onVote={async (i) => {
+                // Optimistic local pick — server returns updated counts
+                // via PollUpdated so the bars catch up within a tick.
+                setMyPicksByPoll((prev) => {
+                  const cur = new Set(prev[p.id] ?? [])
+                  if (p.multiSelect) {
+                    if (cur.has(i)) cur.delete(i); else cur.add(i)
+                  } else {
+                    // Single-choice: clicking same option clears; new option replaces.
+                    if (cur.has(i) && cur.size === 1) cur.clear()
+                    else { cur.clear(); cur.add(i) }
+                  }
+                  return { ...prev, [p.id]: cur }
+                })
+                await votePoll(p.id, i)
+              }}
+              onClose={p.creatorUserId === user?.userId ? () => closePoll(p.id) : null}
+            />
+          ))}
+          {closedPolls.map((p) => (
+            <PollCard
+              key={p.id}
+              poll={p}
+              myUserId={user?.userId}
+              myPicks={myPicksByPoll[p.id] ?? new Set<number>()}
+              onVote={() => { /* closed — no-op */ }}
+              onClose={null}
+            />
+          ))}
+        </div>
       )}
 
       {/* Messages */}

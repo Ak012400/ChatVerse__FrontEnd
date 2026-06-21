@@ -26,6 +26,9 @@ import { useCaptionBroadcaster } from '../../hooks/useCaptionBroadcaster'
 import { useCaptions, type CaptionLine } from '../../hooks/useCaptions'
 import { useCaptionTTS } from '../../hooks/useCaptionTTS'
 import { CaptionOverlay, CaptionsToggle, CaptionTTSToggle } from '../../components/call/CaptionOverlay'
+import PttControl from '../../components/call/PttControl'
+import { usePushToTalk } from '../../hooks/usePushToTalk'
+import SoundboardTray from '../../components/sound/SoundboardTray'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import IconButton from '../../components/ui/IconButton'
@@ -345,6 +348,11 @@ function HostedGroupUI({
     setMicOn(next)
   }
 
+  // Push-to-talk — opt-in walkie-talkie mic. See RandomGroupPage / hook
+  // docstring. Keeps `micOn` state synchronised so the mic button icon
+  // tracks reality whether the user holds the key or taps the button.
+  const ptt = usePushToTalk({ enabled: true, onMicChange: setMicOn })
+
   const toggleCam = async () => {
     const next = !camOn
     await localParticipant.setCameraEnabled(next)
@@ -448,6 +456,9 @@ function HostedGroupUI({
             />
           </>
         )}
+        <PttControl enabled={true} holding={ptt.isHolding} />
+        {/* Drama-flavoured soundboard — fixed-position floating tray. */}
+        <SoundboardTray scope="video" scopeId={roomName} className="bottom-24 right-4" />
         <button
           onClick={leave}
           className="h-11 px-5 rounded-md text-sm font-medium bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-white inline-flex items-center gap-1.5 transition-colors"
