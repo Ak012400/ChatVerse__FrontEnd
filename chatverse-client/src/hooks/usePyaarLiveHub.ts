@@ -8,6 +8,8 @@ import type {
   HistoryResponse, PyaarMessage,
   ShowStartedEvent, RoundAdvancedEvent, CoupleMessageEvent, SpectatorMessageEvent,
   EliminationAnnouncedEvent, ShowEndedEvent,
+  DrilledCoupleView, EliminatedThreadsResponse, RecentReactionsResponse,
+  CoupleSpectatorCountChangedEvent, CoupleVideoStateChangedEvent, ReactionFlashedEvent,
 } from '../types/pyaarLive'
 
 const HUB_URL =
@@ -90,7 +92,34 @@ export function usePyaarLiveHub() {
 
     hub.on('SpectatorMessage', (m: SpectatorMessageEvent) => {
       if (!m?.id) return
-      usePyaarLiveStore.getState().appendSpectatorMessage(m)
+      const store = usePyaarLiveStore.getState()
+      store.appendSpectatorMessage(m)
+      // Also append into the drilled-in view if the user is currently
+      // expanded on that couple.
+      if (store.drilled?.couple.id === m.coupleId) {
+        store.appendDrilledMessage(m)
+      }
+    })
+
+    // Ecosystem push events ────────────────────────────────────
+    hub.on('CoupleSpectatorCountChanged', (p: CoupleSpectatorCountChangedEvent) => {
+      if (!p?.coupleId) return
+      usePyaarLiveStore.getState().applyCoupleSpectatorCount(p.coupleId, p.spectatorCount)
+    })
+
+    hub.on('CoupleVideoStateChanged', (p: CoupleVideoStateChangedEvent) => {
+      if (!p?.coupleId) return
+      usePyaarLiveStore.getState().applyCoupleVideoState(p.coupleId, p.videoActive)
+    })
+
+    hub.on('ReactionFlashed', (p: ReactionFlashedEvent) => {
+      if (!p?.emoji) return
+      usePyaarLiveStore.getState().pushReaction({
+        id:        Math.random().toString(36).slice(2),
+        emoji:     p.emoji,
+        coupleId:  p.coupleId,
+        createdAt: Date.now(),
+      })
     })
 
     hub.on('EliminationAnnounced', (p: EliminationAnnouncedEvent) => {
@@ -207,6 +236,32 @@ export function usePyaarLiveHub() {
     getMyHistory: async (): Promise<HistoryResponse> => {
       await ensureConnected()
       return sharedConnectionRef.current!.invoke<HistoryResponse>('GetMyHistory')
+    },
+
+    // ── Ecosystem ──────────────────────────────────────────────
+    watchCouple: async (coupleId: string): Promise<DrilledCoupleView> => {
+      await ensureConnected()
+      return sharedConnectionRef.current!.invoke<DrilledCoupleView>('WatchCouple', coupleId)
+    },
+    unwatchCouple: async (coupleId: string): Promise<{ ok: boolean }> => {
+      await ensureConnected()
+      return sharedConnectionRef.current!.invoke<{ ok: boolean }>('UnwatchCouple', coupleId)
+    },
+    toggleCoupleVideo: async (active: boolean): Promise<{ ok: boolean; videoActive: boolean; livekitRoomName: string | null }> => {
+      await ensureConnected()
+      return sharedConnectionRef.current!.invoke<{ ok: boolean; videoActive: boolean; livekitRoomName: string | null }>('ToggleCoupleVideo', active)
+    },
+    sendReaction: async (emoji: string, coupleId?: string): Promise<{ ok: boolean }> => {
+      await ensureConnected()
+      return sharedConnectionRef.current!.invoke<{ ok: boolean }>('SendReaction', emoji, coupleId ?? null)
+    },
+    getEliminatedThreads: async (): Promise<EliminatedThreadsResponse> => {
+      await ensureConnected()
+      return sharedConnectionRef.current!.invoke<EliminatedThreadsResponse>('GetEliminatedThreads')
+    },
+    getRecentReactions: async (): Promise<RecentReactionsResponse> => {
+      await ensureConnected()
+      return sharedConnectionRef.current!.invoke<RecentReactionsResponse>('GetRecentReactions')
     },
   }
 }

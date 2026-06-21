@@ -11,13 +11,14 @@ interface MehfilState {
   myRooms:        MehfilRoomCard[]
 
   openRoom:       MehfilRoomCard | null
+  openRoomIAmHost: boolean
   openRoomMessages: MehfilMessage[]
   openRoomAttendees: MehfilAttendee[]
   openRoomTips:   MehfilTip[]
 
   setDiscover:    (rooms: MehfilRoomCard[], templates: MehfilTemplate[], gifts: Record<string, number>) => void
   setMyRooms:     (rooms: MehfilRoomCard[]) => void
-  setOpenRoom:    (r: MehfilRoomCard | null, messages?: MehfilMessage[], attendees?: MehfilAttendee[], tips?: MehfilTip[]) => void
+  setOpenRoom:    (r: MehfilRoomCard | null, iAmHost?: boolean, messages?: MehfilMessage[], attendees?: MehfilAttendee[], tips?: MehfilTip[]) => void
   appendMessage:  (m: MehfilMessage) => void
   applyAudienceChange: (currentCount: number) => void
   applyTip:       (t: MehfilTip, total: number) => void
@@ -30,6 +31,7 @@ export const useMehfilStore = create<MehfilState>((set) => ({
   gifts:            {},
   myRooms:          [],
   openRoom:         null,
+  openRoomIAmHost:  false,
   openRoomMessages: [],
   openRoomAttendees: [],
   openRoomTips:     [],
@@ -38,9 +40,10 @@ export const useMehfilStore = create<MehfilState>((set) => ({
     set(() => ({ discoverRooms: rooms, templates, gifts })),
   setMyRooms:  (rooms) => set(() => ({ myRooms: rooms })),
 
-  setOpenRoom: (r, messages, attendees, tips) =>
+  setOpenRoom: (r, iAmHost, messages, attendees, tips) =>
     set(() => ({
       openRoom: r,
+      openRoomIAmHost: iAmHost ?? false,
       openRoomMessages: messages ?? [],
       openRoomAttendees: attendees ?? [],
       openRoomTips: tips ?? [],

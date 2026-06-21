@@ -21,14 +21,17 @@ export interface PyaarRegistration {
 }
 
 export interface CoupleSummary {
-  id:            string
-  codename:      string
-  coupleNumber:  number
-  voteCount:     number
-  eliminated:    boolean
-  finalRank:     number | null
-  memberA:       string
-  memberB:       string
+  id:                string
+  codename:          string
+  coupleNumber:      number
+  voteCount:         number
+  eliminated:        boolean
+  eliminatedInRound: number | null
+  finalRank:         number | null
+  memberA:           string
+  memberB:           string
+  videoActive:       boolean
+  spectatorCount:    number
 }
 
 export interface ShowDto {
@@ -40,6 +43,8 @@ export interface ShowDto {
   currentRoundLabel:   string | null
   currentRoundEndsAt:  string | null
   prizePool:           number
+  hostedBy:            string         // "ChatVerse System" today
+  spectatorCount:      number         // show-wide live spectator count
   iAmInCouple:         boolean
   myCoupleId:          string | null
   couples:             CoupleSummary[]
@@ -133,4 +138,68 @@ export interface EliminationAnnouncedEvent {
 export interface ShowEndedEvent {
   showId:  string
   winners: Array<{ coupleId: string; codename: string; rank: number; voteCount: number }>
+}
+
+// ── Ecosystem additions (drill-down / video / reactions) ──────
+
+export interface DrilledCoupleDto {
+  id:                string
+  codename:          string
+  coupleNumber:      number
+  memberA:           string
+  memberB:           string
+  voteCount:         number
+  eliminated:        boolean
+  eliminatedInRound: number | null
+  finalRank:         number | null
+  videoActive:       boolean
+  livekitRoomName:   string | null
+}
+export interface DrilledCoupleView {
+  couple:   DrilledCoupleDto
+  messages: PyaarMessage[]
+}
+
+export interface EliminatedThreadRow {
+  couple: {
+    id:                string
+    codename:          string
+    coupleNumber:      number
+    memberA:           string
+    memberB:           string
+    voteCount:         number
+    eliminatedInRound: number | null
+    eliminatedAt:      string
+  }
+  messages: Array<{
+    id:             string
+    senderUsername: string
+    roundNumber:    number
+    content:        string
+    createdAt:      string
+  }>
+}
+export interface EliminatedThreadsResponse {
+  count:      number
+  eliminated: EliminatedThreadRow[]
+}
+
+export interface RecentReactionsResponse {
+  count:     number
+  reactions: Array<{ emoji: string; coupleId: string | null; createdAt: string }>
+}
+
+export interface CoupleSpectatorCountChangedEvent {
+  coupleId:       string
+  spectatorCount: number
+}
+export interface CoupleVideoStateChangedEvent {
+  coupleId:        string
+  videoActive:     boolean
+  livekitRoomName: string | null
+}
+export interface ReactionFlashedEvent {
+  emoji:     string
+  coupleId:  string | null
+  createdAt: string
 }
