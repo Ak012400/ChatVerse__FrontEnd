@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Theater, BookOpen, Send, Heart, Trophy, Crown, Vote, Sparkles,
+  X, Eye, Video, VideoOff, Skull,
 } from 'lucide-react'
 
 import Button from '../../components/ui/Button'
@@ -10,7 +11,19 @@ import Loader from '../../components/ui/Loader'
 import { useToastStore } from '../../stores/toastStore'
 import { usePyaarLiveStore } from '../../stores/pyaarLiveStore'
 import { usePyaarLiveHub } from '../../hooks/usePyaarLiveHub'
-import type { ShowDto, MyCoupleDto, SpectatorCoupleRow } from '../../types/pyaarLive'
+import type {
+  ShowDto, MyCoupleDto, SpectatorCoupleRow,
+  DrilledCoupleView, EliminatedThreadRow, PyaarMessage,
+} from '../../types/pyaarLive'
+
+// 10 distinct hues per couple-number for visual identification on the
+// control-room grid. Kept warm + brand-adjacent (rose/violet/amber).
+const COUPLE_TINTS: Record<number, string> = {
+  1:  '#f43f5e',  2:  '#ec4899',  3:  '#d946ef',  4:  '#a855f7',  5:  '#8b5cf6',
+  6:  '#6366f1',  7:  '#3b82f6',  8:  '#06b6d4',  9:  '#10b981', 10:  '#f59e0b',
+}
+
+const REACTION_SET = ['🔥', '😭', '😍', '🫶', '😱', '💀']
 
 // ============================================================
 //  /pyaar-live — Saturday 8pm IST mass dating show
@@ -373,7 +386,7 @@ function Bubble({ m }: { m: { content: string; mine?: boolean; senderUsername: s
   )
 }
 
-// ─── Spectator grid ─────────────────────────────────────────
+// ─── Control room (the new spectator experience) ───────────
 
 function SpectatorViewBlock({
   show, spectator, myVote, onVote,
@@ -383,58 +396,447 @@ function SpectatorViewBlock({
   myVote: string | null
   onVote: (coupleId: string) => void
 }) {
+  const { drilled, eliminatedThreads, reactions, setDrilled, setEliminatedThreads, pruneReactions } = usePyaarLiveStore()
+  const {
+    watchCouple, unwatchCouple, sendReaction, getEliminatedThreads, getRecentReactions,
+  } = usePyaarLiveHub()
+  const { showToast } = useToastStore()
+
+  const [eliminatedOpen, setEliminatedOpen] = useState(false)
+  const [openEliminatedId, setOpenEliminatedId] = useState<string | null>(null)
+
+  // Periodic prune of stale floating-emojis so the overlay can't grow.
+  useEffect(() => {
+    const t = setInterval(() => pruneReactions(), 1000)
+    return () => clearInterval(t)
+  }, [pruneReactions])
+
+  // Pull ambient reaction crowd-vibe on grid open.
+  useEffect(() => {
+    getRecentReactions().then((r) => {
+      const store = usePyaarLiveStore.getState()
+      const now = Date.now()
+      r.reactions.slice(0, 12).forEach((rr) => {
+        store.pushReaction({
+          id:        Math.random().toString(36).slice(2),
+          emoji:     rr.emoji,
+          coupleId:  rr.coupleId,
+          createdAt: now,
+        })
+      })
+    }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Whenever the eliminated rail is opened, hydrate the archive.
+  useEffect(() => {
+    if (!eliminatedOpen) return
+    getEliminatedThreads()
+      .then((r) => setEliminatedThreads(r.eliminated))
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eliminatedOpen])
+
+  const handleOpenCouple = async (coupleId: string) => {
+    try {
+      const view = await watchCouple(coupleId)
+      setDrilled(view)
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Couldn\'t open', message: err?.message ?? 'Try again.', duration: 3500 })
+    }
+  }
+
+  const handleCloseDrilled = async () => {
+    const current = drilled?.couple.id
+    setDrilled(null)
+    if (current) await unwatchCouple(current).catch(() => {})
+  }
+
+  const handleReaction = async (emoji: string, coupleId?: string) => {
+    try { await sendReaction(emoji, coupleId) }
+    catch { /* silent */ }
+  }
+
+  if (spectator.length === 0) {
+    return <div className="flex justify-center py-12"><Loader /></div>
+  }
+
+  const alive = spectator.filter((c) => !c.eliminated)
+  const dead  = spectator.filter((c) => c.eliminated)
+
   return (
-    <div className="flex flex-col gap-3 cv-stagger">
-      {spectator.length === 0 && <div className="flex justify-center py-12"><Loader /></div>}
-      {spectator.map((c) => (
-        <SpectatorCard key={c.id} c={c} myVote={myVote} onVote={onVote} round={show.currentRound} />
+    <div className="relative">
+      {/* Reactions overlay — floating emojis above the grid */}
+      <ReactionsOverlay reactions={reactions} />
+
+      <ShowHeaderBar show={show} aliveCount={alive.length} totalCount={spectator.length} />
+
+      {/* Couple tile grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4 cv-stagger">
+        {alive.map((c) => (
+          <CoupleTile
+            key={c.id}
+            c={c}
+            round={show.currentRound}
+            voted={myVote === c.id}
+            onOpen={() => handleOpenCouple(c.id)}
+            onVote={() => onVote(c.id)}
+            onReaction={(emoji) => handleReaction(emoji, c.id)}
+          />
+        ))}
+      </div>
+
+      {/* Eliminated rail (post Round 2) */}
+      {dead.length > 0 && (
+        <div className="mt-6">
+          <button
+            onClick={() => setEliminatedOpen((o) => !o)}
+            className="cv-press inline-flex items-center gap-2 text-[11px] uppercase tracking-wider font-medium text-[var(--color-fg-faint)] hover:text-[var(--color-fg-dim)]"
+          >
+            <Skull size={12} />
+            <span>Eliminated ({dead.length}) · {eliminatedOpen ? 'hide' : 'read their final chat'}</span>
+          </button>
+          {eliminatedOpen && (
+            <div className="mt-3 flex flex-col gap-2 cv-stagger">
+              {eliminatedThreads.length === 0
+                ? <div className="text-center text-xs text-[var(--color-fg-faint)] py-3"><Loader /></div>
+                : eliminatedThreads.map((row) => (
+                    <EliminatedCard
+                      key={row.couple.id}
+                      row={row}
+                      open={openEliminatedId === row.couple.id}
+                      onToggle={() => setOpenEliminatedId(
+                        openEliminatedId === row.couple.id ? null : row.couple.id,
+                      )}
+                    />
+                  ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Ambient reaction rail (grid-wide) */}
+      <AmbientReactionsRail onReact={(e) => handleReaction(e)} />
+
+      {/* Drilled-in stage */}
+      {drilled && (
+        <DrilledStage
+          view={drilled}
+          myVote={myVote}
+          onClose={handleCloseDrilled}
+          onVote={() => onVote(drilled.couple.id)}
+          onReaction={(emoji) => handleReaction(emoji, drilled.couple.id)}
+        />
+      )}
+    </div>
+  )
+}
+
+function ShowHeaderBar({
+  show, aliveCount, totalCount,
+}: { show: ShowDto; aliveCount: number; totalCount: number }) {
+  return (
+    <Card padding="md" className="flex items-center gap-3 flex-wrap">
+      <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-medium text-rose-300 bg-rose-500/15 px-2 h-5 rounded-full border border-rose-500/30">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+        LIVE
+      </div>
+      <div className="text-sm text-[var(--color-fg)]">
+        Round {show.currentRound} <span className="text-[var(--color-fg-dim)]">· {show.currentRoundLabel}</span>
+      </div>
+      <div className="ml-auto flex items-center gap-3 text-xs text-[var(--color-fg-dim)]">
+        <span className="inline-flex items-center gap-1">
+          <Heart size={12} className="text-rose-400" /> {aliveCount}/{totalCount} couples
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Eye size={12} /> {show.spectatorCount.toLocaleString()} watching
+        </span>
+        <span className="text-[10px] uppercase tracking-wider">hosted by {show.hostedBy}</span>
+      </div>
+    </Card>
+  )
+}
+
+function CoupleTile({
+  c, round, voted, onOpen, onVote, onReaction,
+}: {
+  c: SpectatorCoupleRow
+  round: number
+  voted: boolean
+  onOpen: () => void
+  onVote: () => void
+  onReaction: (emoji: string) => void
+}) {
+  const tint = COUPLE_TINTS[c.coupleNumber] ?? '#8b5cf6'
+  const tileStyle = { ['--tile-tint' as any]: tint } as React.CSSProperties
+  return (
+    <div
+      className={`cv-pyaar-tile p-3 ${c.eliminated ? 'is-eliminated' : ''}`}
+      style={tileStyle}
+    >
+      {/* Top row — codename, members, live indicators */}
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <button
+          onClick={onOpen}
+          className="text-left min-w-0 flex-1 cv-press"
+          aria-label={`Open ${c.codename}`}
+        >
+          <div className="text-[10px] uppercase tracking-wider font-medium" style={{ color: tint }}>
+            {c.codename}
+          </div>
+          <div className="text-sm font-medium text-[var(--color-fg)] truncate">
+            {c.memberA} <span className="text-[var(--color-fg-faint)]">&</span> {c.memberB}
+          </div>
+        </button>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          {c.videoActive && (
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-rose-300">
+              <span className="cv-pyaar-video-dot" />
+              live cam
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1 text-[10px] text-[var(--color-fg-faint)] tabular-nums">
+            <Eye size={10} /> {c.spectatorCount}
+          </span>
+        </div>
+      </div>
+
+      {/* Live messages preview */}
+      <button
+        onClick={onOpen}
+        className="w-full text-left flex flex-col gap-1 mt-1 mb-2 min-h-[64px] cv-press"
+      >
+        {c.recent.length === 0 ? (
+          <div className="text-[10px] text-[var(--color-fg-faint)] italic">Quiet for now…</div>
+        ) : (
+          c.recent.slice(-3).map((m) => (
+            <div key={m.id} className="text-[11px]">
+              <span className="text-[var(--color-fg-faint)] mr-1">{m.senderUsername}:</span>
+              <span className="text-[var(--color-fg-dim)]">{m.content.length > 60 ? m.content.slice(0, 57) + '…' : m.content}</span>
+            </div>
+          ))
+        )}
+      </button>
+
+      {/* Footer — vote count + vote CTA + drill-in */}
+      <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--color-line)]">
+        <span className="inline-flex items-center gap-1 text-[11px] text-[var(--color-fg-dim)] tabular-nums">
+          <Vote size={11} /> {c.voteCount}
+        </span>
+        <div className="flex gap-1">
+          {!c.eliminated && round >= 1 && (
+            <Button size="sm" variant={voted ? 'primary' : 'secondary'} onClick={onVote}>
+              {voted ? 'Voted' : 'Vote'}
+            </Button>
+          )}
+          <button
+            onClick={() => onReaction('🔥')}
+            className="cv-press inline-flex items-center justify-center h-8 px-2 rounded-md bg-[var(--color-surface-2)] border border-[var(--color-line)] text-sm hover:border-[var(--color-line-strong)]"
+            aria-label="React fire"
+          >
+            🔥
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AmbientReactionsRail({ onReact }: { onReact: (emoji: string) => void }) {
+  return (
+    <div className="mt-5 inline-flex items-center gap-1.5 p-1.5 rounded-full cv-glass border border-[var(--color-line)]">
+      <span className="text-[10px] uppercase tracking-wider text-[var(--color-fg-faint)] px-2">react</span>
+      {REACTION_SET.map((emoji) => (
+        <button
+          key={emoji}
+          onClick={() => onReact(emoji)}
+          className="cv-press w-9 h-9 inline-flex items-center justify-center rounded-full text-lg hover:bg-[var(--color-surface-2)] transition-colors"
+          aria-label={`React ${emoji}`}
+        >
+          {emoji}
+        </button>
       ))}
     </div>
   )
 }
 
-function SpectatorCard({
-  c, myVote, onVote, round,
-}: { c: SpectatorCoupleRow; myVote: string | null; onVote: (id: string) => void; round: number }) {
-  const voted = myVote === c.id
+function ReactionsOverlay({ reactions }: { reactions: { id: string; emoji: string; coupleId: string | null; createdAt: number }[] }) {
+  // Distribute floating emojis pseudo-randomly across the viewport.
+  // Each reaction picks a left% from a stable hash of its id.
   return (
-    <Card padding="md" className={`flex flex-col gap-2 ${c.eliminated ? 'opacity-60' : ''}`}>
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <div className="text-[11px] uppercase tracking-wider font-medium text-[var(--color-fg-faint)]">
-            {c.codename}{c.eliminated ? ' · ELIMINATED' : ''}{c.finalRank && ` · #${c.finalRank}`}
+    <div className="pointer-events-none fixed inset-0 z-20 overflow-hidden">
+      {reactions.map((r) => {
+        const seed = r.id.charCodeAt(0) + r.id.charCodeAt(1 % r.id.length)
+        const left = ((seed * 17) % 88) + 5
+        const bottom = 60 + ((seed * 11) % 200)
+        return (
+          <div
+            key={r.id}
+            className="cv-pyaar-float"
+            style={{ left: `${left}%`, bottom: `${bottom}px` }}
+          >
+            {r.emoji}
           </div>
-          <div className="text-sm text-[var(--color-fg)]">
-            {c.memberA} <span className="text-[var(--color-fg-faint)]">&amp;</span> {c.memberB}
+        )
+      })}
+    </div>
+  )
+}
+
+function DrilledStage({
+  view, myVote, onClose, onVote, onReaction,
+}: {
+  view: DrilledCoupleView
+  myVote: string | null
+  onClose: () => void
+  onVote: () => void
+  onReaction: (emoji: string) => void
+}) {
+  const c = view.couple
+  const tint = COUPLE_TINTS[c.coupleNumber] ?? '#8b5cf6'
+  const stageStyle = { ['--tile-tint' as any]: tint } as React.CSSProperties
+  const voted = myVote === c.id
+
+  // Scroll to bottom on new message.
+  const [scrollRef, setScrollRef] = useState<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!scrollRef) return
+    scrollRef.scrollTop = scrollRef.scrollHeight
+  }, [view.messages.length, scrollRef])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="cv-sheet-up w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[88vh] flex flex-col cv-pyaar-tile"
+        style={stageStyle}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 p-3 border-b border-[var(--color-line)]">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-wider font-medium" style={{ color: tint }}>
+              {c.codename}{c.eliminated && ' · ELIMINATED'}{c.finalRank && ` · #${c.finalRank}`}
+            </div>
+            <div className="text-sm font-medium text-[var(--color-fg)] truncate">
+              {c.memberA} <span className="text-[var(--color-fg-faint)]">&</span> {c.memberB}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {c.videoActive ? (
+              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-rose-300">
+                <Video size={11} /> live
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-[var(--color-fg-faint)]">
+                <VideoOff size={11} /> text
+              </span>
+            )}
+            <button
+              onClick={onClose}
+              className="cv-press w-8 h-8 inline-flex items-center justify-center rounded-md text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] hover:bg-[var(--color-surface-2)]"
+              aria-label="Close"
+            >
+              <X size={16} />
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-[var(--color-fg-dim)] tabular-nums">{c.voteCount} votes</span>
-          {!c.eliminated && round >= 1 && (
-            <Button
-              size="sm" variant={voted ? 'primary' : 'secondary'}
-              leftIcon={<Vote size={12} />}
-              onClick={() => onVote(c.id)}
-            >
-              {voted ? 'Voted' : 'Vote'}
+
+        {/* Video placeholder OR audio waveform vibes */}
+        {c.videoActive && (
+          <div className="px-3 pt-3">
+            <div className="aspect-video rounded-lg bg-gradient-to-br from-rose-900/30 via-black/70 to-violet-900/30 border border-[var(--color-line)] inline-flex items-center justify-center text-xs text-[var(--color-fg-dim)]">
+              📹 Live cam (LiveKit stream lands in v2 — flag is wired)
+            </div>
+          </div>
+        )}
+
+        {/* Messages */}
+        <div ref={setScrollRef} className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
+          {view.messages.length === 0 && (
+            <div className="text-xs text-[var(--color-fg-faint)] text-center py-8 italic">
+              No conversation yet.
+            </div>
+          )}
+          {view.messages.map((m) => <DrilledBubble key={m.id} m={m} tint={tint} />)}
+        </div>
+
+        {/* Footer — vote + reactions */}
+        <div className="p-3 border-t border-[var(--color-line)] flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex gap-1">
+            {REACTION_SET.slice(0, 4).map((emoji) => (
+              <button
+                key={emoji}
+                onClick={() => onReaction(emoji)}
+                className="cv-press w-9 h-9 inline-flex items-center justify-center rounded-full text-lg hover:bg-[var(--color-surface-2)]"
+                aria-label={`React ${emoji}`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+          {!c.eliminated && (
+            <Button variant={voted ? 'primary' : 'secondary'} onClick={onVote} leftIcon={<Vote size={12} />}>
+              {voted ? 'Voted' : 'Vote for this couple'}
             </Button>
           )}
         </div>
       </div>
-      <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
-        {c.recent.length === 0 && (
-          <div className="text-[10px] text-[var(--color-fg-faint)]">No recent lines.</div>
-        )}
-        {c.recent.map((m) => (
-          <div key={m.id} className="text-xs">
-            <span className="text-[10px] uppercase tracking-wider text-[var(--color-fg-faint)] mr-2">
-              {m.senderUsername}
-            </span>
-            <span className="text-[var(--color-fg-dim)] italic">{m.content}</span>
-          </div>
-        ))}
+    </div>
+  )
+}
+
+function DrilledBubble({ m, tint }: { m: PyaarMessage; tint: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <div
+        className="w-7 h-7 rounded-full inline-flex items-center justify-center text-[10px] font-semibold text-white shrink-0"
+        style={{ background: tint }}
+      >
+        {m.senderUsername.slice(0, 1).toUpperCase()}
       </div>
-    </Card>
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] uppercase tracking-wider text-[var(--color-fg-faint)]">
+          {m.senderUsername} <span className="ml-1">· R{m.roundNumber}</span>
+        </div>
+        <div className="text-sm text-[var(--color-fg)] mt-0.5 whitespace-pre-wrap break-words">{m.content}</div>
+      </div>
+    </div>
+  )
+}
+
+function EliminatedCard({
+  row, open, onToggle,
+}: { row: EliminatedThreadRow; open: boolean; onToggle: () => void }) {
+  const tint = COUPLE_TINTS[row.couple.coupleNumber] ?? '#71717a'
+  return (
+    <div className="cv-pyaar-tile is-eliminated p-3" style={{ ['--tile-tint' as any]: tint } as React.CSSProperties}>
+      <button onClick={onToggle} className="w-full flex items-center justify-between gap-3 text-left">
+        <div className="min-w-0">
+          <div className="text-[10px] uppercase tracking-wider font-medium" style={{ color: tint }}>
+            {row.couple.codename} · eliminated R{row.couple.eliminatedInRound ?? '—'}
+          </div>
+          <div className="text-sm text-[var(--color-fg)] truncate">{row.couple.memberA} & {row.couple.memberB}</div>
+        </div>
+        <span className="text-[10px] text-[var(--color-fg-faint)] tabular-nums">{row.messages.length} lines</span>
+      </button>
+      {open && (
+        <div className="mt-3 pt-3 border-t border-[var(--color-line)] flex flex-col gap-1.5 max-h-[40vh] overflow-y-auto">
+          {row.messages.length === 0 ? (
+            <div className="text-[10px] text-[var(--color-fg-faint)] italic">They didn\'t say much.</div>
+          ) : (
+            row.messages.map((m) => (
+              <div key={m.id} className="text-xs">
+                <span className="text-[var(--color-fg-faint)] mr-2">{m.senderUsername}:</span>
+                <span className="text-[var(--color-fg-dim)] italic">{m.content}</span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

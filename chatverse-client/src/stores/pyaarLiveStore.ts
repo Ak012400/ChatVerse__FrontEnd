@@ -1,8 +1,17 @@
 import { create } from 'zustand'
 import type {
   PyaarRegistration, ShowDto, MyCoupleDto, SpectatorCoupleRow,
-  PyaarMessage, HistoryRow,
+  PyaarMessage, HistoryRow, DrilledCoupleView, EliminatedThreadRow,
 } from '../types/pyaarLive'
+
+/** A short-lived floating-emoji record, used by the reaction overlay
+ *  on the spectator grid. We keep at most ~30 and prune by age. */
+export interface FloatingReaction {
+  id:        string
+  emoji:     string
+  coupleId:  string | null
+  createdAt: number  // local ms timestamp
+}
 
 interface PyaarLiveState {
   registration:  PyaarRegistration | null
@@ -12,6 +21,11 @@ interface PyaarLiveState {
   myVote:        string | null
   history:       HistoryRow[]
   loaded:        boolean
+
+  // Ecosystem additions
+  drilled:           DrilledCoupleView | null
+  eliminatedThreads: EliminatedThreadRow[]
+  reactions:         FloatingReaction[]
 
   setRegistration: (r: PyaarRegistration | null) => void
   setShow:         (s: ShowDto | null) => void
@@ -24,6 +38,16 @@ interface PyaarLiveState {
   applyElimination: (ids: string[]) => void
   applyShowEnded:   (winners: Array<{ coupleId: string; rank: number }>) => void
   applyVoteChange:  (coupleId: string) => void
+
+  // Ecosystem
+  setDrilled:       (d: DrilledCoupleView | null) => void
+  appendDrilledMessage: (m: PyaarMessage) => void
+  setEliminatedThreads: (rows: EliminatedThreadRow[]) => void
+  applyCoupleSpectatorCount: (coupleId: string, n: number) => void
+  applyCoupleVideoState:    (coupleId: string, active: boolean) => void
+  pushReaction:    (r: FloatingReaction) => void
+  pruneReactions:  () => void
+
   markLoaded:      () => void
 }
 
@@ -35,6 +59,10 @@ export const usePyaarLiveStore = create<PyaarLiveState>((set) => ({
   myVote:       null,
   history:      [],
   loaded:       false,
+
+  drilled:           null,
+  eliminatedThreads: [],
+  reactions:         [],
 
   setRegistration: (r) => set(() => ({ registration: r })),
   setShow:         (s) => set(() => ({ show: s })),
@@ -90,6 +118,51 @@ export const usePyaarLiveStore = create<PyaarLiveState>((set) => ({
     }),
 
   applyVoteChange: (coupleId) => set(() => ({ myVote: coupleId })),
+
+  // ─── Ecosystem actions ───────────────────────────────────────
+
+  setDrilled: (d) => set(() => ({ drilled: d })),
+
+  appendDrilledMessage: (m) =>
+    set((s) => {
+      if (!s.drilled) return {}
+      if (s.drilled.messages.some((x) => x.id === m.id)) return {}
+      return { drilled: { ...s.drilled, messages: [...s.drilled.messages, m] } }
+    }),
+
+  setEliminatedThreads: (rows) => set(() => ({ eliminatedThreads: rows })),
+
+  applyCoupleSpectatorCount: (coupleId, n) =>
+    set((s) => ({
+      show: s.show
+        ? { ...s.show, couples: s.show.couples.map((c) => c.id === coupleId ? { ...c, spectatorCount: n } : c) }
+        : s.show,
+      spectator: s.spectator.map((c) => c.id === coupleId ? { ...c, spectatorCount: n } : c),
+    })),
+
+  applyCoupleVideoState: (coupleId, active) =>
+    set((s) => ({
+      show: s.show
+        ? { ...s.show, couples: s.show.couples.map((c) => c.id === coupleId ? { ...c, videoActive: active } : c) }
+        : s.show,
+      spectator: s.spectator.map((c) => c.id === coupleId ? { ...c, videoActive: active } : c),
+      drilled: s.drilled && s.drilled.couple.id === coupleId
+        ? { ...s.drilled, couple: { ...s.drilled.couple, videoActive: active } }
+        : s.drilled,
+    })),
+
+  pushReaction: (r) =>
+    set((s) => {
+      // Cap at 60 to keep the overlay performant.
+      const next = [...s.reactions, r].slice(-60)
+      return { reactions: next }
+    }),
+
+  pruneReactions: () =>
+    set((s) => {
+      const now = Date.now()
+      return { reactions: s.reactions.filter((r) => now - r.createdAt < 3200) }
+    }),
 
   markLoaded: () => set(() => ({ loaded: true })),
 }))

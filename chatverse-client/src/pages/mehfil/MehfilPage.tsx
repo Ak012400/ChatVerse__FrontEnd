@@ -67,7 +67,7 @@ export default function MehfilPage() {
   const { showToast } = useToastStore()
   const {
     discoverRooms, templates, gifts, myRooms,
-    openRoom, openRoomMessages, openRoomAttendees, openRoomTips,
+    openRoom, openRoomIAmHost, openRoomMessages, openRoomAttendees, openRoomTips,
     setDiscover, setMyRooms, setOpenRoom, appendMessage,
   } = useMehfilStore()
   const {
@@ -110,7 +110,7 @@ export default function MehfilPage() {
       return
     }
     getRoom(openRoomId)
-      .then((r) => setOpenRoom(r.room, r.messages, r.attendees, r.tips))
+      .then((r) => setOpenRoom(r.room, r.iAmHost, r.messages, r.attendees, r.tips))
       .catch(() => showToast({
         type: 'error', title: 'Couldn\'t load room', message: 'Try again.', duration: 3500,
       }))
@@ -151,6 +151,7 @@ export default function MehfilPage() {
             ? <div className="flex justify-center py-12"><Loader /></div>
             : <RoomDetailView
                 room={openRoom}
+                iAmHost={openRoomIAmHost}
                 messages={openRoomMessages}
                 attendees={openRoomAttendees}
                 tips={openRoomTips}
@@ -163,7 +164,7 @@ export default function MehfilPage() {
                   try {
                     const r = await joinRoom(openRoom.id)
                     const fresh = await getRoom(r.id)
-                    setOpenRoom(fresh.room, fresh.messages, fresh.attendees, fresh.tips)
+                    setOpenRoom(fresh.room, fresh.iAmHost, fresh.messages, fresh.attendees, fresh.tips)
                   } catch (err: any) {
                     showToast({ type: 'error', title: 'Join failed', message: err?.message ?? 'Try again.', duration: 4000 })
                   }
@@ -177,11 +178,11 @@ export default function MehfilPage() {
                   }
                 }}
                 onStart={async () => {
-                  try { const r = await startRoom(openRoom.id); setOpenRoom({ ...openRoom, ...r }) }
+                  try { const r = await startRoom(openRoom.id); setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost) }
                   catch (err: any) { showToast({ type: 'error', title: 'Start failed', message: err?.message ?? 'Try again.', duration: 4000 }) }
                 }}
                 onEnd={async () => {
-                  try { const r = await endRoom(openRoom.id); setOpenRoom({ ...openRoom, ...r }) }
+                  try { const r = await endRoom(openRoom.id); setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost) }
                   catch (err: any) { showToast({ type: 'error', title: 'End failed', message: err?.message ?? 'Try again.', duration: 4000 }) }
                 }}
               />}
@@ -572,11 +573,12 @@ function CreateRoomSheet({
 // ─── Open room detail ───────────────────────────────────────
 
 function RoomDetailView({
-  room, messages, attendees, tips, gifts,
+  room, iAmHost, messages, attendees, tips, gifts,
   draft, setDraft, sending, onSend, onTip,
   onJoin, onLeave, onStart, onEnd,
 }: {
   room: MehfilRoomCard
+  iAmHost: boolean
   messages: ReturnType<typeof useMehfilStore.getState>['openRoomMessages']
   attendees: ReturnType<typeof useMehfilStore.getState>['openRoomAttendees']
   tips: ReturnType<typeof useMehfilStore.getState>['openRoomTips']
@@ -661,8 +663,12 @@ function RoomDetailView({
         </div>
       </div>
 
-      {/* Host lifecycle */}
-      <div className="mt-3"><HostBar room={room} onStart={onStart} onEnd={onEnd} /></div>
+      {/* Host lifecycle — gated on iAmHost from server so audience
+          never sees the Start/End buttons even if they\'re looking
+          at someone else\'s scheduled room. */}
+      {iAmHost && (
+        <div className="mt-3"><HostBar room={room} onStart={onStart} onEnd={onEnd} /></div>
+      )}
 
       {/* Audience join/leave */}
       {isLive && room.hostUsername !== '' && (
