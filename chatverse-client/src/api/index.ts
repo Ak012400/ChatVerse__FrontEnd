@@ -142,6 +142,10 @@ export const adminApi = {
     api.get('/admin/documents', { params: { status, limit } }),
   reviewDocument: (docId: string, outcome: 'approve' | 'reject', rejectReason?: string) =>
     api.post(`/admin/documents/${docId}/review`, { outcome, rejectReason }),
+  // Test triggers — skip the Saturday/Thursday cron waits so we can
+  // smoke-test PYAAR LIVE + Ghost Date without waiting a week.
+  forcePyaarFormation: () => api.post('/admin/test/force-pyaar-formation'),
+  forceGhostPairing:   () => api.post('/admin/test/force-ghost-pairing'),
 }
 
 export const randomGroupApi = {

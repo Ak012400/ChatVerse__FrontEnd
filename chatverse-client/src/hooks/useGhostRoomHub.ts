@@ -186,9 +186,16 @@ export function useGhostRoomHub() {
     },
     leaveRoom: (roomId: string) => safeInvoke('LeaveGhostRoom', roomId),
 
-    // Matchmaker config
-    configureRoom: (roomId: string, privacy: GhostPrivacy, maxVoyagers: number, roundDurationMinutes: number) =>
-      safeInvoke<GhostRoomState>('ConfigureRoom', roomId, privacy, maxVoyagers, roundDurationMinutes),
+    // Matchmaker config — `autoPair` makes the room continuous-pair
+    // (server pairs voyagers as they raise hands, no human picks).
+    configureRoom: (
+      roomId: string,
+      privacy: GhostPrivacy,
+      maxVoyagers: number,
+      roundDurationMinutes: number,
+      autoPair: boolean = false,
+    ) =>
+      safeInvoke<GhostRoomState>('ConfigureRoom', roomId, privacy, maxVoyagers, roundDurationMinutes, autoPair),
 
     // Voyager
     nominate: (roomId: string, realName: string, age: number, gender: string, interestedIn: GhostInterest, shortBio: string) =>
