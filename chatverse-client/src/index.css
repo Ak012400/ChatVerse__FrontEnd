@@ -873,6 +873,99 @@ html[data-theme="light"] {
   }
 
   /* ─────────────────────────────────────────────────────────────
+     🎤 Open Mic (third per-template Mehfil specialisation)
+
+     Per the per-feature isolation policy, every selector here is
+     prefixed `cv-openmic-*`. Visual language: warm amber → red
+     stage-light gradient.
+  ───────────────────────────────────────────────────────────── */
+
+  .cv-openmic-stage {
+    position: relative;
+    isolation: isolate;
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-1);
+    overflow: hidden;
+  }
+  .cv-openmic-stage::before {
+    content: "";
+    position: absolute;
+    inset: -25%;
+    background:
+      radial-gradient(closest-side at 10% 20%, rgba(245, 158, 11, 0.18), transparent 55%),
+      radial-gradient(closest-side at 90% 80%, rgba(239, 68, 68, 0.16), transparent 55%);
+    filter: blur(40px);
+    z-index: -1;
+    animation: cv-aurora-drift 22s ease-in-out infinite;
+  }
+  .cv-openmic-stage > * { position: relative; }
+
+  /* Stage canvas — the actual mic stage card. */
+  .cv-openmic-stage-canvas {
+    transition: border-color 220ms ease, box-shadow 280ms ease;
+  }
+  .cv-openmic-stage-highlight {
+    box-shadow:
+      0 0 0 1px rgba(252, 211, 77, 0.6),
+      0 0 32px rgba(245, 158, 11, 0.32);
+  }
+
+  /* Big mic puck — pulse animation around the stage avatar. */
+  @keyframes cv-openmic-mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0   rgba(245, 158, 11, 0.55); }
+    50%      { box-shadow: 0 0 0 18px rgba(245, 158, 11, 0); }
+  }
+  .cv-openmic-mic-pulse {
+    animation: cv-openmic-mic-pulse 2.4s ease-out infinite;
+  }
+
+  /* Status pill pulse when live. */
+  @keyframes cv-openmic-mic-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(252, 211, 77, 0.55); }
+    50%      { box-shadow: 0 0 0 6px transparent; }
+  }
+  .cv-openmic-mic-glow {
+    animation: cv-openmic-mic-glow 2s ease-out infinite;
+  }
+
+  /* Floating emoji reaction — rises from bottom, fades out. */
+  @keyframes cv-openmic-reaction-float {
+    0%   { transform: translateY(0) scale(0.7); opacity: 0; }
+    15%  { transform: translateY(-20px) scale(1.1); opacity: 1; }
+    100% { transform: translateY(-220px) scale(1); opacity: 0; }
+  }
+  .cv-openmic-reaction-float {
+    animation: cv-openmic-reaction-float 2.4s var(--ease-out-soft, ease-out);
+    will-change: transform, opacity;
+  }
+
+  /* Monitor rail accent — privileged band marker. */
+  .cv-openmic-monitor-rail {
+    position: relative;
+    overflow: hidden;
+  }
+  .cv-openmic-monitor-rail::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #f59e0b, transparent);
+    opacity: 0.7;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cv-openmic-stage::before,
+    .cv-openmic-mic-pulse,
+    .cv-openmic-mic-glow,
+    .cv-openmic-reaction-float {
+      animation: none !important;
+    }
+    .cv-openmic-stage-canvas {
+      transition: none !important;
+    }
+  }
+
+  /* ─────────────────────────────────────────────────────────────
      Push-to-talk pulse — radio icon throbs while user holds the key.
      Used on the PttControl button when `holding` is true.
   ───────────────────────────────────────────────────────────── */
