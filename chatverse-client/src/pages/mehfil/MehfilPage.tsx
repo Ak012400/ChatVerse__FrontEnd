@@ -33,17 +33,23 @@ const MAX_MSG = 1000
 
 const TEMPLATE_LABEL: Record<MehfilTemplate, string> = {
   dating_show: 'Dating show',
-  open_mic:    'Open mic',
-  debate:      'Debate',
-  watch_party: 'Watch party',
-  game_night:  'Game night',
-  podcast:     'Podcast',
+  open_mic:    'Roast',           // 2026-06-21 product pivot — Mehfil only
+  debate:      'Debate',          // exposes Debate + Roast in the create flow.
+  watch_party: 'Watch party',     // open_mic UX serves as the Roast template
+  game_night:  'Game night',      // (multi-performer stage with host queue);
+  podcast:     'Podcast',         // dedicated 'roast' templateKind ships next session.
   story_circle: 'Story circle',
   trivia:      'Trivia',
   talent_show: 'Talent show',
   networking:  'Networking',
   custom:      'Custom',
 }
+
+/// Templates exposed in the room-creation flow. Existing rooms with
+/// other templateKinds remain openable via Discover, but the host can
+/// only create new rooms in these two flavours going forward (product
+/// decision 2026-06-21).
+const CREATE_FLOW_TEMPLATES: MehfilTemplate[] = ['debate', 'open_mic']
 
 // ── Template palettes — each Mehfil template gets its own colour
 //   pair. Wired into the room stage via CSS vars; aurora + bubbles +
@@ -352,7 +358,11 @@ export default function MehfilPage() {
 
       {createOpen && (
         <CreateRoomSheet
-          templates={templates.length > 0 ? templates : Object.keys(TEMPLATE_LABEL) as MehfilTemplate[]}
+          // Force the create flow to the two locked templates regardless
+          // of what the server's `templates` array contains. Existing
+          // rooms in deprecated templates still open via Discover; only
+          // *new* room creation is constrained.
+          templates={CREATE_FLOW_TEMPLATES}
           onClose={() => setCreateOpen(false)}
           onCreate={async (form) => {
             try {

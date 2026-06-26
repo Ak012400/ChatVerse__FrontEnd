@@ -181,6 +181,13 @@ export default function AdminDashboardPage() {
           <StatCard icon={ShieldCheck}  label="Age verified"       value={stats?.ageVerifiedUsers} tone="success" />
         </div>
 
+        {/* Test triggers — admin-only fast-path to fire scheduled
+            features (PYAAR LIVE Saturday show, Ghost Date Thursday
+            pairing) right now, so we can validate end-to-end without
+            waiting a week. */}
+        <TestTriggersCard />
+
+
         {/* Tabs */}
         <div className="flex gap-1 border-b border-[var(--color-line)] mb-4">
           <TabButton active={tab === 'reports'} onClick={() => setTab('reports')}>
@@ -211,6 +218,81 @@ export default function AdminDashboardPage() {
 }
 
 /* ─────────────────────────────────────────────────────────── */
+
+function TestTriggersCard() {
+  const { showToast } = useToastStore()
+  const [pending, setPending] = useState<'pyaar' | 'ghost' | null>(null)
+
+  const fire = async (kind: 'pyaar' | 'ghost') => {
+    setPending(kind)
+    try {
+      const res = kind === 'pyaar'
+        ? await adminApi.forcePyaarFormation()
+        : await adminApi.forceGhostPairing()
+      if ((res.data as any)?.ok) {
+        showToast({
+          type:    'success',
+          title:   kind === 'pyaar' ? 'PYAAR LIVE formation triggered' : 'Ghost Date pairing triggered',
+          message: 'Server is running the scheduler now. Check the feature page in a moment.',
+          duration: 5000,
+        })
+      } else {
+        showToast({
+          type:    'warning',
+          title:   'Trigger returned no-op',
+          message: (res.data as any)?.message ?? 'Pool may be empty.',
+          duration: 4000,
+        })
+      }
+    } catch (e: any) {
+      showToast({
+        type:    'error',
+        title:   'Trigger failed',
+        message: e?.response?.data?.error ?? e?.message ?? 'Try again.',
+        duration: 5000,
+      })
+    } finally {
+      setPending(null)
+    }
+  }
+
+  return (
+    <Card padding="md" className="mb-6 border border-[var(--color-line)]">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold inline-flex items-center gap-1.5 text-[var(--color-accent-fg)]">
+            <ShieldCheck size={13} /> Scheduler test triggers
+          </div>
+          <p className="text-[11px] text-[var(--color-fg-dim)] mt-1 max-w-md leading-relaxed">
+            Run PYAAR LIVE formation or Ghost Date pairing now instead of waiting for
+            the Saturday / Thursday IST cron windows. Bypasses dedup guards by using
+            a test-bucket event-date when today's pool is empty.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="primary"
+            loading={pending === 'pyaar'}
+            disabled={pending !== null}
+            onClick={() => fire('pyaar')}
+          >
+            Start PYAAR LIVE now
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            loading={pending === 'ghost'}
+            disabled={pending !== null}
+            onClick={() => fire('ghost')}
+          >
+            Pair Ghost Dates now
+          </Button>
+        </div>
+      </div>
+    </Card>
+  )
+}
 
 function StatCard({
   icon: Icon,

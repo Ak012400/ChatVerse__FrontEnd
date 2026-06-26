@@ -188,11 +188,21 @@ export default function GhostRoomPage({ room, iAmHost, onLeave, onEndRoom }: Pro
       {iAmHost && config && (
         <MatchmakerControlsBar
           config={config}
-          onConfigure={(p, cap, dur) => hub.configureRoom(room.id, p, cap, dur)}
+          onConfigure={(p, cap, dur, ap) => hub.configureRoom(room.id, p, cap, dur, ap)}
           onAutoPair={(interestBalanced) => hub.autoPairRemaining(room.id, interestBalanced)}
           onEndRound={() => hub.endRound(room.id)}
           onEndRoom={onEndRoom}
         />
+      )}
+
+      {/* Public auto-pair badge — when AutoPair is on, the matchmaker
+          can step away: server pairs voyagers automatically as they
+          raise hands. Shown to EVERYONE so audience knows. */}
+      {config?.autoPair && (
+        <div className="my-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/40 text-[11px] text-emerald-300">
+          <Sparkles size={11} className="animate-pulse" />
+          Auto-pair on — voyagers are matched as they raise hands.
+        </div>
       )}
 
       {/* Hall (voyager grid) + monitor sidebar */}
@@ -292,7 +302,7 @@ function MatchmakerControlsBar({
   config, onConfigure, onAutoPair, onEndRound, onEndRoom,
 }: {
   config: NonNullable<ReturnType<typeof useGhostRoomStore.getState>['roomState']>['config']
-  onConfigure: (privacy: GhostPrivacy, maxVoyagers: number, durationMinutes: number) => void
+  onConfigure: (privacy: GhostPrivacy, maxVoyagers: number, durationMinutes: number, autoPair: boolean) => void
   onAutoPair: (interestBalanced: boolean) => void
   onEndRound: () => void
   onEndRoom: () => void
@@ -343,23 +353,45 @@ function MatchmakerControlsBar({
       </div>
 
       {showConfig && (
-        <div className="basis-full mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+        <div className="basis-full mt-2 grid grid-cols-1 sm:grid-cols-4 gap-2 text-[11px]">
           <PrivacyPicker
             value={config.privacy}
-            onChange={(p) => onConfigure(p, config.maxVoyagers, config.roundDurationMinutes)}
+            onChange={(p) => onConfigure(p, config.maxVoyagers, config.roundDurationMinutes, config.autoPair)}
           />
           <NumberPills
             label="Capacity"
             options={CAPACITIES}
             value={config.maxVoyagers}
-            onChange={(n) => onConfigure(config.privacy, n, config.roundDurationMinutes)}
+            onChange={(n) => onConfigure(config.privacy, n, config.roundDurationMinutes, config.autoPair)}
           />
           <NumberPills
             label="Round min"
             options={DURATIONS}
             value={config.roundDurationMinutes}
-            onChange={(n) => onConfigure(config.privacy, config.maxVoyagers, n)}
+            onChange={(n) => onConfigure(config.privacy, config.maxVoyagers, n, config.autoPair)}
           />
+          {/* Auto-pair toggle — when ON, the matchmaker steps back and
+              the server pairs voyagers continuously as they raise hands.
+              Public Ghost Rooms typically run with this on. */}
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-[var(--color-fg-faint)] mb-1">Auto-pair</div>
+            <button
+              type="button"
+              onClick={() =>
+                onConfigure(config.privacy, config.maxVoyagers, config.roundDurationMinutes, !config.autoPair)
+              }
+              className={[
+                'h-7 px-3 rounded-full text-[11px] font-medium border inline-flex items-center gap-1.5 transition-colors',
+                config.autoPair
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400'
+                  : 'bg-[var(--color-surface-2)] text-[var(--color-fg-dim)] border-[var(--color-line)] hover:text-[var(--color-fg)]',
+              ].join(' ')}
+              aria-pressed={config.autoPair}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${config.autoPair ? 'bg-emerald-400' : 'bg-[var(--color-fg-mute)]'}`} />
+              {config.autoPair ? 'On' : 'Off'}
+            </button>
+          </div>
         </div>
       )}
     </div>

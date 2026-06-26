@@ -25,6 +25,10 @@ export type GhostRoomConfig = {
   inviteCode: string | null
   maxVoyagers: number      // 4 / 6 / 8 / 10 / 12
   roundDurationMinutes: number  // 5 / 10 / 15 / 20
+  /** When true, the server pairs voyagers CONTINUOUSLY as they raise
+   *  hands (no matchmaker intervention). When false, the matchmaker
+   *  manually picks pairs from the bio queue. */
+  autoPair: boolean
 }
 
 export type GhostMe = {
