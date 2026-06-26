@@ -14,6 +14,7 @@ import SoundboardTray from '../../components/sound/SoundboardTray'
 // fallback for templates without a specialised page.
 import DebateRoomPage from './DebateRoomPage'
 import GhostRoomPage from './GhostRoomPage'
+import OpenMicRoomPage from './OpenMicRoomPage'
 import { useToastStore } from '../../stores/toastStore'
 import { useMehfilStore } from '../../stores/mehfilStore'
 import { useMehfilHub } from '../../hooks/useMehfilHub'
@@ -145,6 +146,89 @@ export default function MehfilPage() {
   }
 
   if (openRoomId) {
+    // Per-template specialised pages (debate, ghost_date, open_mic,
+    // podcast, …) need MUCH more horizontal real-estate than the
+    // generic 3xl-constrained card. Render them in a wider canvas with
+    // a sticky back-bar so the back affordance stays visible while the
+    // user scrolls the stage. Generic templates keep the old layout.
+    const isTemplateRoom =
+      !!openRoom &&
+      ['debate', 'ghost_date', 'open_mic', 'podcast'].includes(openRoom.templateKind)
+
+    if (isTemplateRoom) {
+      return (
+        <div className="h-full overflow-y-auto">
+          <div className="sticky top-0 z-30 backdrop-blur-md bg-[color-mix(in_srgb,var(--color-bg)_70%,transparent)] border-b border-[var(--color-line)]">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 h-12 flex items-center">
+              <button
+                onClick={() => setOpenRoomId(null)}
+                className="text-xs text-[var(--color-fg-dim)] hover:text-[var(--color-fg)] inline-flex items-center gap-1.5 cv-press"
+              >
+                <span>←</span> Back to Mehfil
+              </button>
+            </div>
+          </div>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 cv-fade-up">
+            {!openRoom
+              ? <div className="flex justify-center py-12"><Loader /></div>
+              : openRoom.templateKind === 'debate'
+                ? <DebateRoomPage
+                    room={openRoom}
+                    iAmHost={openRoomIAmHost}
+                    onLeave={async () => {
+                      try {
+                        await leaveRoom(openRoom.id)
+                        setOpenRoomId(null)
+                      } catch (err: any) {
+                        showToast({ type: 'error', title: 'Leave failed', message: err?.message ?? 'Try again.', duration: 4000 })
+                      }
+                    }}
+                    onEndRoom={async () => {
+                      try { const r = await endRoom(openRoom.id); setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost) }
+                      catch (err: any) { showToast({ type: 'error', title: 'End failed', message: err?.message ?? 'Try again.', duration: 4000 }) }
+                    }}
+                  />
+              : openRoom.templateKind === 'ghost_date'
+                ? <GhostRoomPage
+                    room={openRoom}
+                    iAmHost={openRoomIAmHost}
+                    onLeave={async () => {
+                      try {
+                        await leaveRoom(openRoom.id)
+                        setOpenRoomId(null)
+                      } catch (err: any) {
+                        showToast({ type: 'error', title: 'Leave failed', message: err?.message ?? 'Try again.', duration: 4000 })
+                      }
+                    }}
+                    onEndRoom={async () => {
+                      try { const r = await endRoom(openRoom.id); setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost) }
+                      catch (err: any) { showToast({ type: 'error', title: 'End failed', message: err?.message ?? 'Try again.', duration: 4000 }) }
+                    }}
+                  />
+              : openRoom.templateKind === 'open_mic'
+                ? <OpenMicRoomPage
+                    room={openRoom}
+                    iAmHost={openRoomIAmHost}
+                    onLeave={async () => {
+                      try {
+                        await leaveRoom(openRoom.id)
+                        setOpenRoomId(null)
+                      } catch (err: any) {
+                        showToast({ type: 'error', title: 'Leave failed', message: err?.message ?? 'Try again.', duration: 4000 })
+                      }
+                    }}
+                    onEndRoom={async () => {
+                      try { const r = await endRoom(openRoom.id); setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost) }
+                      catch (err: any) { showToast({ type: 'error', title: 'End failed', message: err?.message ?? 'Try again.', duration: 4000 }) }
+                    }}
+                  />
+              : null}
+          </div>
+        </div>
+      )
+    }
+
+    // Generic flow (non-template rooms) — unchanged.
     return (
       <div className="h-full overflow-y-auto px-4 sm:px-8 py-6 sm:py-10">
         <div className="max-w-3xl mx-auto cv-fade-up">
