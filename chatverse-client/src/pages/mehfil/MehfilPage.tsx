@@ -12,10 +12,7 @@ import SoundboardTray from '../../components/sound/SoundboardTray'
 // Each templateKind that has its own first-class UX gets imported
 // here and dispatched below. Generic `RoomDetailView` is the
 // fallback for templates without a specialised page.
-// Debate v1 is deprecated by v2 (StageBracket-powered). Keep the import
-// commented so the v1 file stays in the repo as a reference while no
-// runtime path mounts it.
-// import DebateRoomPage from './DebateRoomPage'
+// Debate v1 was deleted 2026-06-21 — replaced by Debate v2 (StageBracket).
 import DebateV2RoomPage from './DebateV2RoomPage'
 import RoastRoomPage from './RoastRoomPage'
 import GhostRoomPage from './GhostRoomPage'

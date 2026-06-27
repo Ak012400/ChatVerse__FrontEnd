@@ -221,10 +221,11 @@ export default function AdminDashboardPage() {
 
 function TestTriggersCard() {
   const { showToast } = useToastStore()
-  const [pending, setPending] = useState<'pyaar' | 'ghost' | null>(null)
+  const [pending, setPending] = useState<string | null>(null)
+  const [seedCount, setSeedCount] = useState(8)
 
   const fire = async (kind: 'pyaar' | 'ghost') => {
-    setPending(kind)
+    setPending(`force-${kind}`)
     try {
       const res = kind === 'pyaar'
         ? await adminApi.forcePyaarFormation()
@@ -240,7 +241,7 @@ function TestTriggersCard() {
         showToast({
           type:    'warning',
           title:   'Trigger returned no-op',
-          message: (res.data as any)?.message ?? 'Pool may be empty.',
+          message: (res.data as any)?.message ?? 'Pool may be empty — seed it first.',
           duration: 4000,
         })
       }
@@ -256,38 +257,91 @@ function TestTriggersCard() {
     }
   }
 
+  const seed = async (kind: 'pyaar' | 'ghost') => {
+    setPending(`seed-${kind}`)
+    try {
+      const res = await adminApi.seedPool(kind, seedCount)
+      const ok = (res.data as any)?.ok
+      const message = (res.data as any)?.message ?? 'Seed attempted.'
+      showToast({
+        type: ok ? 'success' : 'warning',
+        title: ok ? 'Pool seeded' : 'Seed no-op',
+        message,
+        duration: 5000,
+      })
+    } catch (e: any) {
+      showToast({
+        type: 'error',
+        title: 'Seed failed',
+        message: e?.response?.data?.error ?? e?.message ?? 'Try again.',
+        duration: 5000,
+      })
+    } finally {
+      setPending(null)
+    }
+  }
+
   return (
     <Card padding="md" className="mb-6 border border-[var(--color-line)]">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="min-w-0">
-          <div className="text-xs font-semibold inline-flex items-center gap-1.5 text-[var(--color-accent-fg)]">
-            <ShieldCheck size={13} /> Scheduler test triggers
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold inline-flex items-center gap-1.5 text-[var(--color-accent-fg)]">
+              <ShieldCheck size={13} /> Scheduler test triggers
+            </div>
+            <p className="text-[11px] text-[var(--color-fg-dim)] mt-1 max-w-md leading-relaxed">
+              Run PYAAR LIVE formation or Ghost Date pairing now instead of waiting for the Saturday / Thursday IST cron windows. If you're testing solo, hit "Seed pool" first to register N recent users automatically.
+            </p>
           </div>
-          <p className="text-[11px] text-[var(--color-fg-dim)] mt-1 max-w-md leading-relaxed">
-            Run PYAAR LIVE formation or Ghost Date pairing now instead of waiting for
-            the Saturday / Thursday IST cron windows. Bypasses dedup guards by using
-            a test-bucket event-date when today's pool is empty.
-          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm" variant="primary"
+              loading={pending === 'force-pyaar'} disabled={pending !== null}
+              onClick={() => fire('pyaar')}
+            >
+              Start PYAAR LIVE now
+            </Button>
+            <Button
+              size="sm" variant="ghost"
+              loading={pending === 'force-ghost'} disabled={pending !== null}
+              onClick={() => fire('ghost')}
+            >
+              Pair Ghost Dates now
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="border-t border-[var(--color-line)] pt-3 flex flex-wrap items-center gap-2">
+          <div className="text-[10px] uppercase tracking-wider font-semibold text-[var(--color-fg-faint)]">
+            Seed pool
+          </div>
+          <label className="text-[11px] text-[var(--color-fg-dim)] inline-flex items-center gap-1.5">
+            Count
+            <input
+              type="number"
+              min={1} max={20}
+              value={seedCount}
+              onChange={(e) => setSeedCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+              className="w-14 px-2 py-1 rounded-md bg-[var(--color-surface-2)] border border-[var(--color-line)] text-xs"
+            />
+          </label>
           <Button
-            size="sm"
-            variant="primary"
-            loading={pending === 'pyaar'}
-            disabled={pending !== null}
-            onClick={() => fire('pyaar')}
+            size="sm" variant="ghost"
+            loading={pending === 'seed-pyaar'} disabled={pending !== null}
+            onClick={() => seed('pyaar')}
           >
-            Start PYAAR LIVE now
+            Seed PYAAR pool
           </Button>
           <Button
-            size="sm"
-            variant="ghost"
-            loading={pending === 'ghost'}
-            disabled={pending !== null}
-            onClick={() => fire('ghost')}
+            size="sm" variant="ghost"
+            loading={pending === 'seed-ghost'} disabled={pending !== null}
+            onClick={() => seed('ghost')}
           >
-            Pair Ghost Dates now
+            Seed Ghost pool
           </Button>
+          <p className="basis-full text-[10px] text-[var(--color-fg-mute)]">
+            Registers the N most-recently-active non-guest users (excluding you) into today's pool. Skips users already pending. Then hit a "Start now" button to fire formation.
+          </p>
         </div>
       </div>
     </Card>

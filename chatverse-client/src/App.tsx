@@ -41,6 +41,8 @@ import PlayRoomPage         from './pages/games/PlayRoomPage'
 import LudoRoomPage         from './pages/games/LudoRoomPage'
 import TimeCapsulePage      from './pages/timeCapsule/TimeCapsulePage'
 import AboutFeaturesPage    from './pages/about/AboutFeaturesPage'
+import AboutUsPage          from './pages/about/AboutUsPage'
+import SupportPage          from './pages/support/SupportPage'
 import PersonaPage          from './pages/persona/PersonaPage'
 import StoryChainPage       from './pages/storyChain/StoryChainPage'
 import ConfessionsPage      from './pages/confessions/ConfessionsPage'
@@ -208,6 +210,14 @@ export default function App() {
           {/* Feature rules / how-it-works — open to everyone logged in,
               including guests, so they can learn what they\'re missing. */}
           <Route path="/about" element={<PrivateRoute><AboutFeaturesPage /></PrivateRoute>} />
+
+          {/* Public "About Us" — no auth gate so press / curious visitors
+              can read the pitch before signing up. */}
+          <Route path="/about-us" element={<AboutUsPage />} />
+
+          {/* Support — AI assistant + ticket form. Auth-gated so the
+              backend can stamp the user's identity on email tickets. */}
+          <Route path="/support" element={<PrivateRoute><SupportPage /></PrivateRoute>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

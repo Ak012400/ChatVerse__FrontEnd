@@ -205,6 +205,15 @@ export function useStageBracketHub() {
     ) =>
       safeInvoke('ConfigureRoom', roomId, mode, privacy, secondsPerTurn, roundDurationMinutes, challengeSlotSeconds, hostTopic),
     startRound: (roomId: string) => safeInvoke<string>('StartRound', roomId),
+    /** One-shot host action — configure + open round + go live in a
+     *  single server call. Lets the host jump straight from "empty
+     *  room" to "live with mic open" without manually clicking through
+     *  three steps. */
+    quickStart: async (roomId: string, mode: StageBracketMode, hostTopic?: string) => {
+      const s = await safeInvoke<StageBracketRoomState>('QuickStart', roomId, mode, hostTopic ?? null)
+      if (s) setRoomState(s)
+      return s
+    },
     goLive: (roomId: string) => safeInvoke('GoLive', roomId),
     endRound: (roomId: string) => safeInvoke('EndRound', roomId),
     assignSeat: (roomId: string, nominationId: string, side: StageBracketSide, position: number) =>
