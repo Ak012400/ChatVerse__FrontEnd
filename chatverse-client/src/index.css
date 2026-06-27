@@ -1041,6 +1041,79 @@ html[data-theme="light"] {
   }
 
   /* ─────────────────────────────────────────────────────────────
+     💀 Roast (StageBracket — shared backend with Debate v2)
+
+     Same backend, different vibe — savage red → purple ambience.
+     Prefix `cv-roast-*` per the isolation policy on the CSS side.
+  ───────────────────────────────────────────────────────────── */
+
+  .cv-roast-stage {
+    position: relative;
+    isolation: isolate;
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-1);
+    overflow: hidden;
+  }
+  .cv-roast-stage::before {
+    content: "";
+    position: absolute;
+    inset: -25%;
+    background:
+      radial-gradient(closest-side at 10% 22%, rgba(220, 38, 38, 0.18), transparent 55%),
+      radial-gradient(closest-side at 90% 78%, rgba(124, 58, 237, 0.16), transparent 55%);
+    filter: blur(42px);
+    z-index: -1;
+    animation: cv-aurora-drift 24s ease-in-out infinite;
+  }
+  .cv-roast-stage > * { position: relative; }
+
+  /* Roast subject banner. */
+  .cv-roast-topic {
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-line);
+    background: var(--color-surface-1);
+    padding: 10px 14px;
+  }
+
+  /* Arena seat tile. */
+  .cv-roast-seat {
+    transition: border-color 200ms ease, box-shadow 220ms ease, transform 200ms var(--ease-out-soft, ease);
+  }
+  .cv-roast-seat:hover { transform: translateY(-1px); }
+  .cv-roast-seat-active {
+    box-shadow:
+      0 0 0 1px rgba(252, 165, 165, 0.6),
+      0 0 22px rgba(220, 38, 38, 0.4);
+  }
+
+  /* Live-pill pulse. */
+  @keyframes cv-roast-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(252, 165, 165, 0.55); }
+    50%      { box-shadow: 0 0 0 6px transparent; }
+  }
+  .cv-roast-pulse { animation: cv-roast-pulse 1.6s ease-out infinite; }
+
+  /* Host rail accent. */
+  .cv-roast-monitor-rail { position: relative; overflow: hidden; }
+  .cv-roast-monitor-rail::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #dc2626, #7c3aed, transparent);
+    opacity: 0.7;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cv-roast-stage::before,
+    .cv-roast-pulse,
+    .cv-roast-seat-active {
+      animation: none !important;
+    }
+    .cv-roast-seat { transition: none !important; }
+  }
+
+  /* ─────────────────────────────────────────────────────────────
      Push-to-talk pulse — radio icon throbs while user holds the key.
      Used on the PttControl button when `holding` is true.
   ───────────────────────────────────────────────────────────── */

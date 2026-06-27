@@ -5,7 +5,10 @@
 export type MehfilStatus = 'scheduled' | 'live' | 'ended' | 'cancelled'
 
 export type MehfilTemplate =
-  | 'dating_show' | 'open_mic' | 'debate' | 'watch_party' | 'game_night'
+  // Locked focus templates (the only ones the create-flow exposes)
+  | 'debate' | 'roast'
+  // Legacy / pre-existing — kept so old rooms still open
+  | 'dating_show' | 'open_mic' | 'watch_party' | 'game_night'
   | 'podcast' | 'story_circle' | 'trivia' | 'talent_show' | 'networking' | 'custom'
 
 export interface MehfilRoomCard {
