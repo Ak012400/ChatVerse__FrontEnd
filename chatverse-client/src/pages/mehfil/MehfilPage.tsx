@@ -17,6 +17,7 @@ import SoundboardTray from '../../components/sound/SoundboardTray'
 // runtime path mounts it.
 // import DebateRoomPage from './DebateRoomPage'
 import DebateV2RoomPage from './DebateV2RoomPage'
+import RoastRoomPage from './RoastRoomPage'
 import GhostRoomPage from './GhostRoomPage'
 import OpenMicRoomPage from './OpenMicRoomPage'
 import { useToastStore } from '../../stores/toastStore'
@@ -36,12 +37,16 @@ import type { MehfilRoomCard, MehfilTemplate } from '../../types/mehfil'
 const MAX_MSG = 1000
 
 const TEMPLATE_LABEL: Record<MehfilTemplate, string> = {
+  // Locked focus templates — both built on the StageBracket shared backend.
+  debate:      'Debate',
+  roast:       'Roast',
+  // Legacy / pre-existing kinds — labels kept so old rooms still
+  // render correctly in Discover.
   dating_show: 'Dating show',
-  open_mic:    'Roast',           // 2026-06-21 product pivot — Mehfil only
-  debate:      'Debate',          // exposes Debate + Roast in the create flow.
-  watch_party: 'Watch party',     // open_mic UX serves as the Roast template
-  game_night:  'Game night',      // (multi-performer stage with host queue);
-  podcast:     'Podcast',         // dedicated 'roast' templateKind ships next session.
+  open_mic:    'Open mic',
+  watch_party: 'Watch party',
+  game_night:  'Game night',
+  podcast:     'Podcast',
   story_circle: 'Story circle',
   trivia:      'Trivia',
   talent_show: 'Talent show',
@@ -51,18 +56,18 @@ const TEMPLATE_LABEL: Record<MehfilTemplate, string> = {
 
 /// Templates exposed in the room-creation flow. Existing rooms with
 /// other templateKinds remain openable via Discover, but the host can
-/// only create new rooms in these two flavours going forward (product
-/// decision 2026-06-21).
-const CREATE_FLOW_TEMPLATES: MehfilTemplate[] = ['debate', 'open_mic']
+/// only create new rooms in these two flavours going forward.
+const CREATE_FLOW_TEMPLATES: MehfilTemplate[] = ['debate', 'roast']
 
 // ── Template palettes — each Mehfil template gets its own colour
 //   pair. Wired into the room stage via CSS vars; aurora + bubbles +
 //   gift rail all pull from these. Picked so every theme reads as
 //   distinct at a glance without leaving the brand-purple universe.
 const TEMPLATE_PALETTE: Record<MehfilTemplate, { accent1: string; accent2: string; emoji: string }> = {
+  debate:      { accent1: '#f97316', accent2: '#ef4444', emoji: '🔥' },
+  roast:       { accent1: '#dc2626', accent2: '#7c3aed', emoji: '💀' },
   dating_show: { accent1: '#f43f5e', accent2: '#ec4899', emoji: '💞' },
   open_mic:    { accent1: '#f59e0b', accent2: '#fbbf24', emoji: '🎤' },
-  debate:      { accent1: '#f97316', accent2: '#ef4444', emoji: '🔥' },
   watch_party: { accent1: '#6366f1', accent2: '#8b5cf6', emoji: '🎬' },
   game_night:  { accent1: '#10b981', accent2: '#06b6d4', emoji: '🎮' },
   podcast:     { accent1: '#3b82f6', accent2: '#8b5cf6', emoji: '🎙' },
@@ -163,7 +168,7 @@ export default function MehfilPage() {
     // user scrolls the stage. Generic templates keep the old layout.
     const isTemplateRoom =
       !!openRoom &&
-      ['debate', 'ghost_date', 'open_mic', 'podcast'].includes(openRoom.templateKind)
+      ['debate', 'roast', 'ghost_date', 'open_mic', 'podcast'].includes(openRoom.templateKind)
 
     if (isTemplateRoom) {
       return (
@@ -183,6 +188,23 @@ export default function MehfilPage() {
               ? <div className="flex justify-center py-12"><Loader /></div>
               : openRoom.templateKind === 'debate'
                 ? <DebateV2RoomPage
+                    room={openRoom}
+                    iAmHost={openRoomIAmHost}
+                    onLeave={async () => {
+                      try {
+                        await leaveRoom(openRoom.id)
+                        setOpenRoomId(null)
+                      } catch (err: any) {
+                        showToast({ type: 'error', title: 'Leave failed', message: err?.message ?? 'Try again.', duration: 4000 })
+                      }
+                    }}
+                    onEndRoom={async () => {
+                      try { const r = await endRoom(openRoom.id); setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost) }
+                      catch (err: any) { showToast({ type: 'error', title: 'End failed', message: err?.message ?? 'Try again.', duration: 4000 }) }
+                    }}
+                  />
+              : openRoom.templateKind === 'roast'
+                ? <RoastRoomPage
                     room={openRoom}
                     iAmHost={openRoomIAmHost}
                     onLeave={async () => {
