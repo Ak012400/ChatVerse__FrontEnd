@@ -131,6 +131,17 @@ export const presenceApi = {
     }>('/presence/stats', { params: rooms?.length ? { rooms: rooms.join(',') } : {} }),
 }
 
+export const supportApi = {
+  /** Multi-turn AI assistant. Send the full conversation; the server
+   *  prepends its locked system prompt and forwards to Groq → Gemini. */
+  ask: (messages: { role: 'user' | 'assistant'; content: string }[]) =>
+    api.post<{ data: { reply: string; offerTicket: boolean } }>('/support/ask', { messages }),
+  /** Create a support ticket — emails the support inbox with the
+   *  user's identity stamped in. */
+  ticket: (subject: string, body: string) =>
+    api.post<{ data: { ok: boolean; message: string } }>('/support/ticket', { subject, body }),
+}
+
 export const adminApi = {
   whoami:    () => api.get('/admin/whoami'),
   stats:     () => api.get('/admin/stats'),
@@ -146,6 +157,10 @@ export const adminApi = {
   // smoke-test PYAAR LIVE + Ghost Date without waiting a week.
   forcePyaarFormation: () => api.post('/admin/test/force-pyaar-formation'),
   forceGhostPairing:   () => api.post('/admin/test/force-ghost-pairing'),
+  /** Seed the test pool with N recent users so a solo admin can run
+   *  PYAAR / Ghost end-to-end without needing N other browsers. */
+  seedPool: (kind: 'pyaar' | 'ghost', count: number) =>
+    api.post(`/admin/test/seed-pool?kind=${kind}&count=${count}`),
 }
 
 export const randomGroupApi = {

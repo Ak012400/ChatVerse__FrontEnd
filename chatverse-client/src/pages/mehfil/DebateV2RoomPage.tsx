@@ -184,6 +184,7 @@ export default function DebateV2RoomPage({ room, iAmHost, onLeave, onEndRoom }: 
         <HostControlsBar
           config={config ?? null}
           round={round ?? null}
+          onQuickStart={() => hub.quickStart(room.id, 'debate', config?.hostTopic ?? undefined)}
           onConfigure={(p, secs, mins, chal, topic) =>
             hub.configureRoom(room.id, 'debate', p, secs, mins, chal, topic)}
           onStartRound={() => hub.startRound(room.id)}
@@ -191,6 +192,16 @@ export default function DebateV2RoomPage({ room, iAmHost, onLeave, onEndRoom }: 
           onEndRound={() => hub.endRound(room.id)}
           onEndRoom={onEndRoom}
         />
+      )}
+
+      {/* Audience-side empty-round notice. Replaces the chat's broken
+          "Nominate yourself" attempt when there's literally no round
+          to nominate into. */}
+      {!iAmHost && !round && (
+        <div className="my-3 inline-flex items-center gap-2 px-3 py-2 rounded-md bg-[var(--color-surface-1)] border border-[var(--color-line)] text-xs text-[var(--color-fg-dim)]">
+          <Sparkles size={12} className="text-amber-300 animate-pulse" />
+          Waiting for {room.hostUsername} to start a round. You'll be able to nominate yourself the moment it opens.
+        </div>
       )}
 
       {/* The 5v5 stage */}
@@ -325,10 +336,11 @@ function RoundStatusPill({ round }: { round: any | null }) {
 }
 
 function HostControlsBar({
-  config, round, onConfigure, onStartRound, onGoLive, onEndRound, onEndRoom,
+  config, round, onQuickStart, onConfigure, onStartRound, onGoLive, onEndRound, onEndRoom,
 }: {
   config: any | null
   round: any | null
+  onQuickStart: () => void
   onConfigure: (privacy: StageBracketPrivacy, secs: number, mins: number, challenge: number, topic: string | null) => void
   onStartRound: () => void
   onGoLive: () => void
@@ -341,24 +353,34 @@ function HostControlsBar({
 
   const isOpen = round?.status === 'open_seats'
   const isLive = round?.status === 'live'
+  const noRound = !round || round.status === 'ended'
 
   return (
     <div className="cv-debate-v2-monitor-rail rounded-md border border-[var(--color-line)] bg-[var(--color-surface-1)] p-3 flex flex-wrap items-center gap-2">
       <div className="text-[10px] uppercase tracking-wider font-semibold text-orange-300 inline-flex items-center gap-1.5">
         <Shield size={12} /> Host
       </div>
+      {/* ⚡ Quick-start — the fastest path from "empty room" to "live
+          mic + open seats". Default config (public/90s/5min/60s), random
+          topic from the bank. Audience can nominate immediately. */}
+      {noRound && (
+        <Button size="sm" variant="primary" onClick={onQuickStart} leftIcon={<Flame size={12} />}>
+          ⚡ Start instantly
+        </Button>
+      )}
       <Button size="sm" variant="ghost" onClick={() => setShowConfig((v) => !v)} leftIcon={<Sparkles size={12} />}>
         {showConfig ? 'Hide config' : 'Config'}
       </Button>
-      {!round || round.status === 'ended' ? (
-        <Button size="sm" variant="primary" onClick={onStartRound} leftIcon={<Flame size={12} />}>
-          Open new round
+      {noRound && (
+        <Button size="sm" variant="ghost" onClick={onStartRound} leftIcon={<Flame size={12} />}>
+          Open seats (no mic)
         </Button>
-      ) : isOpen ? (
+      )}
+      {isOpen && (
         <Button size="sm" variant="primary" onClick={onGoLive} leftIcon={<Mic size={12} />}>
           Go live (start mic rotation)
         </Button>
-      ) : null}
+      )}
       {isLive && (
         <Button size="sm" variant="ghost" onClick={onEndRound} leftIcon={<X size={12} />}>
           End round

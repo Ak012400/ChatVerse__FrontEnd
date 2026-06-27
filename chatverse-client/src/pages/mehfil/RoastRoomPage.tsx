@@ -191,6 +191,7 @@ export default function RoastRoomPage({ room, iAmHost, onLeave, onEndRoom }: Pro
         <HostControlsBar
           config={config ?? null}
           round={round ?? null}
+          onQuickStart={() => hub.quickStart(room.id, 'roast', config?.hostTopic ?? undefined)}
           onConfigure={(p, secs, mins, chal, topic) =>
             hub.configureRoom(room.id, 'roast', p, secs, mins, chal, topic)}
           onStartRound={() => hub.startRound(room.id)}
@@ -198,6 +199,14 @@ export default function RoastRoomPage({ room, iAmHost, onLeave, onEndRoom }: Pro
           onEndRound={() => hub.endRound(room.id)}
           onEndRoom={onEndRoom}
         />
+      )}
+
+      {/* Audience-side empty-round notice. */}
+      {!iAmHost && !round && (
+        <div className="my-3 inline-flex items-center gap-2 px-3 py-2 rounded-md bg-[var(--color-surface-1)] border border-[var(--color-line)] text-xs text-[var(--color-fg-dim)]">
+          <Sparkles size={12} className="text-red-300 animate-pulse" />
+          Waiting for {room.hostUsername} to start a round. You'll be able to take a seat the moment it opens.
+        </div>
       )}
 
       <div className="cv-roast-arena grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-3 lg:gap-4 mt-4">
@@ -327,10 +336,11 @@ function RoundStatusPill({ round }: { round: any | null }) {
 }
 
 function HostControlsBar({
-  config, round, onConfigure, onStartRound, onGoLive, onEndRound, onEndRoom,
+  config, round, onQuickStart, onConfigure, onStartRound, onGoLive, onEndRound, onEndRoom,
 }: {
   config: any | null
   round: any | null
+  onQuickStart: () => void
   onConfigure: (privacy: StageBracketPrivacy, secs: number, mins: number, challenge: number, topic: string | null) => void
   onStartRound: () => void
   onGoLive: () => void
@@ -343,6 +353,7 @@ function HostControlsBar({
 
   const isOpen = round?.status === 'open_seats'
   const isLive = round?.status === 'live'
+  const noRound = !round || round.status === 'ended'
   const canStart = !!config?.hostTopic // roast requires topic
 
   return (
@@ -350,18 +361,32 @@ function HostControlsBar({
       <div className="text-[10px] uppercase tracking-wider font-semibold text-red-300 inline-flex items-center gap-1.5">
         <Shield size={12} /> Host
       </div>
+      {/* ⚡ Quick-start — Roast still needs the subject set first, but
+          once it is, this skips Configure → StartRound → GoLive in one tap. */}
+      {noRound && (
+        <Button
+          size="sm" variant="primary"
+          disabled={!canStart}
+          onClick={onQuickStart}
+          leftIcon={<Skull size={12} />}
+          title={canStart ? 'Configure + open + go live in one shot' : 'Set the roast subject in Config first'}
+        >
+          {canStart ? '⚡ Start instantly' : 'Set subject first'}
+        </Button>
+      )}
       <Button size="sm" variant="ghost" onClick={() => setShowConfig((v) => !v)} leftIcon={<Sparkles size={12} />}>
         {showConfig ? 'Hide config' : 'Config'}
       </Button>
-      {!round || round.status === 'ended' ? (
-        <Button size="sm" variant="primary" disabled={!canStart} onClick={onStartRound} leftIcon={<Skull size={12} />}>
-          {canStart ? 'Open new round' : 'Set subject first'}
+      {noRound && canStart && (
+        <Button size="sm" variant="ghost" onClick={onStartRound} leftIcon={<Skull size={12} />}>
+          Open seats (no mic)
         </Button>
-      ) : isOpen ? (
+      )}
+      {isOpen && (
         <Button size="sm" variant="primary" onClick={onGoLive} leftIcon={<Mic size={12} />}>
           Go live (start mic rotation)
         </Button>
-      ) : null}
+      )}
       {isLive && (
         <Button size="sm" variant="ghost" onClick={onEndRound} leftIcon={<X size={12} />}>
           End round

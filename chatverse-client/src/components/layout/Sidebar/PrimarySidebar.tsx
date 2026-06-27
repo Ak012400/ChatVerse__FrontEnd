@@ -232,6 +232,18 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
           <HelpCircle size={18} />
         </IconButton>
 
+        {/* AI support assistant — global discovery via the utility
+            cluster so users can ask "how do I…" from any page. */}
+        <IconButton
+          variant="ghost"
+          active={pathname.startsWith('/support')}
+          onClick={() => navigate('/support')}
+          aria-label="AI support"
+          title="AI support"
+        >
+          <Sparkles size={18} />
+        </IconButton>
+
         {/* Token wallet — sits in the utility group rather than the
             feature catalogue because it's a piggy-bank, not a daily
             activity. Wallet balance pushes live via TokensHub. */}
