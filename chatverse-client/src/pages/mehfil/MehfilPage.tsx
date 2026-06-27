@@ -124,16 +124,58 @@ export default function MehfilPage() {
   }, [isConnected, filter, templateFilter])
 
   // Load open-room detail when opened.
+  //
+  // For *debate / roast* rooms hosted by me that are still in 'scheduled'
+  // status, automatically flip to 'live' the moment the host opens them.
+  // These two templates are designed for on-demand sessions, not pre-
+  // scheduled events — without auto-start, room.status stays 'scheduled'
+  // and the room never appears in Discover's "Live" filter, and audience
+  // members get a degraded UX. Other templates keep the old "wait for
+  // the cron at scheduledFor" behaviour.
   useEffect(() => {
     if (!openRoomId || !isConnected) {
       if (!openRoomId) setOpenRoom(null)
       return
     }
-    getRoom(openRoomId)
-      .then((r) => setOpenRoom(r.room, r.iAmHost, r.messages, r.attendees, r.tips))
-      .catch(() => showToast({
-        type: 'error', title: 'Couldn\'t load room', message: 'Try again.', duration: 3500,
-      }))
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await getRoom(openRoomId)
+        if (cancelled) return
+        setOpenRoom(r.room, r.iAmHost, r.messages, r.attendees, r.tips)
+
+        const AUTO_START: MehfilTemplate[] = ['debate', 'roast']
+        if (
+          r.iAmHost &&
+          r.room.status === 'scheduled' &&
+          AUTO_START.includes(r.room.templateKind)
+        ) {
+          try {
+            const live = await startRoom(r.room.id)
+            if (!cancelled) {
+              // Merge: keep messages/attendees/tips from the original load;
+              // only the room card fields (status, audience, etc.) refresh.
+              setOpenRoom(
+                { ...r.room, ...live },
+                true,
+                r.messages, r.attendees, r.tips,
+              )
+            }
+          } catch {
+            // Non-fatal — the host can still start the StageBracket round
+            // via the in-room "Start now" button. The only thing they
+            // lose is automatic visibility in Discover's "Live" filter.
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          showToast({
+            type: 'error', title: 'Couldn\'t load room', message: 'Try again.', duration: 3500,
+          })
+        }
+      }
+    })()
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openRoomId, isConnected])
 
@@ -199,6 +241,14 @@ export default function MehfilPage() {
                       try { const r = await endRoom(openRoom.id); setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost) }
                       catch (err: any) { showToast({ type: 'error', title: 'End failed', message: err?.message ?? 'Try again.', duration: 4000 }) }
                     }}
+                    onStartMehfil={async () => {
+                      try {
+                        const r = await startRoom(openRoom.id)
+                        setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost)
+                      } catch (err: any) {
+                        showToast({ type: 'error', title: 'Start failed', message: err?.message ?? 'Try again.', duration: 4000 })
+                      }
+                    }}
                   />
               : openRoom.templateKind === 'roast'
                 ? <RoastRoomPage
@@ -215,6 +265,14 @@ export default function MehfilPage() {
                     onEndRoom={async () => {
                       try { const r = await endRoom(openRoom.id); setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost) }
                       catch (err: any) { showToast({ type: 'error', title: 'End failed', message: err?.message ?? 'Try again.', duration: 4000 }) }
+                    }}
+                    onStartMehfil={async () => {
+                      try {
+                        const r = await startRoom(openRoom.id)
+                        setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost)
+                      } catch (err: any) {
+                        showToast({ type: 'error', title: 'Start failed', message: err?.message ?? 'Try again.', duration: 4000 })
+                      }
                     }}
                   />
               : openRoom.templateKind === 'ghost_date'

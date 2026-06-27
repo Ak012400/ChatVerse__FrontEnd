@@ -42,9 +42,13 @@ type Props = {
   iAmHost: boolean
   onLeave: () => void
   onEndRoom: () => void
+  /** Optional — when provided, the in-room "START NOW" banner also
+   *  flips the Mehfil itself live (room.status: scheduled → live). Mirrors
+   *  the contract used by DebateV2RoomPage. */
+  onStartMehfil?: () => Promise<void> | void
 }
 
-export default function RoastRoomPage({ room, iAmHost, onLeave, onEndRoom }: Props) {
+export default function RoastRoomPage({ room, iAmHost, onLeave, onEndRoom, onStartMehfil }: Props) {
   const me = useAuthStore((s) => s.user)
   const hub = useStageBracketHub()
   const roomState = useStageBracketStore((s) => s.roomState)
@@ -141,8 +145,33 @@ export default function RoastRoomPage({ room, iAmHost, onLeave, onEndRoom }: Pro
   }, [round, seats, myUid])
   const amINominated = seatNominations.some((n) => n.userId === myUid)
 
+  // ── One-shot "go fully live" — flips Mehfil (if scheduled) + StageBracket
+  // QuickStart in one go. Roast needs a host topic before StageBracket
+  // accepts QuickStart, so we still gate the round-start side on that.
+  const quickStartFullStack = async () => {
+    if (onStartMehfil && room.status === 'scheduled') {
+      try { await onStartMehfil() } catch { /* non-fatal */ }
+    }
+    if (config?.hostTopic) {
+      await hub.quickStart(room.id, 'roast', config.hostTopic)
+    }
+  }
+
   return (
     <div className="cv-roast-stage cv-pop p-4 sm:p-5 border border-[var(--color-line)] relative">
+      {/* ── ALWAYS-VISIBLE STATUS BANNER ─────────────────────────
+         Mirrors DebateV2's pattern: inline-styled (no cv-* utilities)
+         so it shows up even if cv-roast-* CSS misfires. Roast adds a
+         "need a subject first" hint instead of a green CTA when the
+         host hasn't picked a topic yet. */}
+      <MehfilStatusBanner
+        room={room}
+        iAmHost={iAmHost}
+        hostTopic={config?.hostTopic ?? null}
+        roundStatus={roomState?.round?.status ?? null}
+        onQuickStartFullStack={quickStartFullStack}
+      />
+
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
         <div className="flex items-start gap-3 min-w-0">
@@ -191,7 +220,9 @@ export default function RoastRoomPage({ room, iAmHost, onLeave, onEndRoom }: Pro
         <HostControlsBar
           config={config ?? null}
           round={round ?? null}
-          onQuickStart={() => hub.quickStart(room.id, 'roast', config?.hostTopic ?? undefined)}
+          /* Shared with the top status banner so wherever the host
+             clicks the room flips both Mehfil-live + round-live. */
+          onQuickStart={quickStartFullStack}
           onConfigure={(p, secs, mins, chal, topic) =>
             hub.configureRoom(room.id, 'roast', p, secs, mins, chal, topic)}
           onStartRound={() => hub.startRound(room.id)}
@@ -274,6 +305,174 @@ export default function RoastRoomPage({ room, iAmHost, onLeave, onEndRoom }: Pro
 /* ─────────────────────────────────────────────────────────────
    Building blocks
 ───────────────────────────────────────────────────────────── */
+
+/**
+ * Always-visible status banner for Roast. Same shape as
+ * DebateV2's, but the CTA respects Roast's "subject is mandatory"
+ * rule: if the host hasn't set a topic, we show an amber hint
+ * instead of a green Go-Live button.
+ *
+ * Inline-styled on purpose — same defensive reasoning as DebateV2.
+ */
+function MehfilStatusBanner({
+  room, iAmHost, hostTopic, roundStatus, onQuickStartFullStack,
+}: {
+  room: MehfilRoomCard
+  iAmHost: boolean
+  hostTopic: string | null
+  roundStatus: 'open_seats' | 'live' | 'ended' | null
+  onQuickStartFullStack: () => void | Promise<void>
+}) {
+  const isScheduled = room.status === 'scheduled'
+  const isLive      = room.status === 'live'
+  const isEnded     = room.status === 'ended' || room.status === 'cancelled'
+  const roundLive   = roundStatus === 'live' || roundStatus === 'open_seats'
+  const hasTopic    = !!hostTopic
+  const [busy, setBusy] = useState(false)
+
+  const handleGoLive = async () => {
+    if (busy) return
+    setBusy(true)
+    try { await onQuickStartFullStack() }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        zIndex: 2,
+        marginBottom: 12,
+        padding: '10px 12px',
+        borderRadius: 10,
+        border: '1px solid var(--color-line)',
+        background: 'var(--color-surface-2)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        flexWrap: 'wrap',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+        <span
+          style={{
+            fontSize: 10,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            fontWeight: 700,
+            padding: '3px 8px',
+            borderRadius: 999,
+            color: isLive ? '#fca5a5' : isScheduled ? '#fcd34d' : '#9ca3af',
+            background: isLive ? 'rgba(220,38,38,0.15)' : isScheduled ? 'rgba(245,158,11,0.15)' : 'rgba(148,163,184,0.15)',
+            border: `1px solid ${isLive ? 'rgba(220,38,38,0.4)' : isScheduled ? 'rgba(245,158,11,0.4)' : 'rgba(148,163,184,0.4)'}`,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          {isLive && <span style={{ width: 6, height: 6, borderRadius: 999, background: '#dc2626', display: 'inline-block' }} />}
+          {isLive ? 'Live' : isScheduled ? 'Scheduled' : 'Ended'}
+        </span>
+
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: 'var(--color-fg)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: 360,
+            }}
+          >
+            {room.title || 'Untitled roast'}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--color-fg-faint)' }}>
+            💀 Roast · hosted by <strong style={{ color: 'var(--color-fg-dim)' }}>{room.hostUsername || '—'}</strong>
+            {isLive && <> · <span style={{ color: 'var(--color-fg-dim)' }}>{room.currentAudienceCount}/{room.maxAudience} in room</span></>}
+          </div>
+        </div>
+      </div>
+
+      {/* Host CTA — Roast variant. Needs a topic before the green
+          button unlocks; otherwise show an amber "set subject first"
+          hint that hints at the Config panel below. */}
+      {iAmHost && !isEnded && (
+        !hasTopic ? (
+          <span
+            style={{
+              fontSize: 11,
+              padding: '4px 10px',
+              borderRadius: 999,
+              border: '1px solid rgba(245,158,11,0.5)',
+              background: 'rgba(245,158,11,0.12)',
+              color: '#fcd34d',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            <Flame size={10} /> Set a roast subject in Config below
+          </span>
+        ) : isScheduled ? (
+          <button
+            onClick={handleGoLive}
+            disabled={busy}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: '1px solid #dc2626',
+              background: busy
+                ? 'rgba(220,38,38,0.4)'
+                : 'linear-gradient(135deg, #dc2626 0%, #7c3aed 100%)',
+              color: 'white',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: busy ? 'wait' : 'pointer',
+              boxShadow: '0 4px 16px rgba(220,38,38,0.35)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <Skull size={14} /> {busy ? 'Starting…' : 'START NOW'}
+          </button>
+        ) : isLive && !roundLive ? (
+          <button
+            onClick={handleGoLive}
+            disabled={busy}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: '1px solid rgba(220,38,38,0.6)',
+              background: 'rgba(220,38,38,0.15)',
+              color: '#fca5a5',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: busy ? 'wait' : 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <Mic size={12} /> {busy ? 'Opening…' : 'Open the stage'}
+          </button>
+        ) : (
+          <span style={{ fontSize: 11, color: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Mic size={11} /> Stage live
+          </span>
+        )
+      )}
+
+      {!iAmHost && isScheduled && (
+        <span style={{ fontSize: 11, color: 'var(--color-fg-faint)' }}>
+          Waiting for host to start…
+        </span>
+      )}
+    </div>
+  )
+}
 
 function InviteCodeGate({
   value, setValue, onSubmit, onBack,
