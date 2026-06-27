@@ -223,6 +223,14 @@ export default function DebateV2RoomPage({ room, iAmHost, onLeave, onEndRoom, on
           onGoLive={() => hub.goLive(room.id)}
           onEndRound={() => hub.endRound(room.id)}
           onEndRoom={onEndRoom}
+          /* Re-open seats: ends the current round and immediately
+             starts a fresh one in 'open_seats' state, so audience can
+             nominate again. Useful when a round went live with empty
+             seats. */
+          onReopenSeats={async () => {
+            await hub.endRound(room.id)
+            await hub.startRound(room.id)
+          }}
         />
       )}
 
@@ -265,11 +273,12 @@ export default function DebateV2RoomPage({ room, iAmHost, onLeave, onEndRoom, on
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 mt-5">
         <ChatColumn
           myUserId={myUid}
+          iAmHost={iAmHost}
           amISeated={amISeated}
           amINominated={amINominated}
           pendingCount={roomState?.pendingNominationCount ?? 0}
           messages={messages}
-          roundLive={round?.status === 'live'}
+          roundStatus={round?.status ?? null}
           onSendChat={(text) => hub.sendChat(room.id, text)}
           onNominate={(side, note) => hub.nominateForSeat(room.id, side, note)}
           onWithdrawNomination={() => hub.withdrawNomination(room.id)}
@@ -524,6 +533,7 @@ function RoundStatusPill({ round }: { round: any | null }) {
 
 function HostControlsBar({
   config, round, onQuickStart, onConfigure, onStartRound, onGoLive, onEndRound, onEndRoom,
+  onReopenSeats,
 }: {
   config: any | null
   round: any | null
@@ -533,6 +543,11 @@ function HostControlsBar({
   onGoLive: () => void
   onEndRound: () => void
   onEndRoom: () => void
+  /** Optional — when supplied, a "Re-open seats" button appears while
+   *  the round is live so the host can return to 'open_seats' phase and
+   *  accept fresh nominations. Useful when QuickStart fired into an
+   *  empty room and no one had a chance to nominate. */
+  onReopenSeats?: () => void | Promise<void>
 }) {
   const [showConfig, setShowConfig] = useState(false)
   const [topicDraft, setTopicDraft] = useState(config?.hostTopic ?? '')
@@ -566,6 +581,11 @@ function HostControlsBar({
       {isOpen && (
         <Button size="sm" variant="primary" onClick={onGoLive} leftIcon={<Mic size={12} />}>
           Go live (start mic rotation)
+        </Button>
+      )}
+      {isLive && onReopenSeats && (
+        <Button size="sm" variant="ghost" onClick={onReopenSeats} leftIcon={<Hand size={12} />}>
+          Re-open seats
         </Button>
       )}
       {isLive && (
@@ -823,15 +843,17 @@ function PerformerMicHelper() {
 }
 
 function ChatColumn({
-  myUserId, amISeated, amINominated, pendingCount, messages, roundLive,
+  myUserId, iAmHost, amISeated, amINominated, pendingCount, messages, roundStatus,
   onSendChat, onNominate, onWithdrawNomination, onRaiseHandChallenge,
 }: {
   myUserId: string | undefined
+  iAmHost: boolean
   amISeated: boolean
   amINominated: boolean
   pendingCount: number
   messages: any[]
-  roundLive: boolean
+  /** Round phase. Drives which audience actions are even meaningful. */
+  roundStatus: 'open_seats' | 'live' | 'ended' | null
   onSendChat: (t: string) => void
   onNominate: (side: StageBracketPreferredSide, note: string) => void
   onWithdrawNomination: () => void
@@ -850,40 +872,67 @@ function ChatColumn({
     setDraft('')
   }
 
+  // Backend gates: NominateForSeat only accepts 'open_seats' or no-round
+  // states; RaiseHandToChallenge only when 'live'. Mirror these client-
+  // side so we don't surface buttons that will error out.
+  const canNominate = !amISeated && (roundStatus === null || roundStatus === 'open_seats' || roundStatus === 'ended')
+  const canChallenge = !amISeated && roundStatus === 'live'
+
   return (
     <div className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface-1)] flex flex-col min-h-[360px] max-h-[60vh]">
       <div className="border-b border-[var(--color-line)] px-3 py-2 flex items-center gap-2 flex-wrap text-[11px]">
         <span className="text-[var(--color-fg-faint)] inline-flex items-center gap-1">
           <Hand size={11} /> {pendingCount} {pendingCount === 1 ? 'hand' : 'hands'}
         </span>
-        {!amISeated && (
-          amINominated ? (
-            <button
-              onClick={onWithdrawNomination}
-              className="ml-auto text-[var(--color-warning-fg)] hover:underline"
-            >Withdraw nomination</button>
-          ) : (
-            <button
-              onClick={() => setShowSeatForm(true)}
-              className="ml-auto text-[var(--color-accent-fg)] hover:underline inline-flex items-center gap-1"
-            >
-              <Hand size={11} /> Nominate yourself
-            </button>
-          )
-        )}
-        {!amISeated && roundLive && (
-          <button
-            onClick={() => setShowChallengeForm(true)}
-            className="text-amber-300 hover:underline inline-flex items-center gap-1"
-            title="Challenge a current speaker"
-          >
-            ⚡ Challenge
-          </button>
-        )}
-        {amISeated && (
-          <span className="ml-auto inline-flex items-center gap-1 text-emerald-300">
-            <Mic size={11} /> You're on stage
+
+        {/* Host doesn't compete — they only moderate. So we hide
+            nominate/challenge entirely. Their "remove" affordance lives
+            on each seat tile, and their assign/approve flow lives in
+            the HostSidebar (right column). */}
+        {iAmHost ? (
+          <span className="ml-auto inline-flex items-center gap-1 text-orange-300/85">
+            <Shield size={11} /> Moderating
           </span>
+        ) : (
+          <>
+            {canNominate && (
+              amINominated ? (
+                <button
+                  onClick={onWithdrawNomination}
+                  className="ml-auto text-[var(--color-warning-fg)] hover:underline"
+                >Withdraw nomination</button>
+              ) : (
+                <button
+                  onClick={() => setShowSeatForm(true)}
+                  className="ml-auto text-[var(--color-accent-fg)] hover:underline inline-flex items-center gap-1"
+                >
+                  <Hand size={11} /> Nominate yourself
+                </button>
+              )
+            )}
+            {/* Round is mid-rotation — no new seats, but audience can cut
+                in via Challenge. Keep them informed; don't show a dead
+                Nominate button that would error with "No round to join". */}
+            {!amISeated && roundStatus === 'live' && !canNominate && (
+              <span className="ml-auto text-[var(--color-fg-faint)] italic inline-flex items-center gap-1">
+                <Mic size={11} /> Round in progress
+              </span>
+            )}
+            {canChallenge && (
+              <button
+                onClick={() => setShowChallengeForm(true)}
+                className="text-amber-300 hover:underline inline-flex items-center gap-1"
+                title="Cut in on a current speaker"
+              >
+                ⚡ Challenge
+              </button>
+            )}
+            {amISeated && (
+              <span className="ml-auto inline-flex items-center gap-1 text-emerald-300">
+                <Mic size={11} /> You're on stage
+              </span>
+            )}
+          </>
         )}
       </div>
 
