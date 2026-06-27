@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft, Sparkles, Shield, Mic, Heart, MessageCircle, Mail, Globe,
-  Github, Users, Gamepad2, Theater,
+  Users, Gamepad2, Theater,
 } from 'lucide-react'
 
 import Logo from '../../components/ui/Logo'
@@ -171,8 +171,6 @@ export default function AboutUsPage() {
         </footer>
       </main>
 
-      {/* Defensive — silence unused-import warnings if any feature card branch goes unused. */}
-      <div hidden>{[Github]}</div>
     </div>
   )
 }
