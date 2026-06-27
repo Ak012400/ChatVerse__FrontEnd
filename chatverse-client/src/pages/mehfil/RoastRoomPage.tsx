@@ -229,6 +229,12 @@ export default function RoastRoomPage({ room, iAmHost, onLeave, onEndRoom, onSta
           onGoLive={() => hub.goLive(room.id)}
           onEndRound={() => hub.endRound(room.id)}
           onEndRoom={onEndRoom}
+          /* End the current round and immediately open a fresh one so
+             audience can nominate again. Mirrors DebateV2's behaviour. */
+          onReopenSeats={async () => {
+            await hub.endRound(room.id)
+            await hub.startRound(room.id)
+          }}
         />
       )}
 
@@ -267,11 +273,12 @@ export default function RoastRoomPage({ room, iAmHost, onLeave, onEndRoom, onSta
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 mt-5">
         <ChatColumn
           myUserId={myUid}
+          iAmHost={iAmHost}
           amISeated={amISeated}
           amINominated={amINominated}
           pendingCount={roomState?.pendingNominationCount ?? 0}
           messages={messages}
-          roundLive={round?.status === 'live'}
+          roundStatus={round?.status ?? null}
           onSendChat={(text) => hub.sendChat(room.id, text)}
           onNominate={(side, note) => hub.nominateForSeat(room.id, side, note)}
           onWithdrawNomination={() => hub.withdrawNomination(room.id)}
@@ -536,6 +543,7 @@ function RoundStatusPill({ round }: { round: any | null }) {
 
 function HostControlsBar({
   config, round, onQuickStart, onConfigure, onStartRound, onGoLive, onEndRound, onEndRoom,
+  onReopenSeats,
 }: {
   config: any | null
   round: any | null
@@ -545,6 +553,9 @@ function HostControlsBar({
   onGoLive: () => void
   onEndRound: () => void
   onEndRoom: () => void
+  /** Optional — mirrors DebateV2: lets the host return to 'open_seats'
+   *  to accept fresh nominations after a round started empty. */
+  onReopenSeats?: () => void | Promise<void>
 }) {
   const [showConfig, setShowConfig] = useState(false)
   const [topicDraft, setTopicDraft] = useState(config?.hostTopic ?? '')
@@ -584,6 +595,11 @@ function HostControlsBar({
       {isOpen && (
         <Button size="sm" variant="primary" onClick={onGoLive} leftIcon={<Mic size={12} />}>
           Go live (start mic rotation)
+        </Button>
+      )}
+      {isLive && onReopenSeats && (
+        <Button size="sm" variant="ghost" onClick={onReopenSeats} leftIcon={<Hand size={12} />}>
+          Re-open seats
         </Button>
       )}
       {isLive && (
@@ -842,15 +858,17 @@ function PerformerMicHelper() {
 }
 
 function ChatColumn({
-  myUserId, amISeated, amINominated, pendingCount, messages, roundLive,
+  myUserId, iAmHost, amISeated, amINominated, pendingCount, messages, roundStatus,
   onSendChat, onNominate, onWithdrawNomination, onRaiseHandChallenge,
 }: {
   myUserId: string | undefined
+  iAmHost: boolean
   amISeated: boolean
   amINominated: boolean
   pendingCount: number
   messages: any[]
-  roundLive: boolean
+  /** Round phase. Drives whether nominate / cut-in buttons make sense. */
+  roundStatus: 'open_seats' | 'live' | 'ended' | null
   onSendChat: (t: string) => void
   onNominate: (side: StageBracketPreferredSide, note: string) => void
   onWithdrawNomination: () => void
@@ -869,39 +887,59 @@ function ChatColumn({
     setDraft('')
   }
 
+  // Mirror backend gates so we don't expose buttons that will toast-error.
+  const canNominate = !amISeated && (roundStatus === null || roundStatus === 'open_seats' || roundStatus === 'ended')
+  const canChallenge = !amISeated && roundStatus === 'live'
+
   return (
     <div className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface-1)] flex flex-col min-h-[360px] max-h-[60vh]">
       <div className="border-b border-[var(--color-line)] px-3 py-2 flex items-center gap-2 flex-wrap text-[11px]">
         <span className="text-[var(--color-fg-faint)] inline-flex items-center gap-1">
           <Hand size={11} /> {pendingCount} {pendingCount === 1 ? 'hand' : 'hands'}
         </span>
-        {!amISeated && (
-          amINominated ? (
-            <button onClick={onWithdrawNomination} className="ml-auto text-[var(--color-warning-fg)] hover:underline">
-              Withdraw nomination
-            </button>
-          ) : (
-            <button
-              onClick={() => setShowSeatForm(true)}
-              className="ml-auto text-red-300 hover:underline inline-flex items-center gap-1"
-            >
-              <Skull size={11} /> Take a seat
-            </button>
-          )
-        )}
-        {!amISeated && roundLive && (
-          <button
-            onClick={() => setShowChallengeForm(true)}
-            className="text-amber-300 hover:underline inline-flex items-center gap-1"
-            title="Cut in on the current speaker"
-          >
-            ⚡ Cut in
-          </button>
-        )}
-        {amISeated && (
-          <span className="ml-auto inline-flex items-center gap-1 text-red-300">
-            <Mic size={11} /> You're on stage
+
+        {/* Host moderates, doesn't compete. Seat-tile X already gives
+            remove; HostSidebar handles assign/approve. */}
+        {iAmHost ? (
+          <span className="ml-auto inline-flex items-center gap-1 text-red-300/85">
+            <Shield size={11} /> Moderating
           </span>
+        ) : (
+          <>
+            {canNominate && (
+              amINominated ? (
+                <button onClick={onWithdrawNomination} className="ml-auto text-[var(--color-warning-fg)] hover:underline">
+                  Withdraw nomination
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowSeatForm(true)}
+                  className="ml-auto text-red-300 hover:underline inline-flex items-center gap-1"
+                >
+                  <Skull size={11} /> Take a seat
+                </button>
+              )
+            )}
+            {!amISeated && roundStatus === 'live' && !canNominate && (
+              <span className="ml-auto text-[var(--color-fg-faint)] italic inline-flex items-center gap-1">
+                <Mic size={11} /> Round in progress
+              </span>
+            )}
+            {canChallenge && (
+              <button
+                onClick={() => setShowChallengeForm(true)}
+                className="text-amber-300 hover:underline inline-flex items-center gap-1"
+                title="Cut in on the current speaker"
+              >
+                ⚡ Cut in
+              </button>
+            )}
+            {amISeated && (
+              <span className="ml-auto inline-flex items-center gap-1 text-red-300">
+                <Mic size={11} /> You're on stage
+              </span>
+            )}
+          </>
         )}
       </div>
 
