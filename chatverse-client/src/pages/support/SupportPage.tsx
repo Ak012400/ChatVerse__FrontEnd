@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  ArrowLeft, Send, Sparkles, MessageCircle, Mail, Loader2, Check, X,
+  ArrowLeft, Send, MessageCircle, Mail, Loader2, Check, X, Bot,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
@@ -110,7 +110,7 @@ export default function SupportPage() {
           </Link>
           <div className="flex-1" />
           <div className="inline-flex items-center gap-2 text-sm font-semibold">
-            <Sparkles size={14} className="text-[var(--color-accent-fg)] animate-pulse" />
+            <Bot size={14} className="text-[var(--color-accent-fg)] animate-pulse" />
             ChatVerse Assistant
           </div>
         </div>
@@ -188,7 +188,7 @@ function ChatBubble({ m, onTicket }: { m: ChatMessage; onTicket: () => void }) {
           : 'bg-[var(--color-surface-1)] border border-[var(--color-line)] text-[var(--color-fg)]'}`}>
         {!mine && (
           <div className="text-[10px] uppercase tracking-wider font-semibold text-[var(--color-accent-fg)] mb-0.5 inline-flex items-center gap-1">
-            <Sparkles size={9} /> Assistant
+            <Bot size={9} /> Assistant
           </div>
         )}
         <div className="whitespace-pre-wrap break-words">{m.content}</div>
