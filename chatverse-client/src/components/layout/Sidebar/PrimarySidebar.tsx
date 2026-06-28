@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import {
   MessagesSquare, Video, LogOut, Settings, ShieldCheck, CreditCard, Mail,
   Sun, Moon, Hourglass, HelpCircle, Sparkles, Feather, MessageSquare,
-  Heart, Users, Key, Theater, Mic, Wallet, type LucideIcon,
+  Heart, Users, Key, Theater, Mic, Wallet, Bot, type LucideIcon,
 } from 'lucide-react'
 import { useAuthStore } from '../../../stores/authStore'
 import { useUiStore, type FeatureIconId } from '../../../stores/uiStore'
@@ -233,7 +233,9 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
         </IconButton>
 
         {/* AI support assistant — global discovery via the utility
-            cluster so users can ask "how do I…" from any page. */}
+            cluster so users can ask "how do I…" from any page. Bot
+            icon distinguishes this from Persona Roulette, which owns
+            Sparkles in the feature rail. */}
         <IconButton
           variant="ghost"
           active={pathname.startsWith('/support')}
@@ -241,7 +243,7 @@ export default function PrimarySidebar({ activeTab, setActiveTab }: Props) {
           aria-label="AI support"
           title="AI support"
         >
-          <Sparkles size={18} />
+          <Bot size={18} />
         </IconButton>
 
         {/* Token wallet — sits in the utility group rather than the
