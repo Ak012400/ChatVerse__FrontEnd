@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Brain, Sparkles, Laugh, Loader2, Globe, Lock, Crown, Dices } from 'lucide-react'
+import { X, Brain, Laugh, Loader2, Globe, Lock, Crown, Dices, Flame, Coffee, Gauge } from 'lucide-react'
 import { gamesApi } from '../../api'
 import { useAuthStore } from '../../stores/authStore'
 import { useToastStore } from '../../stores/toastStore'
@@ -25,17 +25,20 @@ import type {
 //    custom categories can still go to /games directly.
 // ============================================================
 
-type GamePreset = 'quiz' | 'trivia' | 'jokes' | 'chess' | 'ludo'
+type GamePreset = 'quiz' | 'jokes' | 'chess' | 'ludo'
 
 interface PresetConfig {
   id: GamePreset
-  /** Backend game type — Quiz preset and Trivia preset both send
-   *  `Quiz` to the API (Trivia is just a difficulty/timing variant).
+  /** Backend game type — Quiz preset sends `Quiz`. Difficulty is now
+   *  chosen separately via a chip row instead of being baked into a
+   *  "Hard Trivia" preset (which was just a Quiz at Hard difficulty).
    *  Jokes preset sends `Jokes` which routes to JokesSession. */
   gameType: GameType
   title: string
   subtitle: string
   category: QuizCategory
+  /** Default difficulty — only Quiz preset honours per-launch overrides
+   *  via the difficulty chip row; Jokes/Chess/Ludo ignore it. */
   difficulty: QuizDifficulty
   questionCount: number
   secondsPerQuestion: number
@@ -44,12 +47,21 @@ interface PresetConfig {
   iconBg: string
 }
 
+// Per-difficulty timing — Hard gives less time per question, Easy gives
+// more, mirroring the old "Hard Trivia" feel without a second preset.
+const DIFFICULTY_TIMINGS: Record<QuizDifficulty, number> = {
+  Easy: 20,
+  Medium: 15,
+  Hard: 10,
+  Any: 15,
+}
+
 const PRESETS: PresetConfig[] = [
   {
     id: 'quiz',
     gameType: 'Quiz',
-    title: 'Casual Quiz',
-    subtitle: '10 questions · 15s each · any category, any difficulty',
+    title: 'Quiz',
+    subtitle: '10 questions · pick a difficulty below',
     category: 'Any',
     difficulty: 'Any',
     questionCount: 10,
@@ -57,19 +69,6 @@ const PRESETS: PresetConfig[] = [
     maxPlayers: 6,
     icon: <Brain size={20} />,
     iconBg: 'bg-[var(--color-accent-soft)] text-[var(--color-accent-fg)]',
-  },
-  {
-    id: 'trivia',
-    gameType: 'Quiz',
-    title: 'Hard Trivia',
-    subtitle: '10 questions · 10s each · hard difficulty — for the brave',
-    category: 'Any',
-    difficulty: 'Hard',
-    questionCount: 10,
-    secondsPerQuestion: 10,
-    maxPlayers: 6,
-    icon: <Sparkles size={20} />,
-    iconBg: 'bg-[var(--color-warning-soft)] text-[var(--color-warning-fg)]',
   },
   {
     id: 'jokes',
@@ -148,6 +147,9 @@ export default function GameLauncherModal({
   const isGuest = !!me?.isGuest
   const [name, setName] = useState(defaultName ?? '')
   const [selected, setSelected] = useState<GamePreset>('quiz')
+  // Difficulty override — only Quiz preset reads this; other presets
+  // ignore it (Jokes/Chess/Ludo have no concept of difficulty).
+  const [quizDifficulty, setQuizDifficulty] = useState<QuizDifficulty>('Any')
   const [submitting, setSubmitting] = useState(false)
   // Visibility default = public when the modal is launched from inside
   // a chat (so other chat members see it), otherwise private. Users
@@ -162,19 +164,26 @@ export default function GameLauncherModal({
     const trimmed = (name.trim() || defaultName || 'Quick game').slice(0, 40)
     setSubmitting(true)
     try {
+      // Apply per-launch difficulty override for Quiz preset only.
+      // Others use the preset's default (which is 'Any', harmless).
+      const finalDifficulty: QuizDifficulty =
+        preset.id === 'quiz' ? quizDifficulty : preset.difficulty
+      const finalSeconds =
+        preset.id === 'quiz' ? DIFFICULTY_TIMINGS[quizDifficulty] : preset.secondsPerQuestion
+
       const req: CreateGameRoomRequest = {
         name: trimmed,
         type: preset.gameType, // Quiz or Jokes — routed by GameSessionRegistry
         maxPlayers: preset.maxPlayers,
         category: preset.category,
-        difficulty: preset.difficulty,
+        difficulty: finalDifficulty,
         questionCount: preset.questionCount,
-        secondsPerQuestion: preset.secondsPerQuestion,
+        secondsPerQuestion: finalSeconds,
         isPublic,
         sourceChatSlug,
-        // Quiz v2: new quiz/trivia rooms use buzzer scoring — first
-        // correct answer gets the point. Jokes/Chess ignore the field;
-        // old rooms keep Speed mode (backend default).
+        // Quiz v2: new quiz rooms use buzzer scoring — first correct
+        // answer gets the point. Jokes/Chess ignore the field; old
+        // rooms keep Speed mode (backend default).
         scoringMode: preset.gameType === 'Quiz' ? 'FirstCorrect' : undefined,
       }
       const res = await gamesApi.create(req)
@@ -339,6 +348,53 @@ export default function GameLauncherModal({
                 Sign up to host
               </a>
             </p>
+          )}
+
+          {/* Difficulty chip row — appears only for the Quiz preset.
+              Replaces the old "Hard Trivia" preset by giving a clean
+              difficulty slider instead of a separate game mode. Hard
+              also drops per-question time to 10s (matches old trivia
+              feel); Easy bumps it to 20s. */}
+          {selected === 'quiz' && (
+            <div>
+              <p className="text-xs text-[var(--color-fg-dim)] mb-2">Difficulty</p>
+              <div className="grid grid-cols-4 gap-2">
+                {(['Any', 'Easy', 'Medium', 'Hard'] as QuizDifficulty[]).map((d) => {
+                  const active = quizDifficulty === d
+                  const icon =
+                    d === 'Easy'   ? <Coffee size={12} /> :
+                    d === 'Medium' ? <Gauge  size={12} /> :
+                    d === 'Hard'   ? <Flame  size={12} /> :
+                                     <Brain  size={12} />
+                  const tint =
+                    d === 'Hard'   ? 'bg-[var(--color-warning-soft)] text-[var(--color-warning-fg)] border-[var(--color-warning-border)]' :
+                    d === 'Easy'   ? 'bg-[var(--color-success-soft)] text-[var(--color-success-fg)] border-[var(--color-success-fg)]' :
+                                     'bg-[var(--color-accent-soft)] text-[var(--color-accent-fg)] border-[var(--color-accent-fg)]'
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setQuizDifficulty(d)}
+                      className={[
+                        'h-9 px-2 rounded-md border text-xs font-medium inline-flex items-center justify-center gap-1.5 transition-all',
+                        active
+                          ? tint
+                          : 'bg-[var(--color-surface-1)] border-[var(--color-line)] text-[var(--color-fg-dim)] hover:border-[var(--color-line-strong)]',
+                      ].join(' ')}
+                    >
+                      {icon}
+                      <span>{d}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-[10px] text-[var(--color-fg-mute)] mt-1.5 italic">
+                {quizDifficulty === 'Hard' && '10s per question · for the brave'}
+                {quizDifficulty === 'Easy' && '20s per question · relaxed pace'}
+                {quizDifficulty === 'Medium' && '15s per question · classic feel'}
+                {quizDifficulty === 'Any' && '15s per question · mixed bag'}
+              </p>
+            </div>
           )}
         </div>
 
