@@ -125,13 +125,14 @@ export default function MehfilPage() {
 
   // Load open-room detail when opened.
   //
-  // For *debate / roast* rooms hosted by me that are still in 'scheduled'
-  // status, automatically flip to 'live' the moment the host opens them.
-  // These two templates are designed for on-demand sessions, not pre-
-  // scheduled events — without auto-start, room.status stays 'scheduled'
-  // and the room never appears in Discover's "Live" filter, and audience
-  // members get a degraded UX. Other templates keep the old "wait for
-  // the cron at scheduledFor" behaviour.
+  // For *debate / roast / ghost_date / open_mic* rooms hosted by me that
+  // are still in 'scheduled' status, automatically flip to 'live' the
+  // moment the host opens them. These templates are designed for on-
+  // demand sessions, not pre-scheduled events — without auto-start,
+  // room.status stays 'scheduled' and the room never appears in
+  // Discover's "Live" filter, and audience members get a degraded UX.
+  // Other templates keep the old "wait for the cron at scheduledFor"
+  // behaviour.
   useEffect(() => {
     if (!openRoomId || !isConnected) {
       if (!openRoomId) setOpenRoom(null)
@@ -144,7 +145,7 @@ export default function MehfilPage() {
         if (cancelled) return
         setOpenRoom(r.room, r.iAmHost, r.messages, r.attendees, r.tips)
 
-        const AUTO_START: MehfilTemplate[] = ['debate', 'roast']
+        const AUTO_START: MehfilTemplate[] = ['debate', 'roast', 'ghost_date', 'open_mic']
         if (
           r.iAmHost &&
           r.room.status === 'scheduled' &&
@@ -291,6 +292,14 @@ export default function MehfilPage() {
                       try { const r = await endRoom(openRoom.id); setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost) }
                       catch (err: any) { showToast({ type: 'error', title: 'End failed', message: err?.message ?? 'Try again.', duration: 4000 }) }
                     }}
+                    onStartMehfil={async () => {
+                      try {
+                        const r = await startRoom(openRoom.id)
+                        setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost)
+                      } catch (err: any) {
+                        showToast({ type: 'error', title: 'Start failed', message: err?.message ?? 'Try again.', duration: 4000 })
+                      }
+                    }}
                   />
               : openRoom.templateKind === 'open_mic'
                 ? <OpenMicRoomPage
@@ -307,6 +316,14 @@ export default function MehfilPage() {
                     onEndRoom={async () => {
                       try { const r = await endRoom(openRoom.id); setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost) }
                       catch (err: any) { showToast({ type: 'error', title: 'End failed', message: err?.message ?? 'Try again.', duration: 4000 }) }
+                    }}
+                    onStartMehfil={async () => {
+                      try {
+                        const r = await startRoom(openRoom.id)
+                        setOpenRoom({ ...openRoom, ...r }, openRoomIAmHost)
+                      } catch (err: any) {
+                        showToast({ type: 'error', title: 'Start failed', message: err?.message ?? 'Try again.', duration: 4000 })
+                      }
                     }}
                   />
               : null}

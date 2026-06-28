@@ -37,9 +37,16 @@ type Props = {
   iAmHost: boolean
   onLeave: () => void
   onEndRoom: () => void
+  /** Optional — parity with DebateV2/Roast. MehfilPage auto-flips
+   *  scheduled→live for open_mic templates on first open, so this
+   *  prop is currently a no-op slot kept for future server resync. */
+  onStartMehfil?: () => Promise<void> | void
 }
 
-export default function OpenMicRoomPage({ room, iAmHost, onLeave, onEndRoom }: Props) {
+export default function OpenMicRoomPage({ room, iAmHost, onLeave, onEndRoom, onStartMehfil }: Props) {
+  // Silence unused-prop lint while keeping the API surface uniform.
+  void onStartMehfil
+
   const me = useAuthStore((s) => s.user)
   const hub = useOpenMicHub()
   const roomState = useOpenMicStore((s) => s.roomState)

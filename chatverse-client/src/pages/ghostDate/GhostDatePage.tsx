@@ -405,6 +405,16 @@ function DecisionView({
 }: { activeDate: ActiveGhostDate; busy: boolean; onChoose: (reveal: boolean) => void }) {
   const decided = activeDate.myDecision !== null
 
+  // Re-render once per second so the window-closed check stays fresh
+  // and the buttons disable the moment the deadline passes (rather
+  // than only on next React render). Cheap — single state tick.
+  const [nowTs, setNowTs] = useState(Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNowTs(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const windowClosed = nowTs >= new Date(activeDate.decisionDeadline).getTime()
+
   return (
     <Card padding="lg" className="flex flex-col items-center gap-3 text-center cv-pop">
       <div className="w-12 h-12 rounded-2xl bg-[var(--color-accent-soft)] text-[var(--color-accent-fg)] inline-flex items-center justify-center cv-halo">
@@ -426,12 +436,34 @@ function DecisionView({
             {activeDate.theirDecided ? 'Both decisions in — outcome incoming.' : 'Waiting for them to choose…'}
           </div>
         </Card>
+      ) : windowClosed ? (
+        // Window expired before the user picked. Suppress the buttons —
+        // the server will reject anyway with "decision window closed"
+        // and the toast was confusing. Friendlier copy here.
+        <Card padding="sm" className="w-full max-w-xs">
+          <div className="text-sm text-[var(--color-fg)]">Decision window closed.</div>
+          <div className="text-xs text-[var(--color-fg-dim)] mt-1">
+            The system will treat this as a pass. Try again next Thursday.
+          </div>
+        </Card>
       ) : (
         <div className="flex gap-2">
-          <Button variant="secondary" loading={busy} onClick={() => onChoose(false)} leftIcon={<Ghost size={14} />}>
+          <Button
+            variant="secondary"
+            loading={busy}
+            disabled={busy || windowClosed}
+            onClick={() => onChoose(false)}
+            leftIcon={<Ghost size={14} />}
+          >
             Pass
           </Button>
-          <Button variant="primary" loading={busy} onClick={() => onChoose(true)} leftIcon={<Check size={14} />}>
+          <Button
+            variant="primary"
+            loading={busy}
+            disabled={busy || windowClosed}
+            onClick={() => onChoose(true)}
+            leftIcon={<Check size={14} />}
+          >
             Reveal
           </Button>
         </div>

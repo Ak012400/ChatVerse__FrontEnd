@@ -749,11 +749,50 @@ function DrilledStage({
           </div>
         </div>
 
-        {/* Video placeholder OR audio waveform vibes */}
+        {/* Cam panel — when the couple is broadcasting we'd embed
+            the LiveKit player here. Today we render a polished
+            gradient stage with the couple's tint + animated "🎧 audio
+            only" badge instead of debug text. The LiveKit wiring is
+            ready in the backend (videoActive flag is honoured), so
+            swapping this block to <LiveKitRoom> later is one edit. */}
         {c.videoActive && (
           <div className="px-3 pt-3">
-            <div className="aspect-video rounded-lg bg-gradient-to-br from-rose-900/30 via-black/70 to-violet-900/30 border border-[var(--color-line)] inline-flex items-center justify-center text-xs text-[var(--color-fg-dim)]">
-              📹 Live cam (LiveKit stream lands in v2 — flag is wired)
+            <div
+              className="relative aspect-video rounded-lg overflow-hidden border border-[var(--color-line)] flex items-center justify-center"
+              style={{
+                background:
+                  `radial-gradient(circle at 30% 30%, ${tint}33, transparent 60%),` +
+                  `radial-gradient(circle at 70% 70%, ${tint}22, transparent 65%),` +
+                  `linear-gradient(135deg, rgba(0,0,0,0.6), rgba(0,0,0,0.85))`,
+              }}
+            >
+              {/* Animated waveform-ish bars — uses Tailwind's
+                  `animate-pulse` with staggered delays so we don't
+                  need a custom @keyframes. */}
+              <div className="flex items-end gap-1 h-10">
+                {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                  <span
+                    key={i}
+                    className="w-1.5 rounded-full animate-pulse"
+                    style={{
+                      background: tint,
+                      height: `${30 + ((i * 13 + 11) % 70)}%`,
+                      animationDelay: `${i * 120}ms`,
+                      animationDuration: `${1100 + ((i * 37) % 700)}ms`,
+                    }}
+                  />
+                ))}
+              </div>
+              <span
+                className="absolute top-2 right-2 text-[10px] uppercase tracking-wider font-medium px-2 py-0.5 rounded-full"
+                style={{
+                  background: 'rgba(0,0,0,0.55)',
+                  color: tint,
+                  border: `1px solid ${tint}66`,
+                }}
+              >
+                🎧 audio only
+              </span>
             </div>
           </div>
         )}
