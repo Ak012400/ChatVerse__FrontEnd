@@ -43,9 +43,19 @@ type Props = {
   iAmHost: boolean
   onLeave: () => void
   onEndRoom: () => void
+  /** Optional — exposed for parity with DebateV2/Roast. MehfilPage's
+   *  open-room useEffect already auto-flips scheduled→live for ghost_date
+   *  templates, so this is currently only consumed if a child component
+   *  needs to re-trigger the start (e.g. resume after a server hiccup). */
+  onStartMehfil?: () => Promise<void> | void
 }
 
-export default function GhostRoomPage({ room, iAmHost, onLeave, onEndRoom }: Props) {
+export default function GhostRoomPage({ room, iAmHost, onLeave, onEndRoom, onStartMehfil }: Props) {
+  // Bind unused destructure so TS / lint don't complain; the prop is
+  // wired through for future use (server-state resync) and to keep the
+  // dispatch arms in MehfilPage uniform.
+  void onStartMehfil
+
   const me = useAuthStore((s) => s.user)
   const hub = useGhostRoomHub()
   const roomState = useGhostRoomStore((s) => s.roomState)
